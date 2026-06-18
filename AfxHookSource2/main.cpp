@@ -317,10 +317,8 @@ public:
 
 private:
 	virtual bool GetSuspendMirvInput() override {
-		// Suspend free-cam mouse-look (and let the OS cursor show) when the console
-		// is up OR the camera-marker edit menu / camera timeline panel is open, so
-		// their Panorama buttons are clickable. Free cam stays enabled; the camera
-		// just holds its pose.
+		// Suspend free-cam mouse-look when the console, marker menu, camera timeline,
+		// or regular filmmaker cursor mode owns the mouse.
 		return (g_pGameUIService && g_pGameUIService->Con_IsVisible())
 			|| Filmmaker::MarkerMenu_WantsCursor()
 			|| Filmmaker::CameraTimeline_WantsCursor();

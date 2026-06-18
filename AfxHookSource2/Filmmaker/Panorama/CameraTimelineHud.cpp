@@ -147,7 +147,8 @@ std::string CameraTimelineHud::BuildStateJson() {
 	std::ostringstream o;
 	o << "{";
 	o << "\"open\":" << (m_visible ? "true" : "false");
-	o << ",\"cursor\":" << (m_cursor ? "true" : "false");
+	o << ",\"cursor\":" << (Cursor() ? "true" : "false");
+	o << ",\"cursorForced\":" << (CursorForced() ? "true" : "false");
 	o << ",\"view\":\"" << (m_view == 1 ? "curve" : "timeline") << "\"";
 	o << ",\"count\":" << n;
 	o << ",\"selected\":" << sel;
@@ -156,7 +157,8 @@ std::string CameraTimelineHud::BuildStateJson() {
 	o << ",\"timing\":\"" << cp.TimingName() << "\"";
 	o << ",\"speedMode\":\"" << cp.SpeedModeName() << "\"";
 	o << ",\"constSpeed\":" << r2(cp.ConstSpeed());
-	o << ",\"playing\":" << (cp.IsPlaying() ? "true" : "false");
+	o << ",\"playing\":" << ((cp.IsPlaying() || cp.PlaybackPending()) ? "true" : "false");
+	o << ",\"previewHudHidden\":" << (cp.PreviewHudHidden() ? "true" : "false");
 	o << ",\"scrubbing\":" << (cp.IsScrubbing() ? "true" : "false");
 	o << ",\"tick\":" << curTick;
 	o << ",\"time\":" << r2(curTime);
@@ -208,7 +210,7 @@ std::string CameraTimelineHud::BuildCurveJson() {
 		}
 	}
 
-	static const char* names[7] = { "X", "Y", "Z", "Pitch", "Yaw", "Roll", "FOV" };
+	static const char* names[7] = { "X", "Y", "Z", "Pitch", "Yaw", "Tilt", "FOV" };
 	std::ostringstream o;
 	o << "{";
 	o << "\"t0\":" << (long long)(t0 + 0.5) << ",\"t1\":" << (long long)(t1 + 0.5) << ",\"n\":" << N;

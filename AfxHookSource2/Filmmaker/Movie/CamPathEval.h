@@ -51,6 +51,8 @@ public:
 	// Map a demo TICK (may be fractional) to a pose using the markers' recorded
 	// ticks. Deterministic: identical tick => identical pose (used for scrubbing).
 	Pose EvalAtTick(const CamMarkers& markers, double tick) const;
+	// Map a demo tick onto the Freeze timing axis, preserving the same segment/progress.
+	double TimingAtTick(const CamMarkers& markers, double tick) const;
 
 	// Map an explicit (segment, normalized progress) to a pose: ease the progress,
 	// project onto the shape axis, sample the spline. The shared core of the above.

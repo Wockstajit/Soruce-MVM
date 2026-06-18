@@ -62,6 +62,7 @@ public:
 	int Add(const CamMarker& m);                              // append, select it, return index
 	bool DeleteIndex(int i);                                  // erase + fix selection; false if OOB
 	void DeleteAll();
+	void Restore(const std::vector<CamMarker>& markers, int selected);
 
 	// JSON sidecar: markers + settings + selection in one file.
 	//   Save: false on IO failure (caller may warn).

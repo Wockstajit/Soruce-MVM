@@ -53,6 +53,7 @@ private:
 	// intercepts clicks at all (CS2's own spectator + native demo UI handle
 	// them), so this stays true and is informational.
 	bool m_cursor = true;
+	bool m_controlDown = false; // input-thread modifier state for Ctrl+Z curve undo
 	bool m_modeDirty = false;
 	Mode m_pendingMode = Mode::Default;
 	std::vector<std::string> m_cmdQueue;

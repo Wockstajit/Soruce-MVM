@@ -389,10 +389,11 @@ bool MirvInput::GetCamResetView(void)
 }
 
 // Movement (forward/left/up) scales with both the cam speed and the slow factor.
-// Rotation/FOV from the MOUSE is deliberately NOT scaled by cam speed, so look
-// sensitivity stays constant as you change movement speed (only keyboard
-// arrow-key rotation scales with speed). Everything still scales with the slow
-// factor so Shift gives uniform fine control.
+// Rotation/FOV from the MOUSE is deliberately NOT scaled by cam speed OR the slow
+// factor, so look sensitivity stays constant regardless of movement speed and Shift:
+// Shift slows only camera MOVEMENT (and keyboard arrow-key rotation, for fine
+// composing), never your mouse aim. Only the keyboard arrow-key rotation term takes
+// m_SlowFactor / m_CamSpeed; the mouse term is added in raw.
 double MirvInput::GetCamDForward(void)
 {
 	return m_SlowFactor * m_CamSpeed * (m_CamForward -m_CamForwardI +m_MouseInput.GetForward());
@@ -410,12 +411,12 @@ double MirvInput::GetCamDUp(void)
 
 double MirvInput::GetCamDPitch(void)
 {
-	return m_SlowFactor * (m_CamSpeed * (m_CamPitch -m_CamPitchI) +m_MouseInput.GetPitch());
+	return m_SlowFactor * m_CamSpeed * (m_CamPitch -m_CamPitchI) +m_MouseInput.GetPitch();
 }
 
 double MirvInput::GetCamDYaw(void)
 {
-	return m_SlowFactor * (m_CamSpeed * (m_CamYaw -m_CamYawI) +m_MouseInput.GetYaw());
+	return m_SlowFactor * m_CamSpeed * (m_CamYaw -m_CamYawI) +m_MouseInput.GetYaw();
 }
 
 double MirvInput::GetCamDRoll(void)
@@ -1074,7 +1075,24 @@ void MirvInput::Supply_MouseFrameEnd(void)
 		return;
 
 	if(m_Dependencies->GetSuspendMirvInput())
+	{
+		// Suspension prevents future key-up events from reaching Supply_KeyEvent, so any
+		// held movement key would otherwise remain latched for the whole cursor session.
+		// Clear both keyboard velocities and accumulated mouse deltas every suspended
+		// frame. This stops the camera immediately when G enables cursor mode.
+		m_CamForward = m_CamForwardI = 0.0;
+		m_CamLeft = m_CamLeftI = 0.0;
+		m_CamUp = m_CamUpI = 0.0;
+		m_CamFov = m_CamFovI = 0.0;
+		m_CamPitch = m_CamPitchI = 0.0;
+		m_CamYaw = m_CamYawI = 0.0;
+		m_CamRoll = m_CamRollI = 0.0;
+		m_MouseInput.Clear();
+		m_MNormalLeftButtonWasDown = m_MouseInput.Normal.LeftButtonDown;
+		m_MNormalRightButtonWasDown = m_MouseInput.Normal.RightButtonDown;
+		m_FirstGetCursorPos = true; // re-sync the delta baseline cleanly on resume
 		return;
+	}
 
 	if(m_CameraControlMode)
 	{

@@ -223,7 +223,9 @@ bool MarkerMenu_WantsCursor() { return CameraPathRef().WantsCursor(); }
 // --- Camera timeline panel: cursor/suspend hook for main.cpp ---
 bool CameraTimeline_WantsCursor() {
 	auto& tl = CameraTimelineHudRef();
-	return tl.Visible() && tl.Cursor();
+	// The camera timeline / curve editor is always a UI surface, so it forces cursor
+	// ownership while open. When closed, the regular native-bar/G cursor toggle owns it.
+	return tl.Cursor();
 }
 bool CameraTimeline_Visible() { return CameraTimelineHudRef().Visible(); }
 

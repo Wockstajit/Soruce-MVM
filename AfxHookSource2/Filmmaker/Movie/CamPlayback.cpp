@@ -53,9 +53,10 @@ void CamPlayback::Reset() {
 	m_engageApplied = false;
 }
 
-void CamPlayback::StartPlay(double duration, bool rangeGated) {
+void CamPlayback::StartPlay(double duration, bool rangeGated, double startTiming) {
 	Reset();
 	m_duration = duration;
+	m_playT = startTiming < 0.0 ? 0.0 : (startTiming > duration ? duration : startTiming);
 	m_playing = true;
 	m_scrubbing = false;
 	m_rangeGated = rangeGated;

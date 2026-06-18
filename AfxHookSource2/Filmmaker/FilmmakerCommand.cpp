@@ -8,7 +8,9 @@
 #include "Panorama/PanoramaBridge.h"
 #include "Panorama/CameraTimelineHud.h"
 #include "Platform/TextEncoding.h"
+#include "Movie/CameraBridge.h"
 #include "Movie/CameraPath.h"
+#include "Movie/MovieMode.h"
 
 #include "../WrpConsole.h"
 #include "../../shared/AfxConsole.h"
@@ -59,11 +61,21 @@ void PrintHelp(const char* cmd) {
 	);
 	advancedfx::Message(
 		"Camera markers / dolly path (in free cam):\n"
-		"   K = place, J = arm path, Space = play, X = stop, L = delete aimed, F = edit aimed.\n"
+		"   K = place, L = delete aimed, F = edit aimed. Camera-path playback is disabled pending rewrite.\n"
 		"%s marker [...] - full marker/path control (run for sub-help).\n"
 		"%s camtl [...] - camera TIMELINE + curve editor (scrub, keys, easing; run for sub-help).\n"
 		, cmd, cmd
 	);
+}
+
+bool RegularCursorToggleAllowed() {
+	using Mode = Filmmaker::MovieMode::Mode;
+	const Mode mode = Filmmaker::MovieModeRef().GetMode();
+	return mode == Mode::ThirdPerson || mode == Mode::FreeCam;
+}
+
+void PlaybackDisabledNotice() {
+	advancedfx::Message("mirv_filmmaker: camera path playback is disabled pending rewrite.\n");
 }
 
 void DoUiStatus() {
@@ -124,10 +136,8 @@ void DoMarker(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	if (argc < 3) {
 		advancedfx::Message(
 			"%s marker place - add a marker at the current camera pose (also K).\n"
-			"%s marker preview - arm playback: jump to 1st marker + pause (J); needs >=2.\n"
-			"%s marker previewplay - start playback from armed (Space).\n"
+			"%s marker preview|arm|play|previewplay - disabled pending camera-path playback rewrite.\n"
 			"%s marker previewstop - stop playback (X).\n"
-			"%s marker hudtoggle - hide/show the HUD during playback (Tab).\n"
 			"%s marker delete <i> | deleteall confirm - remove markers (L = aimed).\n"
 			"%s marker select <i> | next | prev - select (menu arrows teleport).\n"
 			"%s marker edit <i> | close - open/close the settings menu (F = aimed).\n"
@@ -140,7 +150,7 @@ void DoMarker(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 			"%s marker constspeed <0.2..1.0> | cycle - global Constant-mode speed.\n"
 			"%s marker autosnap on|off|toggle - snap viewer to a marker when selected.\n"
 			"%s marker list | save | load.\n",
-			cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
+			cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
 		return;
 	}
 
@@ -148,10 +158,9 @@ void DoMarker(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	const char* a3 = (argc >= 4) ? args->ArgV(3) : "";
 
 	if (0 == _stricmp(a, "place")) cp.PlaceMarker();
-	else if (0 == _stricmp(a, "preview") || 0 == _stricmp(a, "arm") || 0 == _stricmp(a, "play")) cp.ArmPreview();
-	else if (0 == _stricmp(a, "previewplay")) cp.StartPreviewPlay();
+	else if (0 == _stricmp(a, "preview") || 0 == _stricmp(a, "arm") || 0 == _stricmp(a, "play") || 0 == _stricmp(a, "previewplay")) PlaybackDisabledNotice();
 	else if (0 == _stricmp(a, "previewstop") || 0 == _stricmp(a, "stop")) cp.StopPreview();
-	else if (0 == _stricmp(a, "hudtoggle")) cp.TogglePreviewHud();
+	else if (0 == _stricmp(a, "hudtoggle")) advancedfx::Message("mirv_filmmaker: camera path HUD toggle is disabled.\n");
 	else if (0 == _stricmp(a, "repositionplace")) cp.PlaceReposition();
 	else if (0 == _stricmp(a, "repositioncancel")) cp.CancelReposition();
 	else if (0 == _stricmp(a, "delete")) {
@@ -223,15 +232,17 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 			"%s camtl open|close|toggle - show/hide the camera timeline panel.\n"
 			"%s camtl view timeline|curve - switch view (no arg = toggle).\n"
 			"%s camtl scrub <tick> - tick-perfect scrub to <tick> (paused).\n"
-			"%s camtl play | stop - play / stop the camera path.\n"
+			"%s camtl play|pause|playtest - disabled pending camera-path playback rewrite.\n"
+			"%s camtl stop - stop any lingering path playback and scrub.\n"
 			"%s camtl addkey | delkey <i> | movekey <i> <tick>.\n"
-			"%s camtl setval <i> <ch 0..6> <v> - 0=x 1=y 2=z 3=pitch 4=yaw 5=roll 6=fov.\n"
+			"%s camtl setval <i> <ch 0..6> <v> - 0=x 1=y 2=z 3=pitch 4=yaw 5=tilt 6=fov.\n"
+			"%s camtl undo - undo the last curve value/retime edit (Ctrl+Z).\n"
 			"%s camtl ease <i> none|in|out|inout  |  speed <i> <0.2..1.0>.\n"
 			"%s camtl interp linear|cubic|cycle  |  zoom in|out|reset  |  pan -1|1.\n"
-			"%s camtl cursor on|off|toggle - UI-mouse mode (also G while in free cam).\n"
+			"%s camtl cursor on|off|toggle - regular UI-mouse mode (third-person/freecam; forced on while editor is open).\n"
 			"%s camtl clear - remove ALL keyframes.\n"
 			"%s camtl eval <panorama js>.\n",
-			cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
+			cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
 		return;
 	}
 
@@ -242,10 +253,20 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 
 	if (0 == _stricmp(a, "open")) {
 		tl.SetVisible(true);
+		Filmmaker::CameraBridge_SetFreeCamEnabled(true);
+		if (cp.Count() > 0) cp.SelectForEditor(cp.Selected() >= 0 ? cp.Selected() : 0);
 		advancedfx::Message("mirv_filmmaker: camera timeline shown (must be in a demo).\n");
 	}
 	else if (0 == _stricmp(a, "close")) { tl.SetVisible(false); cp.StopScrub(); }
-	else if (0 == _stricmp(a, "toggle")) tl.Toggle();
+	else if (0 == _stricmp(a, "toggle")) {
+		const bool opening = !tl.Visible();
+		tl.Toggle();
+		if (opening) {
+			Filmmaker::CameraBridge_SetFreeCamEnabled(true);
+			if (cp.Count() > 0) cp.SelectForEditor(cp.Selected() >= 0 ? cp.Selected() : 0);
+		}
+		else if (!opening) cp.StopScrub();
+	}
 	else if (0 == _stricmp(a, "view")) {
 		if (0 == _stricmp(a3, "curve")) tl.SetView(1);
 		else if (0 == _stricmp(a3, "timeline")) tl.SetView(0);
@@ -259,7 +280,16 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 		if (argc < 4) { advancedfx::Warning("usage: %s camtl scrubpreview <tick>\n", cmd); return; }
 		cp.ScrubToTick(atof(a3), false);
 	}
-	else if (0 == _stricmp(a, "play")) cp.PlayPath(); // timeline play: no jump, dolly within range
+	else if (0 == _stricmp(a, "select")) {
+		if (argc < 4) { advancedfx::Warning("usage: %s camtl select <i>\n", cmd); return; }
+		cp.SelectForEditor(atoi(a3));
+	}
+	else if (0 == _stricmp(a, "selectdelta")) {
+		cp.SelectEditorDelta((argc >= 4) ? atoi(a3) : 1);
+	}
+	// Camera-path playback is disabled pending rewrite. Keep the commands present as
+	// no-ops so old UI/console calls cannot start the broken playback path.
+	else if (0 == _stricmp(a, "play") || 0 == _stricmp(a, "pause") || 0 == _stricmp(a, "playtest")) PlaybackDisabledNotice();
 	else if (0 == _stricmp(a, "stop")) { cp.StopPreview(); cp.StopScrub(); }
 	else if (0 == _stricmp(a, "addkey")) cp.PlaceMarker();
 	else if (0 == _stricmp(a, "delkey")) {
@@ -274,6 +304,13 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 		if (argc < 6) { advancedfx::Warning("usage: %s camtl setval <i> <ch> <v>\n", cmd); return; }
 		cp.SetChannelValue(atoi(a3), atoi(a4), atof(a5));
 	}
+	else if (0 == _stricmp(a, "editbegin")) cp.BeginCurveValueEdit();
+	else if (0 == _stricmp(a, "setvalpreview")) {
+		if (argc < 6) { advancedfx::Warning("usage: %s camtl setvalpreview <i> <ch> <v>\n", cmd); return; }
+		cp.PreviewChannelValue(atoi(a3), atoi(a4), atof(a5));
+	}
+	else if (0 == _stricmp(a, "editend")) cp.EndCurveValueEdit();
+	else if (0 == _stricmp(a, "undo")) cp.UndoCurveEdit();
 	else if (0 == _stricmp(a, "ease")) {
 		if (argc < 5) { advancedfx::Warning("usage: %s camtl ease <i> none|in|out|inout\n", cmd); return; }
 		Filmmaker::Ease e = Filmmaker::Ease::None;
@@ -298,10 +335,24 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 		else tl.ZoomReset();
 	}
 	else if (0 == _stricmp(a, "pan")) { tl.Pan((argc >= 4) ? atoi(a3) : 1); }
+	else if (0 == _stricmp(a, "gamehud")) {
+		advancedfx::Message("mirv_filmmaker: camera timeline HUD toggle is disabled.\n");
+	}
 	else if (0 == _stricmp(a, "cursor")) {
+		if (!RegularCursorToggleAllowed()) {
+			tl.SetCursor(false);
+			advancedfx::Message("mirv_filmmaker: cursor toggle is available in third-person/freecam.\n");
+			return;
+		}
+		if (tl.CursorForced()) {
+			advancedfx::Message("mirv_filmmaker: cursor is forced on while the camera timeline is open.\n");
+			return;
+		}
 		if (0 == _stricmp(a3, "on")) tl.SetCursor(true);
 		else if (0 == _stricmp(a3, "off")) tl.SetCursor(false);
-		else tl.ToggleCursor();
+		else {
+			tl.ToggleCursor();
+		}
 		// Returning to free-cam look (cursor off) releases any active scrub so the
 		// camera stops being pinned to the scrub tick and the user can fly again.
 		if (!tl.Cursor()) cp.StopScrub();

@@ -116,6 +116,7 @@ std::string MarkerHud::BuildStateJson() {
 	o << ",\"autoSnap\":" << (cp.AutoSnap() ? "true" : "false");
 	o << ",\"segment\":" << cp.PlaySegment();
 	o << ",\"playing\":" << (cp.IsPlaying() ? "true" : "false");
+	o << ",\"editorPlay\":" << (cp.EditorPlay() ? "true" : "false"); // editor test: no banner
 	o << ",\"notice\":\"" << noticeEsc << "\"";
 	o << "}";
 	return o.str();

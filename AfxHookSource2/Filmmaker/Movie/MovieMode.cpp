@@ -22,17 +22,17 @@ namespace {
 	constexpr int kVK_X = 0x58;
 	constexpr int kVK_F8 = 0x77;    // toggle the director help/status HUD
 	constexpr int kVK_SHIFT = 0x10; // hold = slow/fine free-cam movement
+	constexpr int kVK_CONTROL = 0x11;
 	constexpr int kVK_SPACE = 0x20; // pause / resume the demo
 	constexpr int kVK_LEFT = 0x25;  // skip -15s
 	constexpr int kVK_RIGHT = 0x27; // skip +15s
 	constexpr int kVK_ESC = 0x1B;   // close menu / cancel reposition / stop preview
-	constexpr int kVK_TAB = 0x09;   // toggle HUD during camera-path preview
 	// Camera-marker / dolly path keys (BO2-style):
 	constexpr int kVK_K = 0x4B;     // place a camera marker
-	constexpr int kVK_J = 0x4A;     // arm the camera path (Space then plays)
 	constexpr int kVK_L = 0x4C;     // delete the aimed-at marker
 	constexpr int kVK_F = 0x46;     // edit the aimed-at marker
 	constexpr int kVK_G = 0x47;     // toggle UI-mouse for the camera timeline panel
+	constexpr int kVK_Z = 0x5A;     // Ctrl+Z: undo last curve edit
 
 	constexpr int kSkipSeconds = 15; // arrow-key demo skip step
 
@@ -68,6 +68,15 @@ bool MovieMode::OnMouseWheel(int delta, bool shiftDown) {
 		return false;
 	if (delta == 0)
 		return false;
+
+	// Inside the camera editor the wheel navigates camera keys and always moves to
+	// their exact pose/tick. Do not cycle first/third/free camera modes here.
+	if (CameraTimeline_Visible()) {
+		EnqueueCmd(delta > 0
+			? "mirv_filmmaker camtl selectdelta -1"
+			: "mirv_filmmaker camtl selectdelta 1");
+		return true;
+	}
 
 	// In free cam, Shift+scroll adjusts free-cam SPEED (documented control).
 	if (CameraBridge_GetFreeCamEnabled() && shiftDown) {
@@ -112,18 +121,31 @@ bool MovieMode::OnMouseButton(int button, bool down) {
 }
 
 bool MovieMode::OnKey(int vkey, bool down) {
+	if (vkey == kVK_CONTROL) {
+		m_controlDown = down;
+		return false;
+	}
 	if (!IsDemoActive())
 		return false; // director keys only act while a demo plays
 
-	// G: toggle UI-mouse mode for the camera timeline so you can click/drag the
-	// panel while in free cam; press again to return to free-cam look. Only acts
-	// (and is consumed) while the timeline is open, otherwise G passes through.
+	if (vkey == kVK_Z && down && m_controlDown && CameraTimeline_Visible()) {
+		EnqueueCmd("mirv_filmmaker camtl undo");
+		return true;
+	}
+
+	// G toggles the native-demo-bar UI cursor only in regular viewing mode, and only
+	// from third-person/freecam. The camera timeline / curve editor is always a UI
+	// surface, so G is swallowed there and cannot turn the cursor off.
 	if (vkey == kVK_G) {
-		if (CameraTimeline_Visible()) {
-			if (down) EnqueueCmd("mirv_filmmaker camtl cursor toggle");
+		if (CameraTimeline_Visible())
+			return true;
+		const Mode mode = GetMode();
+		if (mode != Mode::ThirdPerson && mode != Mode::FreeCam) {
+			if (down) EnqueueCmd("mirv_filmmaker camtl cursor off");
 			return true;
 		}
-		return false;
+		if (down) EnqueueCmd("mirv_filmmaker camtl cursor toggle");
+		return true;
 	}
 
 	using CPMode = CameraPath::Mode;
@@ -138,15 +160,12 @@ bool MovieMode::OnKey(int vkey, bool down) {
 		}
 		if (vkey == kVK_LEFT || vkey == kVK_RIGHT) return true; // don't scrub the demo
 	} else if (cpMode == CPMode::PreviewArmed) {
-		// Jumped to the first marker; Space plays, X/Esc cancels.
-		if (vkey == kVK_SPACE) { if (down) EnqueueCmd("mirv_filmmaker marker previewplay"); return true; }
+		// Legacy armed state only: playback is disabled pending rewrite. X/Esc cancels.
 		if (vkey == kVK_X || vkey == kVK_ESC) { if (down) EnqueueCmd("mirv_filmmaker marker previewstop"); return true; }
 		if (vkey == kVK_LEFT || vkey == kVK_RIGHT) return true;
 	} else if (cpMode == CPMode::PreviewPlaying) {
-		// Dolly running; X stops + exits, Tab toggles the HUD, Space is swallowed.
+		// Legacy playback state only: playback entry points are disabled pending rewrite.
 		if (vkey == kVK_X || vkey == kVK_ESC) { if (down) EnqueueCmd("mirv_filmmaker marker previewstop"); return true; }
-		if (vkey == kVK_TAB) { if (down) EnqueueCmd("mirv_filmmaker marker hudtoggle"); return true; }
-		if (vkey == kVK_SPACE) return true;
 		if (vkey == kVK_LEFT || vkey == kVK_RIGHT) return true;
 	}
 
@@ -191,9 +210,14 @@ bool MovieMode::OnKey(int vkey, bool down) {
 				int ticksPerSec = (ipt > 0.0f) ? (int)(1.0f / ipt + 0.5f) : 64;
 				int delta = kSkipSeconds * ticksPerSec;
 				int target = tick + (vkey == kVK_RIGHT ? +delta : -delta);
-				if (target < 0) target = 0;
 				std::ostringstream oss;
-				oss << "demo_gototick " << target;
+				if (CameraTimeline_Visible() && CameraPathRef().HasPathRange()) {
+					target = CameraPathRef().ClampToPathTick(target);
+					oss << "mirv_filmmaker camtl scrub " << target;
+				} else {
+					if (target < 0) target = 0;
+					oss << "demo_gototick " << target;
+				}
 				EnqueueCmd(oss.str());
 			}
 		}
@@ -240,13 +264,6 @@ bool MovieMode::OnKey(int vkey, bool down) {
 			return true;
 		}
 
-		if (vkey == kVK_J) {
-			// Arm the camera path: jump to the first marker + pause, then wait for Space
-			// (BO2-style). With fewer than 2 markers, ArmPreview raises the "need 2" notice.
-			if (down) EnqueueCmd("mirv_filmmaker marker preview");
-			return true;
-		}
-
 		if (vkey == kVK_L) {
 			// Delete the marker the camera is aimed at (consume only when targeting).
 			int h = CameraPathRef().HoveredAtomic();
@@ -283,11 +300,19 @@ void MovieMode::ApplyMode(Mode m) {
 		break;
 	case Mode::ThirdPerson:
 		CameraBridge_SetFreeCamEnabled(false);
-		if (g_pEngineToClient) g_pEngineToClient->ExecuteClientCmd(0, kSpecModeThirdPerson, true);
+		if (g_pEngineToClient) {
+			g_pEngineToClient->ExecuteClientCmd(0, kSpecModeThirdPerson, true);
+			// Leaving free cam: drop the UI cursor so it can't linger into a normal
+			// spectator view (and stays in sync for the next time you enter free cam).
+			g_pEngineToClient->ExecuteClientCmd(0, "mirv_filmmaker camtl cursor off", true);
+		}
 		break;
 	case Mode::Default:
 		CameraBridge_SetFreeCamEnabled(false);
-		if (g_pEngineToClient) g_pEngineToClient->ExecuteClientCmd(0, kSpecModeFirstPerson, true);
+		if (g_pEngineToClient) {
+			g_pEngineToClient->ExecuteClientCmd(0, kSpecModeFirstPerson, true);
+			g_pEngineToClient->ExecuteClientCmd(0, "mirv_filmmaker camtl cursor off", true);
+		}
 		break;
 	}
 }

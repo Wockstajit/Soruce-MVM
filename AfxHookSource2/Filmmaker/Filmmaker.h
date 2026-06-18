@@ -68,20 +68,17 @@ bool DemoSpeedBar_Enabled();
 // menu closes. Cheap; safe to call every frame from the input/render path.
 bool MarkerMenu_WantsCursor();
 
-// True while the camera TIMELINE / curve-editor panel is open AND its UI-mouse
-// mode is on (toggled by G). main.cpp ORs this into GetSuspendMirvInput() so the
-// panel's scrubber + buttons are clickable and the OS cursor shows (same mechanism
-// as the marker menu); G again returns control to free-cam look. Cheap; safe to
-// call every frame.
+// True while filmmaker cursor mode owns the mouse. The camera timeline / curve
+// editor forces this on while open; otherwise the regular native-bar/G cursor
+// toggle controls it in third-person/freecam.
 bool CameraTimeline_WantsCursor();
 
 // True while the camera timeline panel is open (any cursor mode). Read by the
 // input layer to decide whether G should toggle the panel's UI-mouse mode.
 bool CameraTimeline_Visible();
 
-// True while a camera-path preview is running with the HUD toggled off (Tab).
-// MovieHud queries this each frame to mask the director panel for a clean preview;
-// the user's normal HUD visibility is restored when the preview ends.
+// True when non-preview UI should be hidden: always during full path playback,
+// and while the armed preview has its background HUD toggled off with Tab.
 bool CameraPath_PreviewHudHidden();
 
 } // namespace Filmmaker

@@ -34,8 +34,10 @@ const FLOAT c_CameraTrajectoryPixelWidth = 8.0f;
 // world-space gizmo drawn with fixed-pixel lines turns into a fat blob when you fly
 // away (the shape shrinks but the lines don't); this keeps the proportion fixed.
 const double c_MarkerScreenRefDist = 300.0; // distance (units) at which scale == 1.0
-const double c_MarkerScreenMinScale = 0.35; // clamp so very near markers aren't tiny
-const double c_MarkerScreenMaxScale = 6.0;  // clamp so very far markers aren't huge
+const double c_MarkerScreenMinScale = 0.5;  // clamp so very near markers aren't huge
+// Cap the FAR growth tightly: past ~660 units the gizmo holds a fixed world size and so
+// SHRINKS with distance like everything else, instead of ballooning into a glow blob.
+const double c_MarkerScreenMaxScale = 2.2;
 
 /// <summary>Epsilon for point reduction in world units (inch).</summary>
 /// <remarks>Must be at least 0.0.</remarks>
@@ -1247,7 +1249,8 @@ void CCampathDrawer::OnPostRenderAllTools_DrawingThread(CDynamicProperties * dyn
 					// accumulates so the centre blooms while the edges fall off softly.
 					m_DeviceContext->OMSetBlendState(m_BlendStateAdditive ? m_BlendStateAdditive : m_BlendState, NULL, 0xffffffff);
 					struct GlowPass { float widthMul; unsigned char alpha; };
-					static const GlowPass kGlow[] = { {7.0f,22},{4.5f,34},{2.8f,52},{1.7f,90},{1.0f,255} };
+					// Narrower widest passes so the halo doesn't bloom into a fat blob.
+					static const GlowPass kGlow[] = { {4.5f,20},{3.0f,30},{2.0f,48},{1.4f,90},{1.0f,255} };
 					for (int pass = 0; pass < (int)(sizeof(kGlow)/sizeof(kGlow[0])); ++pass)
 				{
 					this->SetLineWidth(c_CampathCrossPixelWidth * kGlow[pass].widthMul);

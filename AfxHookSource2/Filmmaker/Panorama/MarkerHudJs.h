@@ -123,7 +123,8 @@ inline const char* kMarkerHudJs = R"MKJS(
       btn.SetPanelEvent('onactivate', function () { cmd(command); });
       return v;
     }
-
+)MKJS"
+R"MKJS(
     // Speed Mode and Path Mode are DELIBERATELY separate axes: Speed Mode decides
     // how long each segment takes; Path Mode (Linear/Bezier) decides the curve shape.
     var SPEED_STEPS = [0.2, 0.5, 0.8, 1.0];
@@ -237,39 +238,67 @@ inline const char* kMarkerHudJs = R"MKJS(
     banner.hittest = false;
     var bs = banner.style;
     bs.flowChildren = 'down'; bs.horizontalAlign = 'center'; bs.verticalAlign = 'top';
-    bs.marginTop = '90px'; bs.minWidth = '420px';
-    bs.backgroundColor = 'rgba(0,0,0,0.78)'; bs.borderRadius = '6px';
-    bs.paddingTop = '12px'; bs.paddingBottom = '12px';
-    bs.paddingLeft = '24px'; bs.paddingRight = '24px';
+    // Keep the preview control clear of the upper HUD and spectator labels.
+    bs.marginTop = '160px'; bs.minWidth = '294px';
+    bs.backgroundColor = 'rgba(0,0,0,0.78)'; bs.borderRadius = '5px';
+    bs.paddingTop = '8px'; bs.paddingBottom = '8px';
+    bs.paddingLeft = '17px'; bs.paddingRight = '17px';
     bs.fontFamily = S.font;
     var bTitle = $.CreatePanel('Label', banner, '', {});
-    bTitle.style.color = S.accent; bTitle.style.fontSize = '18px'; bTitle.style.fontWeight = 'bold';
-    bTitle.style.letterSpacing = '2px'; bTitle.style.horizontalAlign = 'center';
+    bTitle.style.color = S.accent; bTitle.style.fontSize = '13px'; bTitle.style.fontWeight = 'bold';
+    bTitle.style.letterSpacing = '1px'; bTitle.style.horizontalAlign = 'center';
     var bSub = $.CreatePanel('Label', banner, '', {});
-    bSub.style.color = S.value; bSub.style.fontSize = '15px'; bSub.style.horizontalAlign = 'center';
-    bSub.style.marginTop = '6px';
+    bSub.style.color = S.value; bSub.style.fontSize = '11px'; bSub.style.horizontalAlign = 'center';
+    bSub.style.marginTop = '4px';
     var bKeys = $.CreatePanel('Label', banner, '', {});
-    bKeys.style.color = S.label; bKeys.style.fontSize = '13px'; bKeys.style.horizontalAlign = 'center';
-    bKeys.style.marginTop = '8px';
+    bKeys.style.color = S.label; bKeys.style.fontSize = '10px'; bKeys.style.horizontalAlign = 'center';
+    bKeys.style.marginTop = '5px';
 
     function showBanner(titleText, titleColor, subText, keysText) {
       bTitle.text = titleText; bTitle.style.color = titleColor;
       bSub.text = subText; bKeys.text = keysText;
       banner.visible = true; card.visible = false; catcher.visible = false;
     }
-
+)MKJS"
+R"MKJS(
     var st = null;
     var hostAttr = root;
+
+    // Hide sibling HUD panels while preserving this preview root. During armed preview,
+    // Tab toggles this so the Cam Path Preview control remains available. During playback,
+    // siblings stay hidden and this root hides too, producing a completely clean frame.
+    var hiddenPanels = null;
+    function setOtherUiHidden(h) {
+      if (h) {
+        if (!hiddenPanels) hiddenPanels = [];
+        var count = ctx.GetChildCount ? ctx.GetChildCount() : 0;
+        for (var i = 0; i < count; i++) {
+          var p = ctx.GetChild(i);
+          if (!p || p === root || p.id === 'MarkerHudRoot') continue;
+          if (p.visible) {
+            hiddenPanels.push(p);
+            try { p.visible = false; } catch (e) {}
+          }
+        }
+      } else if (hiddenPanels) {
+        for (var j = 0; j < hiddenPanels.length; j++) {
+          try { hiddenPanels[j].visible = true; } catch (e2) {}
+        }
+        hiddenPanels = null;
+      }
+    }
 
     var api = {};
     api.render = function () {
       var raw = hostAttr.GetAttributeString('state', '');
-      if (!raw) { root.visible = false; return; }
+      if (!raw) { root.visible = false; setOtherUiHidden(false); return; }
       var s; try { s = JSON.parse(raw); } catch (e) { return; }
       st = s;
 
       var mode = s.mode || 'editing';
       var freeze = (s.timing === 'Freeze');
+      setOtherUiHidden(((mode === 'previewPlaying' && !s.editorPlay) || mode === 'previewArmed')
+        && !!s.hudHidden);
 
       // Transient notice (e.g. "Need at least 2 camera markers to play path.").
       // Shown over everything EXCEPT the open settings card (which has its own
@@ -287,21 +316,10 @@ inline const char* kMarkerHudJs = R"MKJS(
         root.visible = true; return;
       }
       if (mode === 'previewArmed') {
-        if (s.hudHidden) { root.visible = false; return; }
-        showBanner('CAMERA PATH PREVIEW', (freeze ? S.freeze : S.accent),
-          'Press Space to play camera path.',
-          'Space: Play      X: Cancel');
-        root.visible = true; return;
+        root.visible = false; return;
       }
       if (mode === 'previewPlaying') {
-        if (s.hudHidden) { root.visible = false; return; }
-        var segN = (s.segment != null ? s.segment : 0) + 1;
-        var segTot = (s.count != null && s.count > 1) ? (s.count - 1) : 1;
-        showBanner('PLAYING CAMERA PATH', (freeze ? S.freeze : S.accent),
-          'Segment ' + segN + ' / ' + segTot + '   ·   '
-            + (freeze ? 'Freeze' : 'Live') + ' · ' + (s.speedMode || '') + ' · ' + (s.interp || ''),
-          'X: Stop / Exit      Tab: Toggle HUD');
-        root.visible = true; return;
+        root.visible = false; return;
       }
 
       // editing

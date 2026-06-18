@@ -258,7 +258,9 @@ R"MHJS(
     var vAng  = mkKV(secCam, 'Ang');
     var vFov  = mkKV(secCam, 'FOV');
     var vTT   = mkKV(secCam, 'Tick / Time'); // combined tick + time, one compact line
-    [vPos, vAng].forEach(function (v) { v.style.fontSize = '12px'; });
+    // Pos/Ang are the numbers the user reads while composing a shot -- keep them the
+    // LARGEST values on the card. nowrap so the longer coordinate strings stay on one line.
+    [vPos, vAng].forEach(function (v) { v.style.fontSize = '17px'; v.style.whiteSpace = 'nowrap'; });
 
     // ======================================================================
     // LEFT CARD -- top-left, tucked just under the radar/minimap. Holds the

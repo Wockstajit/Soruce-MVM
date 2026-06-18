@@ -20,7 +20,11 @@ namespace Filmmaker {
 
 namespace {
 	constexpr double kPi = 3.14159265358979323846;
-	constexpr double kAimDot = 0.990; // ~8 deg crosshair cone for marker picking
+	// Marker picking. A NARROW, well-centred base cone (~5 deg) so selection feels precise,
+	// WIDENED up close by the marker's subtended angle (kAimMarkerRadius / distance) so near
+	// markers stay easy to grab and being right on top of one always registers.
+	constexpr double kAimConeCos = 0.9962;    // cos(~5 deg): base acceptance cone
+	constexpr double kAimMarkerRadius = 30.0; // world half-size for the near-range cone widen
 
 	bool DemoIsPlaying() {
 		if (!g_pEngineToClient) return false;
@@ -65,7 +69,27 @@ const char* CameraPath::ModeName() const {
 
 bool CameraPath::PreviewHudHidden() const {
 	Mode m = GetMode();
-	return m_hudHidden && (m == Mode::PreviewArmed || m == Mode::PreviewPlaying);
+	// Only the user's Tab toggle hides HUD. Playing the path by itself must not hide
+	// the HUD, and editor/timeline auto-play must keep the editor visible.
+	return m_hudHidden && (m == Mode::PreviewArmed || (m == Mode::PreviewPlaying && !m_editorPlay));
+}
+
+int CameraPath::FirstPathTick() const {
+	return m_data.Empty() ? 0 : m_data.Front().tick;
+}
+
+int CameraPath::LastPathTick() const {
+	return m_data.Empty() ? 0 : m_data.Back().tick;
+}
+
+int CameraPath::ClampToPathTick(int tick) const {
+	if (!HasPathRange())
+		return tick < 0 ? 0 : tick;
+	const int first = FirstPathTick();
+	const int last = LastPathTick();
+	if (tick < first) return first;
+	if (tick > last) return last;
+	return tick;
 }
 
 float CameraPath::SelectedSpeedMul() const {
@@ -106,7 +130,10 @@ void CameraPath::RebuildCamPath() {
 }
 
 void CameraPath::EnsureDrawState() {
-	bool want = !m_data.Empty();
+	// Show the in-world path visuals (markers/lines/cones/glow) while EDITING, but hide
+	// every one of them while the camera path is actively PLAYING so the test/preview is a
+	// clean shot. Master m_Draw flag gates the whole drawer, so this hides all of it.
+	bool want = !m_data.Empty() && GetMode() != Mode::PreviewPlaying;
 	if (want != m_drawOn) {
 		CameraBridge_SetPathDrawEnabled(want);
 		m_drawOn = want;
@@ -133,6 +160,37 @@ const char* CameraPath::Notice() const { return m_notice.c_str(); }
 
 void CameraPath::PushPose(const CamMarker& m) {
 	CameraBridge_SetCameraPose(m.x, m.y, m.z, m.pitch, m.yaw, m.roll, m.fov);
+}
+
+void CameraPath::SeekDemoTick(int tick) {
+	if (tick < 0) tick = 0;
+	std::ostringstream oss;
+	oss << "demo_gototick " << tick;
+	DemoCmd(oss.str().c_str());
+}
+
+void CameraPath::HoldEditorAtMarker(int index) {
+	if (!m_data.ValidIndex(index))
+		return;
+	const CamMarker& marker = m_data.At(index);
+	m_data.SetSelected(index);
+	CameraBridge_SetFreeCamEnabled(true);
+	PushPose(marker);
+	m_editorPoseHoldFrames = 4;
+	if (m_data.Count() >= 2)
+		m_play.BeginScrub(marker.tick);
+}
+
+void CameraPath::FinishPlaybackAtLastKey() {
+	const int lastIndex = m_data.Count() - 1;
+	const int lastTick = LastPathTick();
+	if (m_timing == Timing::Live) {
+		DemoCmd("demo_pause");
+		m_liveResumeGuard = 0;
+		SeekDemoTick(lastTick);
+	}
+	StopPreview();
+	HoldEditorAtMarker(lastIndex);
 }
 
 // --- editing actions ---
@@ -201,6 +259,48 @@ void CameraPath::SelectDelta(int delta) {
 	if (m_data.Empty()) return;
 	int base = (m_data.Selected() < 0) ? 0 : m_data.Selected();
 	SelectIndex(base + delta, /*teleport*/ true);
+}
+
+void CameraPath::SelectForEditor(int index) {
+	if (m_data.Empty()) return;
+	EndCurveValueEdit();
+	m_timelinePlayPending = false;
+	m_editorPlayPending = false;
+	m_editorPlay = false;
+	SetMode(Mode::Editing);
+	m_data.SetSelected(index);
+	const CamMarker& marker = m_data.At(m_data.Selected());
+
+	// The editor always navigates to the selected camera, independent of the optional
+	// marker-menu Auto-Snap setting.
+	CameraBridge_SetFreeCamEnabled(true);
+	if (DemoIsPlaying() && !DemoIsPaused()) DemoCmd("demo_pause");
+	SeekDemoTick(marker.tick);
+	PushPose(marker);
+	m_editorPoseHoldFrames = 4;
+
+	// Rebuilding invalidates the drawer's cached trajectory/keyframes. This prevents a
+	// stale camera-path draw packet from surviving an editor jump until the view moves.
+	RebuildCamPath();
+	CameraBridge_SetPathDrawEnabled(true);
+	m_drawOn = true;
+
+	if (m_data.Count() >= 2)
+		m_play.BeginScrub(marker.tick);
+	else
+		m_play.Stop();
+
+	advancedfx::Message("[campath] editor selected camera #%d @ tick %d.\n",
+		m_data.Selected(), marker.tick);
+}
+
+void CameraPath::SelectEditorDelta(int delta) {
+	if (m_data.Empty()) return;
+	int base = m_data.Selected() < 0 ? 0 : m_data.Selected();
+	int next = base + delta;
+	if (next < 0) next = 0;
+	if (next >= m_data.Count()) next = m_data.Count() - 1;
+	SelectForEditor(next);
 }
 
 void CameraPath::OpenMenu(int index) {
@@ -272,10 +372,14 @@ void CameraPath::BeginReposition() {
 		advancedfx::Message("[campath] reposition: select/aim at a marker first.\n");
 		return;
 	}
+	// Seek the demo to the selected marker's tick FIRST, so you reposition the camera at
+	// the exact moment it is supposed to be placed (issue: reposition didn't seek).
+	SeekDemoTick(m_data.At(sel).tick);
 	m_menuOpen = false;
 	CameraBridge_SetFreeCamEnabled(true);
 	SetMode(Mode::Reposition);
-	advancedfx::Message("[campath] repositioning marker #%d: move + left-click to place (X/Esc cancel).\n", sel);
+	advancedfx::Message("[campath] repositioning marker #%d @ tick %d: move + left-click to place (X/Esc cancel).\n",
+		sel, m_data.At(sel).tick);
 }
 
 void CameraPath::PlaceReposition() {
@@ -322,13 +426,13 @@ void CameraPath::ArmPreview() {
 
 	m_menuOpen = false;
 	m_hudHidden = false;
+	m_editorPlay = false; // J preview is the FULL preview (banner shown), not an editor test
+	m_timelinePlayPending = false;
+	m_editorPlayPending = false;
 	m_play.Stop();
 
 	// Seek to the first marker and pause so the start frame is stable while composing.
-	{
-		std::ostringstream oss; oss << "demo_gototick " << m_data.Front().tick;
-		DemoCmd(oss.str().c_str());
-	}
+	SeekDemoTick(m_data.Front().tick);
 	if (DemoIsPlaying() && !DemoIsPaused()) DemoCmd("demo_pause");
 
 	CameraBridge_SetFreeCamEnabled(true);
@@ -351,11 +455,32 @@ void CameraPath::StartPreviewPlay() {
 	m_play.StartPlay(m_eval.Duration());
 	SetMode(Mode::PreviewPlaying);
 
-	if (m_timing == Timing::Live) { if (DemoIsPaused()) DemoCmd("demo_resume"); }
+	// Insurance: the dolly drives the camera through MirvInput's free-cam override, so make
+	// sure free cam is on before we hand poses to it. Without this, if free cam was dropped
+	// between arming and playing, TickPlay's poses would no-op and the demo would play from
+	// the normal spectator view -- the "demo plays but the camera doesn't fly the path" bug.
+	CameraBridge_SetFreeCamEnabled(true);
+
+	// The pause state can lag immediately after demo_gototick. Resuming an already
+	// running demo is harmless; doing it unconditionally prevents an armed path from
+	// remaining frozen when playback starts. The guard re-resumes for the next ~2s in
+	// case the seek's auto-pause lands a frame or two later (see m_liveResumeGuard).
+	if (m_timing == Timing::Live) { DemoCmd("demo_resume"); m_liveResumeGuard = 120; }
 
 	advancedfx::Message(
 		"[campath] PLAY: %d markers, speedMode=%s, interp=%s, timing=%s, duration=%.2fs.\n",
 		Count(), SpeedModeName(), InterpName(), TimingName(), m_eval.Duration());
+}
+
+void CameraPath::PlayFromTimeline() {
+	// Match J then Space, but automatically: arm/seek first, let the asynchronous
+	// demo_gototick settle for a couple of frames, then start playback.
+	ArmPreview();
+	if (GetMode() != Mode::PreviewArmed)
+		return;
+	m_editorPlay = true; // keep the timeline HUD visible; suppress the armed prompt
+	m_timelinePlayPending = true;
+	m_timelinePlayWaitFrames = 0;
 }
 
 // Timeline "play": play the path from the demo's CURRENT position without jumping to
@@ -376,21 +501,95 @@ void CameraPath::PlayPath() {
 	}
 	m_menuOpen = false;
 	m_hudHidden = false;
+	m_editorPlay = false; // timeline Play button is a normal play (banner shown)
+	// A leftover scrub (from dragging the timeline/curve playhead) leaves the demo PAUSED
+	// and the playback state in scrub mode. Clear it before playing or the dolly never
+	// advances -- this is why pressing Play after scrubbing looked "frozen".
+	m_play.EndScrub();
 	// Freeze plays self-contained on wall-clock and needs the free cam on now; Live
 	// range-gating toggles the free cam itself as the playhead enters/leaves the range.
 	if (m_timing == Timing::Freeze) CameraBridge_SetFreeCamEnabled(true);
 	m_play.StartPlay(m_eval.Duration(), /*rangeGated*/ m_timing == Timing::Live);
 	SetMode(Mode::PreviewPlaying);
-	if (m_timing == Timing::Live) { if (DemoIsPaused()) DemoCmd("demo_resume"); }
+	// Resume UNCONDITIONALLY in Live: the demo is usually paused here (from a prior scrub)
+	// and the cached pause check could miss it, leaving the playhead stuck. demo_resume on
+	// an already-playing demo is a harmless no-op. The guard re-resumes for ~2s to defeat
+	// a lingering seek auto-pause (see m_liveResumeGuard).
+	if (m_timing == Timing::Live) { DemoCmd("demo_resume"); m_liveResumeGuard = 120; }
 	advancedfx::Message(
 		"[campath] timeline PLAY: %d markers, timing=%s, interp=%s (no jump; dolly active within marker range).\n",
 		Count(), TimingName(), InterpName());
 }
 
+// Editor TEST playback (Space inside the editor / the "Test" button). Seeks the demo to
+// the CURRENT editor playhead tick, then plays the demo AND the dolly together from that
+// exact tick so you can preview the camera live, synchronized with the replay. Unlike J's
+// ArmPreview this does NOT show the big "Camera Path Preview" banner (m_editorPlay), does
+// not jump to the first marker, and engages the dolly immediately (not range-gated).
+void CameraPath::PlayFromEditor() {
+	EndCurveValueEdit();
+	const int n = m_data.Count();
+	if (n < 2) {
+		Notify("Need at least 2 camera markers to play path.");
+		advancedfx::Message("[campath] editor play refused: need >=2 markers (have %d).\n", n);
+		return;
+	}
+	RebuildCamPath();
+	if (!m_eval.CanEval()) { Notify("Camera path could not be built."); return; }
+
+	// Current editor tick = the scrub playhead if we were scrubbing, else the live tick.
+	int tick = m_data.Front().tick;
+	if (m_play.Scrubbing()) tick = (int)(m_play.ScrubTick() + 0.5);
+	else { int dt = 0; if (g_MirvTime.GetCurrentDemoTick(dt)) tick = dt; }
+	tick = ClampToPathTick(tick);
+
+	m_menuOpen = false;
+	m_hudHidden = false;
+	m_editorPlay = true; // keep the editor HUD visible; suppress preview banners
+	m_timelinePlayPending = false;
+	m_editorPlayPending = true;
+	m_editorPlayTargetTick = tick;
+	m_editorPlayWaitFrames = 0;
+	m_editorPlayStartTiming = m_eval.TimingAtTick(m_data, tick);
+
+	// Keep deterministic scrub active while the asynchronous seek settles. Playback
+	// starts from RunFrame only after the engine reports the requested tick.
+	SeekDemoTick(tick);
+	CameraBridge_SetFreeCamEnabled(true);
+	m_play.BeginScrub(tick);
+	SetMode(Mode::Editing);
+
+	const int lastTick = m_data.Back().tick;
+	advancedfx::Message(
+		"[campath][INPUT] editor play queued: start tick=%d, plays to LAST keyframe tick=%d (#%d), then stops; waiting for seek.\n",
+		tick, lastTick, n);
+	if (tick >= lastTick)
+		advancedfx::Message("[campath][INPUT] note: playhead is at/after the last keyframe (tick %d >= %d) -- play ends immediately.\n",
+			tick, lastTick);
+}
+
+void CameraPath::PausePreview() {
+	if (GetMode() != Mode::PreviewPlaying && !PlaybackPending())
+		return;
+	m_play.Stop();
+	if (m_timing == Timing::Live)
+		DemoCmd("demo_pause");
+	m_hudHidden = false;
+	m_editorPlay = false;
+	m_timelinePlayPending = false;
+	m_editorPlayPending = false;
+	SetMode(Mode::Editing);
+	advancedfx::Message("[campath] playback paused at current tick.\n");
+}
+
 void CameraPath::StopPreview() {
+	EndCurveValueEdit();
 	bool was = (GetMode() == Mode::PreviewArmed || GetMode() == Mode::PreviewPlaying);
 	m_play.Stop();
 	m_hudHidden = false;
+	m_editorPlay = false;
+	m_timelinePlayPending = false;
+	m_editorPlayPending = false;
 	SetMode(Mode::Editing);
 	if (was) advancedfx::Message("[campath] preview stopped (back to editing).\n");
 }
@@ -409,6 +608,7 @@ void CameraPath::ScrubToTick(double tick, bool seek) {
 		Notify("Need at least 2 markers to scrub the path.");
 		return;
 	}
+	tick = (double)ClampToPathTick((int)(tick + 0.5));
 
 	// Deterministic scrub happens while PAUSED so the same tick always lands the same
 	// pose. The pure EvalAtTick path (TickScrub) bypasses the clock + pose low-pass, so
@@ -423,14 +623,78 @@ void CameraPath::ScrubToTick(double tick, bool seek) {
 		CameraBridge_SetFreeCamEnabled(true);
 	}
 	if (seek) {
-		int it = (int)(tick + 0.5);
-		if (it < 0) it = 0;
-		std::ostringstream oss; oss << "demo_gototick " << it; DemoCmd(oss.str().c_str());
+		SeekDemoTick((int)(tick + 0.5));
 	}
 	m_play.BeginScrub(tick);
 }
 
 void CameraPath::StopScrub() { m_play.EndScrub(); }
+
+void CameraPath::PushCurveUndo() {
+	if (m_curveUndo.size() >= 64)
+		m_curveUndo.erase(m_curveUndo.begin());
+	m_curveUndo.push_back({ m_data.All(), m_data.Selected() });
+}
+
+double* CameraPath::ChannelTarget(CamMarker& marker, int channel) {
+	switch (channel) {
+	case 0: return &marker.x;
+	case 1: return &marker.y;
+	case 2: return &marker.z;
+	case 3: return &marker.pitch;
+	case 4: return &marker.yaw;
+	case 5: return &marker.roll;
+	case 6: return &marker.fov;
+	default: return nullptr;
+	}
+}
+
+void CameraPath::BeginCurveValueEdit() {
+	if (m_curveEditActive) return;
+	m_curveEditStart = { m_data.All(), m_data.Selected() };
+	m_curveEditActive = true;
+	m_curveEditChanged = false;
+}
+
+void CameraPath::PreviewChannelValue(int index, int channel, double v) {
+	if (!m_data.ValidIndex(index)) return;
+	if (!m_curveEditActive) BeginCurveValueEdit();
+	CamMarker& marker = m_data.At(index);
+	double* target = ChannelTarget(marker, channel);
+	if (!target || *target == v) return;
+	*target = v;
+	m_curveEditChanged = true;
+	RebuildCamPath();
+	CameraBridge_SetFreeCamEnabled(true);
+	PushPose(marker);
+	if (m_play.Scrubbing()) m_play.SetScrubTick(marker.tick);
+}
+
+void CameraPath::EndCurveValueEdit() {
+	if (!m_curveEditActive) return;
+	if (m_curveEditChanged) {
+		if (m_curveUndo.size() >= 64) m_curveUndo.erase(m_curveUndo.begin());
+		m_curveUndo.push_back(m_curveEditStart);
+		MarkDirty();
+	}
+	m_curveEditActive = false;
+	m_curveEditChanged = false;
+}
+
+void CameraPath::UndoCurveEdit() {
+	EndCurveValueEdit();
+	if (m_curveUndo.empty()) {
+		Notify("Nothing to undo.");
+		return;
+	}
+	CurveUndoState state = m_curveUndo.back();
+	m_curveUndo.pop_back();
+	m_data.Restore(state.markers, state.selected);
+	m_play.EndScrub();
+	RebuildCamPath();
+	MarkDirty();
+	advancedfx::Message("[campath] curve edit undone.\n");
+}
 
 void CameraPath::MoveKey(int index, int newTick) {
 	if (!m_data.ValidIndex(index)) return;
@@ -440,7 +704,9 @@ void CameraPath::MoveKey(int index, int newTick) {
 	if (newTick < lo) newTick = lo;
 	if (index < n - 1) { int hi = m_data.At(index + 1).tick - 1; if (newTick > hi) newTick = hi; }
 	if (newTick < 0) newTick = 0;
+	if (newTick == m_data.At(index).tick) return;
 
+	PushCurveUndo();
 	CamMarker& m = m_data.At(index);
 	m.tick = newTick;
 	float ipt = g_MirvTime.interval_per_tick_get();
@@ -453,16 +719,11 @@ void CameraPath::MoveKey(int index, int newTick) {
 void CameraPath::SetChannelValue(int index, int channel, double v) {
 	if (!m_data.ValidIndex(index)) return;
 	CamMarker& m = m_data.At(index);
-	switch (channel) {
-	case 0: m.x = v; break;
-	case 1: m.y = v; break;
-	case 2: m.z = v; break;
-	case 3: m.pitch = v; break;
-	case 4: m.yaw = v; break;
-	case 5: m.roll = v; break;
-	case 6: m.fov = v; break;
-	default: return;
-	}
+	double* target = ChannelTarget(m, channel);
+	if (!target) return;
+	if (*target == v) return;
+	PushCurveUndo();
+	*target = v;
 	RebuildCamPath();
 	MarkDirty();
 	advancedfx::Message("[campath] marker #%d channel %d -> %.3f.\n", index, channel, v);
@@ -512,16 +773,27 @@ void CameraPath::UpdateHover() {
 	double fz = -std::sin(pr);
 
 	int best = -1;
-	double bestDot = kAimDot;
+	double bestDot = -2.0;
 	for (int i = 0; i < n; ++i) {
 		const CamMarker& mk = m_data.At(i);
 		double dx = mk.x - o[0];
 		double dy = mk.y - o[1];
 		double dz = mk.z - o[2];
 		double len = std::sqrt(dx * dx + dy * dy + dz * dz);
-		if (len < 1.0) { best = i; bestDot = 1.0; continue; }
-		double dot = (dx * fx + dy * fy + dz * fz) / len;
-		if (dot > bestDot) { bestDot = dot; best = i; }
+		if (len < 1e-3) { best = i; bestDot = 1.0; continue; } // basically inside the marker
+		double inv = 1.0 / len;
+		double dot = (dx * fx + dy * fy + dz * fz) * inv;
+		if (dot <= 0.0) continue; // behind the camera -- never pick
+
+		// Acceptance cone widens up close (marker subtends a bigger angle), so near markers
+		// are easy and being on top always registers; far markers use the narrow base cone.
+		double coneCos = kAimConeCos;
+		double sinHalf = kAimMarkerRadius * inv;
+		if (sinHalf > 0.85) sinHalf = 0.85; // clamp so the sqrt stays sane very close in
+		double nearCos = std::sqrt(1.0 - sinHalf * sinHalf);
+		if (nearCos < coneCos) coneCos = nearCos; // take the WIDER of base / subtended cone
+
+		if (dot >= coneCos && dot > bestDot) { bestDot = dot; best = i; } // most-centred wins
 	}
 	int prev = m_hovered.exchange(best);
 	if (prev != best && best >= 0)
@@ -536,9 +808,13 @@ void CameraPath::RunFrame() {
 	if (cur != m_demoPath) {
 		m_demoPath = cur;
 		m_data.DeleteAll();
+		m_curveUndo.clear();
 		m_menuOpen = false;
 		m_play.Stop();
 		m_hudHidden = false;
+		m_editorPlay = false;
+		m_timelinePlayPending = false;
+		m_editorPlayPending = false;
 		SetMode(Mode::Editing);
 		Load();              // no-op if no sidecar
 		RebuildCamPath();
@@ -547,13 +823,23 @@ void CameraPath::RunFrame() {
 
 	// Fail-safe: if a mode/scrub was left active when the demo stopped, return to a
 	// clean editing state so MirvInput isn't left suspended with no closable panel.
+	// IsPlayingDemo() reports false transiently during a demo_gototick seek, so debounce:
+	// only tear down after the demo has been stopped for several consecutive frames. A
+	// single mid-seek blip must NOT kill a play/scrub that just started.
 	if (GetMode() != Mode::Editing || m_menuOpen || m_play.Playing() || m_play.Scrubbing()) {
-		if (!DemoIsPlaying()) {
+		if (!DemoIsPlaying()) ++m_demoStoppedFrames; else m_demoStoppedFrames = 0;
+		if (m_demoStoppedFrames >= 20) {
 			m_menuOpen = false;
 			m_play.Stop();
 			m_hudHidden = false;
+			m_editorPlay = false;
+			m_timelinePlayPending = false;
+			m_editorPlayPending = false;
+			m_liveResumeGuard = 0;
 			SetMode(Mode::Editing);
 		}
+	} else {
+		m_demoStoppedFrames = 0;
 	}
 
 	// Expire the transient notice banner.
@@ -561,18 +847,78 @@ void CameraPath::RunFrame() {
 
 	UpdateHover();
 
+	if (m_editorPlayPending) {
+		++m_editorPlayWaitFrames;
+		int tick = -1;
+		const bool atTarget = g_MirvTime.GetCurrentDemoTick(tick)
+			&& std::abs(tick - m_editorPlayTargetTick) <= 1;
+		// Start as soon as the seek lands, but NEVER cancel into a stuck scrub if it doesn't
+		// settle exactly -- after a short fallback, start anyway. During a match tech-pause the
+		// demo tick churns (CGameRules pause/unpause every tick) so an exact-tick settle can
+		// never match; the old "seek did not settle" cancel left the editor stuck in SCRUBBING
+		// with the play button frozen on the play icon. Live playback binds the camera to demo
+		// time, so starting from wherever the demo actually is still flies the path; the resume
+		// guard keeps the demo rolling.
+		if ((atTarget && m_editorPlayWaitFrames >= 2) || m_editorPlayWaitFrames >= 30) {
+			m_editorPlayPending = false;
+			m_play.EndScrub();
+			CameraBridge_SetFreeCamEnabled(true);
+			m_play.StartPlay(m_eval.Duration(), /*rangeGated*/ false, m_editorPlayStartTiming);
+			SetMode(Mode::PreviewPlaying);
+			if (m_timing == Timing::Live) { DemoCmd("demo_resume"); m_liveResumeGuard = 120; }
+			advancedfx::Message("[campath] editor play started from tick %d (atTarget=%d, waited %d frames, freecam=%d).\n",
+				m_editorPlayTargetTick, atTarget ? 1 : 0, m_editorPlayWaitFrames,
+				CameraBridge_GetFreeCamEnabled() ? 1 : 0);
+		}
+	}
+
 	Mode mode = GetMode();
 	if (mode == Mode::PreviewArmed && !m_data.Empty()) {
 		PushPose(m_data.Front()); // hold the camera at the start frame
+		if (m_timelinePlayPending) {
+			++m_timelinePlayWaitFrames;
+			int tick = -1;
+			const bool atStart = g_MirvTime.GetCurrentDemoTick(tick)
+				&& std::abs(tick - m_data.Front().tick) <= 1;
+			// Wait for the seek to actually land before playing. The "Demo Skipping" stall
+			// can run for hundreds of ms (~20+ frames), so the blind fallback must be long
+			// enough not to fire mid-skip -- doing so unpaused the demo for a single tick
+			// and then the seek's own auto-pause refroze it. 240 frames is the safety net
+			// for a seek that never reports the target tick.
+			if ((atStart && m_timelinePlayWaitFrames >= 2) || m_timelinePlayWaitFrames >= 240) {
+				m_timelinePlayPending = false;
+				StartPreviewPlay();
+				mode = GetMode();
+			}
+		}
 	} else if (mode == Mode::PreviewPlaying) {
+		// Keep the demo running in Live timing: the lingering demo_gototick auto-pause
+		// (and any one-frame seek pause) would otherwise freeze the dolly right after it
+		// starts. Re-resume while the guard is active and the demo is paused -- nothing the
+		// USER does pauses during PreviewPlaying (Space is swallowed; the HUD pause button
+		// leaves this mode), so a paused demo here is always the seek, never intentional.
+		if (m_liveResumeGuard > 0) {
+			if (m_timing == Timing::Live && DemoIsPaused()) DemoCmd("demo_resume");
+			--m_liveResumeGuard;
+		}
 		if (m_play.TickPlay(m_data, m_eval, MakeContext())) {
-			advancedfx::Message("[campath] play reached end of path (%d markers).\n", m_data.Count());
-			StopPreview();
+			// Reached the LAST keyframe tick. The timeline only covers the marker range, so
+			// HALT the demo here (Live) instead of letting it roll past the path -- the whole
+			// point of the timeline is to bound playback to where the cam path ends. Freeze is
+			// self-contained on wall-clock and needs no demo pause.
+			const int lastTick = m_data.Empty() ? -1 : m_data.Back().tick;
+			advancedfx::Message("[campath] play reached end of path (%d markers, last keyframe tick=%d) -- stopping at last keyframe.\n",
+				m_data.Count(), lastTick);
+			FinishPlaybackAtLastKey();
 		}
 	} else if (m_play.Scrubbing()) {
 		m_play.TickScrub(m_data, m_eval); // deterministic tick-perfect preview (paused)
+	} else if (m_editorPoseHoldFrames > 0 && m_data.ValidIndex(m_data.Selected())) {
+		PushPose(m_data.At(m_data.Selected()));
+		--m_editorPoseHoldFrames;
 	}
 
+	EnsureDrawState(); // per-frame: tracks mode so visuals hide while playing, show while editing
 	SyncDrawerStyle();
 
 	if (m_dirty) { Save(); m_dirty = false; }
@@ -587,6 +933,7 @@ void CameraPath::Save() {
 
 void CameraPath::Load() {
 	if (m_demoPath.empty()) return;
+	m_curveUndo.clear();
 	PathSettings st = MakeSettings(); // seed with current defaults
 	int sel = m_data.Selected();
 	if (m_data.Load(SidecarPath(), st, sel)) {

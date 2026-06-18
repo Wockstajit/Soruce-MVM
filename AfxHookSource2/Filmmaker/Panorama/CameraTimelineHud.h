@@ -33,11 +33,13 @@ public:
 	void Toggle() { m_visible = !m_visible; }
 	bool Visible() const { return m_visible; }
 
-	// UI-mouse mode: when on (and the panel is open) the panel is hit-testable and
-	// MirvInput is suspended so the OS cursor shows. Toggled by G while in freecam.
+	// UI-mouse mode: MirvInput is suspended so the OS cursor shows. While the camera
+	// timeline / curve editor is open this is forced on; otherwise it is the regular
+	// native-demo-bar mouse toggle.
 	void SetCursor(bool v) { m_cursor = v; }
 	void ToggleCursor() { m_cursor = !m_cursor; }
-	bool Cursor() const { return m_cursor; }
+	bool Cursor() const { return m_visible || m_cursor; }
+	bool CursorForced() const { return m_visible; }
 
 	void SetView(int view) { m_view = (view != 0) ? 1 : 0; } // 0 timeline, 1 curve
 	void ToggleView() { m_view ^= 1; }
@@ -66,7 +68,7 @@ private:
 	short m_symCurve = -1;
 	bool m_built = false;
 	bool m_visible = false; // hidden until 'camtl open'
-	bool m_cursor = false;  // UI-mouse mode (G toggles); opens in fly mode, G grabs cursor
+	bool m_cursor = false;  // global freecam cursor mode (G toggles; never opens the editor)
 	int m_view = 0;         // 0 timeline, 1 curve
 
 	// Visible tick window for the curve editor (also the timeline scrub range).

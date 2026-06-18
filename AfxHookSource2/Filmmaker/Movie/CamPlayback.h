@@ -39,7 +39,7 @@ public:
 	// Begin playback over [0, duration] on the timing axis. rangeGated (timeline play):
 	// in Live mode the dolly only drives the camera once the demo reaches the first
 	// marker's tick and releases it (normal demo view) before that / after the last.
-	void StartPlay(double duration, bool rangeGated = false);
+	void StartPlay(double duration, bool rangeGated = false, double startTiming = 0.0);
 	void Stop();                       // stop playback AND scrub
 
 	void BeginScrub(double tick);      // enter scrub at a tick (facade issues gototick/pause)

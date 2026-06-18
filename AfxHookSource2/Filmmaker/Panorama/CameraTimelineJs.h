@@ -8,13 +8,13 @@
 // next-camera hotkey labels) are hidden and ours occupies that bottom space; the
 // native bar is restored when we close.
 //
-// UI-mouse mode (toggled by G, state.cursor): when ON the panel is hit-testable and
-// the OS cursor shows (MirvInput suspended); when OFF the panel is click-through so
-// free-cam look/movement work. This lets the editor be used while in free cam.
+// UI-mouse mode (state.cursor): while the camera timeline / curve editor is open it
+// is forced on so the panel is always clickable. In regular native-demo-bar mode it
+// can be toggled from third-person/freecam by G or the injected MOUSE button.
 //
 //   * TIMELINE: a native-styled scrubber (HorizontalSlider) + keyframe diamonds +
 //     transport + speed buttons.
-//   * CURVE EDITOR: IWXMVM's multi-lane value-vs-time graph (X/Y/Z/Pitch/Yaw/Roll/
+//   * CURVE EDITOR: IWXMVM's multi-lane value-vs-time graph (X/Y/Z/Pitch/Yaw/Tilt/
 //     FOV), drawn with the rotated-panel line trick + diamond keyframes, a draggable
 //     playhead, and a draggable VALUE slider that edits the selected key/channel.
 //
@@ -39,10 +39,11 @@ inline const char* kCameraTimelineJs = R"TLJS(
       label: '#9aa4b0ff', value: '#eef2f6ff', btnBg: '#ffffff14', btnOn: '#f0b32333',
       font: 'Stratum2, "Arial Unicode MS"'
     };
-    var W = 1000, LANE_H = 36, LANE_GAP = 6, LABELW = 118;
+    var W = 1250, LANE_H = 42, LANE_GAP = 8, LABELW = 132;
     var LANES_H = (LANE_H + LANE_GAP) * 7;
     var CH = ['x','y','z','pitch','yaw','roll','fov'];
-    var CHLBL = ['X','Y','Z','PITCH','YAW','ROLL','FOV'];
+    var CHLBL = ['X','Y','Z','PITCH','YAW','TILT','FOV'];
+    var CHHELP = ['','','','up / down','left / right','',''];
     var EASE = ['none','in','out','inout'];
     var EASE_LBL = ['None','Ease In','Ease Out','Ease In/Out'];
 
@@ -106,24 +107,71 @@ inline const char* kCameraTimelineJs = R"TLJS(
 
     // Patch the LIVE native demo bar (CSGOHudDemoController): remove the
     // next-camera / next-player / mouse-cursor hotkey hints, and inject our
-    // "CAM EDITOR" button into it (idempotent; re-adds if the bar is recreated).
+    // "MOUSE" + "CAM EDITOR" buttons into it (idempotent; re-adds if the bar is recreated).
     // Runs every frame while in a demo so the clutter never reappears.
     function patchNativeBar() {
       var ids = ['HotKey_Next_Camera', 'HotKey_Player_Next', 'HotKey_Toggle_Mouse_Cursor'];
       for (var i = 0; i < ids.length; i++) { var p = findNative(ids[i]); if (p) p.visible = false; }
       var host = findNative('HotKeyLabels') || findNative('ControlRow');
       if (!host) return;
-      var b = host.FindChildTraverse && host.FindChildTraverse('CamEditorBtn');
-      if (b) return;
-      b = $.CreatePanel('Panel', host, 'CamEditorBtn', {});
-      b.hittest = true;
-      b.style.height = '34px'; b.style.verticalAlign = 'center'; b.style.marginRight = '8px';
-      b.style.paddingLeft = '12px'; b.style.paddingRight = '12px';
-      b.style.backgroundColor = '#f0b32333'; b.style.borderRadius = '3px';
-      var l = $.CreatePanel('Label', b, '', {});
-      l.text = 'CAM EDITOR'; l.style.color = S.accent; l.style.fontWeight = 'bold';
-      l.style.fontSize = '15px'; l.style.verticalAlign = 'center'; l.style.horizontalAlign = 'center';
-      b.SetPanelEvent('onactivate', function () { cmd('mirv_filmmaker camtl toggle'); });
+      function childIndex(p) {
+        if (!p || !host.GetChildCount) return -1;
+        var n = host.GetChildCount();
+        for (var ci = 0; ci < n; ci++) if (host.GetChild(ci) === p) return ci;
+        return -1;
+      }
+      var oldMouse = host.FindChildTraverse && host.FindChildTraverse('CamCursorBtn');
+      var oldEditor = host.FindChildTraverse && host.FindChildTraverse('CamEditorBtn');
+      if ((!oldMouse && oldEditor) || (oldMouse && oldEditor && childIndex(oldMouse) > childIndex(oldEditor))) {
+        try { if (oldMouse) oldMouse.DeleteAsync(0); } catch (orderErr1) {}
+        try { oldEditor.DeleteAsync(0); } catch (orderErr2) {}
+        return;
+      }
+      function nativeBtn(id, text, onactivate) {
+        var b = host.FindChildTraverse && host.FindChildTraverse(id);
+        if (!b) {
+          b = $.CreatePanel('Panel', host, id, {});
+          b.hittest = true;
+          b.style.height = '34px'; b.style.verticalAlign = 'center'; b.style.marginRight = '8px';
+          b.style.paddingLeft = '12px'; b.style.paddingRight = '12px';
+          b.style.borderRadius = '3px';
+          var l = $.CreatePanel('Label', b, '', {});
+          l.style.fontWeight = 'bold'; l.style.fontSize = '15px';
+          l.style.verticalAlign = 'center'; l.style.horizontalAlign = 'center';
+          b.__lbl = l;
+          b.SetPanelEvent('onactivate', onactivate);
+        } else if (!b.__lbl) {
+          b.__lbl = (b.GetChildCount && b.GetChildCount() > 0) ? b.GetChild(0) : $.CreatePanel('Label', b, '', {});
+        }
+        b.__lbl.text = text;
+        return b;
+      }
+      var mb = nativeBtn('CamCursorBtn', 'MOUSE (G)', function () { cmd('mirv_filmmaker camtl cursor toggle'); });
+      var curOn = !!(st && st.cursor);
+      mb.style.backgroundColor = curOn ? '#c92a2acc' : '#ffffff14';
+      mb.__lbl.style.color = curOn ? '#ffffffff' : S.label;
+      var cb = nativeBtn('CamEditorBtn', 'CAM EDITOR', function () { cmd('mirv_filmmaker camtl toggle'); });
+      cb.style.backgroundColor = '#f0b32333';
+      cb.__lbl.style.color = S.accent;
+    }
+
+    // Legacy cleanup hook: if an older build hid native HUD siblings, restore them. The
+    // camera timeline HUD toggle is disabled; this must not hide anything anymore.
+    var OURS = { 'CamTimelineRoot': 1, 'MarkerHudRoot': 1, 'MovieHudRoot': 1 };
+    var hiddenNatives = null; // [{p, v}] captured while hidden; null while the HUD is shown
+    function setGameHudHidden(hide) {
+      if (hide) {
+        if (!hiddenNatives) hiddenNatives = [];
+        var nk = ctx.GetChildCount ? ctx.GetChildCount() : 0;
+        for (var i = 0; i < nk; i++) {
+          var c = ctx.GetChild(i);
+          if (!c || OURS[c.id]) continue;
+          if (c.visible) { hiddenNatives.push({ p: c, v: true }); try { c.visible = false; } catch (e) {} }
+        }
+      } else if (hiddenNatives) {
+        for (var j = 0; j < hiddenNatives.length; j++) { try { hiddenNatives[j].p.visible = hiddenNatives[j].v; } catch (e2) {} }
+        hiddenNatives = null;
+      }
     }
 
     // ---- root + hit catcher + panel ------------------------------------
@@ -135,7 +183,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
 
     var panel = mk('Panel', root); panel.hittest = true;
     var ps = panel.style;
-    ps.horizontalAlign = 'center'; ps.verticalAlign = 'bottom'; ps.marginBottom = '22px';
+    ps.horizontalAlign = 'center'; ps.verticalAlign = 'bottom'; ps.marginBottom = '0px';
     ps.width = (LABELW + W + 28) + 'px';
     ps.backgroundColor = S.bg; ps.borderRadius = '6px'; ps.border = '1px solid ' + S.panelBorder;
     ps.boxShadow = '#000000cc 0px 0px 12px 2px'; // native demo-bar style depth
@@ -166,33 +214,46 @@ R"TLJS(
     var tl = mk('Panel', panel); tl.style.flowChildren = 'down'; tl.style.width = (LABELW + W) + 'px';
     var trow = mk('Panel', tl); trow.style.flowChildren = 'right'; trow.style.width = '100%'; trow.style.marginBottom = '8px';
     var playBtn = btn(trow, '▶', function () {
-      if (st && st.playing) cmd('mirv_filmmaker camtl stop'); else cmd('mirv_filmmaker camtl play');
+      cmd('mirv_filmmaker camtl play');
     }, S.accent);
+    playBtn.visible = false; // camera-path playback disabled pending rewrite
     btn(trow, '⏮', function () { gotoKey(-1); }, S.value);
     btn(trow, '⏭', function () { gotoKey(1); }, S.value);
-    btn(trow, '◀ 1', function () { if (st) cmd('mirv_filmmaker camtl scrub ' + (st.tick - 1)); }, S.value);
-    btn(trow, '1 ▶', function () { if (st) cmd('mirv_filmmaker camtl scrub ' + (st.tick + 1)); }, S.value);
+    btn(trow, '◀ 1', function () { if (st) cmd('mirv_filmmaker camtl scrub ' + (activeTick() - 1)); }, S.value);
+    btn(trow, '1 ▶', function () { if (st) cmd('mirv_filmmaker camtl scrub ' + (activeTick() + 1)); }, S.value);
     var tReadout = lbl(trow, '', S.value, 13); tReadout.style.verticalAlign = 'center';
     tReadout.style.marginLeft = '10px'; tReadout.style.width = 'fill-parent-flow(1.0)';
     var SPD = [0.1, 0.25, 0.5, 1, 2, 4];
+    var speedBtns = [], activeSpeed = 1;
+    function updateSpeedButtons() {
+      for (var bi = 0; bi < speedBtns.length; bi++) {
+        var on = Math.abs(speedBtns[bi].speed - activeSpeed) < 0.0001;
+        speedBtns[bi].panel.style.backgroundColor = on ? S.btnOn : S.btnBg;
+        speedBtns[bi].panel.__lbl.style.color = on ? S.accent : S.label;
+      }
+    }
     for (var si = 0; si < SPD.length; si++) (function (v) {
-      btn(trow, (v < 1 ? v : v + '') + 'x', function () { cmd('demo_timescale ' + v); }, S.label);
+      var sb = btn(trow, (v < 1 ? v : v + '') + 'x', function () {
+        activeSpeed = v; updateSpeedButtons(); cmd('demo_timescale ' + v);
+      }, S.label);
+      speedBtns.push({ panel: sb, speed: v });
     })(SPD[si]);
+    updateSpeedButtons();
 
     // Timeline scrubber spans the FULL content width (no label gutter -- that column is
     // only for the curve editor's per-channel lane labels).
     var TLW = LABELW + W;
-    var srow = mk('Panel', tl); srow.style.width = TLW + 'px'; srow.style.height = '34px';
+    var srow = mk('Panel', tl); srow.style.width = TLW + 'px'; srow.style.height = '40px';
     var diamWrap = mk('Panel', srow); diamWrap.hittest = false;
-    diamWrap.style.width = TLW + 'px'; diamWrap.style.height = '16px'; diamWrap.style.position = '0px 0px 0px';
+    diamWrap.style.width = TLW + 'px'; diamWrap.style.height = '22px'; diamWrap.style.position = '0px 0px 0px';
     var trackBg = mk('Panel', srow); trackBg.style.width = TLW + 'px'; trackBg.style.height = '4px';
-    trackBg.style.position = '0px 16px 0px'; trackBg.style.backgroundColor = S.track; trackBg.style.borderRadius = '2px';
+    trackBg.style.position = '0px 20px 0px'; trackBg.style.backgroundColor = S.track; trackBg.style.borderRadius = '2px';
     // Native CS2 sliders need BOTH the class (styling) and the direction ATTRIBUTE
     // (drag axis): e.g. <Slider class="HorizontalSlider" direction="horizontal"/>.
     // Without direction the Slider defaults to vertical, so the thumb drags up/down
     // instead of left/right -- pass it in the CreatePanel construction props.
     var scrub = $.CreatePanel('Slider', srow, 'CamScrub', { direction: 'horizontal' }); scrub.AddClass('HorizontalSlider');
-    scrub.style.width = TLW + 'px'; scrub.style.height = '20px'; scrub.style.position = '0px 8px 0px';
+    scrub.style.width = TLW + 'px'; scrub.style.height = '24px'; scrub.style.position = '0px 10px 0px';
 
     // ===================== CURVE VIEW ===================================
     var cv = mk('Panel', panel); cv.style.flowChildren = 'down'; cv.style.width = (LABELW + W) + 'px'; cv.visible = false;
@@ -212,15 +273,25 @@ R"TLJS(
     var graphArea = mk('Panel', cv); graphArea.style.width = (LABELW + W) + 'px'; graphArea.style.height = LANES_H + 'px';
     var lanesInner = mk('Panel', graphArea); lanesInner.style.flowChildren = 'down';
     lanesInner.style.width = '100%'; lanesInner.style.position = '0px 0px 0px';
-    var laneGraphs = [], laneRange = [];
+    var laneGraphs = [], laneLabels = [], laneNames = [], laneRange = [];
     for (var c = 0; c < CH.length; c++) {
       var row = mk('Panel', lanesInner); row.style.flowChildren = 'right'; row.style.width = '100%'; row.style.height = (LANE_H + LANE_GAP) + 'px';
-      var lc = mk('Panel', row); lc.style.width = LABELW + 'px'; lc.style.flowChildren = 'down'; lc.style.verticalAlign = 'center';
+      var lc = mk('Panel', row); lc.style.width = LABELW + 'px'; lc.style.height = LANE_H + 'px';
+      lc.style.flowChildren = 'down'; lc.style.verticalAlign = 'center'; lc.hittest = true;
       var nm = lbl(lc, CHLBL[c], S.accent, 12); nm.style.fontWeight = 'bold';
+      if (CHHELP[c]) {
+        var hp = lbl(lc, CHHELP[c], S.label, 9);
+        hp.style.marginTop = '-1px';
+      }
       laneRange.push(lbl(lc, '', S.label, 10));
+      (function (ci, lp) { lp.SetPanelEvent('onactivate', function () { selectChannel(ci); }); })(c, lc);
       var g = mk('Panel', row); g.style.width = W + 'px'; g.style.height = LANE_H + 'px';
-      g.style.backgroundColor = S.grid; g.style.borderRadius = '2px'; g.hittest = true;
-      (function (ci, gp) { gp.SetPanelEvent('onactivate', function () { selChannel = ci; selectNearestInLane(); }); })(c, g);
+      g.style.backgroundColor = S.grid; g.style.borderRadius = '2px'; g.style.border = '1px solid transparent'; g.hittest = true;
+      // Lane clicks select the property only. Keyframe diamonds own camera selection;
+      // keeping these responsibilities separate prevents the parent lane click from
+      // immediately overriding a clicked camera with the old playhead-nearest camera.
+      (function (ci, gp) { gp.SetPanelEvent('onactivate', function () { selectChannel(ci); }); })(c, g);
+      laneLabels.push(lc); laneNames.push(nm);
       laneGraphs.push(g);
     }
     var phLine = mk('Panel', graphArea); phLine.hittest = false;
@@ -231,7 +302,7 @@ R"TLJS(
     var cedit = mk('Panel', cv); cedit.style.flowChildren = 'right'; cedit.style.width = '100%'; cedit.style.marginTop = '8px'; cedit.visible = false;
     var ceLabel = lbl(cedit, '', S.value, 13); ceLabel.style.verticalAlign = 'center'; ceLabel.style.width = '210px';
     var cevSlider = $.CreatePanel('Slider', cedit, 'CamVal', { direction: 'horizontal' }); cevSlider.AddClass('HorizontalSlider');
-    cevSlider.style.width = '620px'; cevSlider.style.height = '16px'; cevSlider.style.verticalAlign = 'center';
+    cevSlider.style.width = '860px'; cevSlider.style.height = '16px'; cevSlider.style.verticalAlign = 'center';
     var cevVal = lbl(cedit, '', S.accent, 13); cevVal.style.verticalAlign = 'center'; cevVal.style.marginLeft = '12px'; cevVal.style.fontWeight = 'bold';
 )TLJS"
 R"TLJS(
@@ -255,8 +326,9 @@ R"TLJS(
     K.tm = btn(keyFooter, 'Live', function () { cmd('mirv_filmmaker marker timing toggle'); }, S.value);
 
     // =====================================================================
-    var st = null, curve = null, curView = 'timeline', selChannel = 0;
+    var st = null, curve = null, curView = 'timeline', selChannel = -1;
     var lastRev = -1, lastView = '', lastTlSig = '';
+    var lastCurveSelected = -2, lastCurveChannel = -1;
     // Dynamically-created Panorama sliders work in their default 0..1 range (setting
     // min/max/out-of-range value is unreliable and leaves the thumb stuck mid-track), so
     // we keep value normalized and map 0..1 <-> tick / channel-value ourselves.
@@ -265,6 +337,14 @@ R"TLJS(
     function sliderTick(v, a, b) { return Math.round(a + v * (b - a)); }
 
     function frac(tick, t0, t1) { var d = t1 - t0; return d > 0 ? (tick - t0) / d : 0; }
+    function activeTick() {
+      return st && st.scrubbing ? st.scrubTick : (st ? st.tick : 0);
+    }
+    function selectChannel(ci) {
+      selChannel = ci;
+      if (curve) rebuildCurveLanes();
+      if (api && api.render) api.render();
+    }
     function gotoKey(dir) {
       if (!st || !st.markers || st.markers.length === 0) return;
       var cur = st.tick, bestI = -1, bestT = null;
@@ -273,7 +353,7 @@ R"TLJS(
         if (dir < 0 && t < cur) { if (bestT === null || t > bestT) { bestT = t; bestI = i; } }
         if (dir > 0 && t > cur) { if (bestT === null || t < bestT) { bestT = t; bestI = i; } }
       }
-      if (bestI >= 0) { cmd('mirv_filmmaker marker select ' + bestI); cmd('mirv_filmmaker camtl scrub ' + bestT); }
+      if (bestI >= 0) cmd('mirv_filmmaker camtl select ' + bestI);
     }
     function stepSpeed(d) {
       if (!st || st.selected < 0) return;
@@ -282,11 +362,11 @@ R"TLJS(
       idx += (d > 0 ? 1 : -1); if (idx < 0) idx = 0; if (idx >= steps.length) idx = steps.length - 1;
       cmd('mirv_filmmaker camtl speed ' + st.selected + ' ' + steps[idx].toFixed(2));
     }
-    // Select the marker nearest the current playhead tick (used when a lane bg is clicked).
+    // Select the marker nearest the visible playhead (used when a lane background is clicked).
     function selectNearestInLane() {
       if (!st || !st.markers || st.markers.length === 0) return;
-      var best = -1, bd = 1e15;
-      for (var i = 0; i < st.markers.length; i++) { var d = Math.abs(st.markers[i].tick - st.tick); if (d < bd) { bd = d; best = i; } }
+      var best = -1, bd = 1e15, tick = activeTick();
+      for (var i = 0; i < st.markers.length; i++) { var d = Math.abs(st.markers[i].tick - tick); if (d < bd) { bd = d; best = i; } }
       if (best >= 0) cmd('mirv_filmmaker marker select ' + best);
     }
 
@@ -308,13 +388,26 @@ R"TLJS(
     $.RegisterEventHandler('SliderReleased', phSlider, function (panel, v) {
       cmd('mirv_filmmaker camtl scrub ' + sliderTick(v, phT0, phT1));
     });
-    // Value editor: live number while dragging, apply (setval -> rebuild) on release.
+    // Value editor: update the selected camera/property continuously while dragging.
+    // The backend records one undo snapshot for the whole gesture.
+    var valueDragActive = false, valueSyncing = false;
     $.RegisterEventHandler('SliderValueChanged', cevSlider, function (panel, v) {
-      cevVal.text = (valLo + v * (valHi - valLo)).toFixed(2);
+      if (valueSyncing) return;
+      var value = valLo + v * (valHi - valLo);
+      cevVal.text = value.toFixed(2);
+      if (st && st.selected >= 0 && selChannel >= 0) {
+        if (!valueDragActive) {
+          valueDragActive = true;
+          cmd('mirv_filmmaker camtl editbegin');
+        }
+        cmd('mirv_filmmaker camtl setvalpreview ' + st.selected + ' ' + selChannel + ' ' + value.toFixed(3));
+      }
     });
     $.RegisterEventHandler('SliderReleased', cevSlider, function (panel, v) {
-      if (st && st.selected >= 0)
-        cmd('mirv_filmmaker camtl setval ' + st.selected + ' ' + selChannel + ' ' + (valLo + v * (valHi - valLo)).toFixed(3));
+      if (valueDragActive) {
+        valueDragActive = false;
+        cmd('mirv_filmmaker camtl editend');
+      }
     });
 
     function rebuildTimelineDiamonds() {
@@ -324,9 +417,8 @@ R"TLJS(
       for (var i = 0; i < st.markers.length; i++) (function (i) {
         var x = frac(st.markers[i].tick, t0, t1) * TLW;
         var sel = (i === st.selected);
-        diamond(diamWrap, x, 8, sel ? 13 : 10, sel ? S.lineSel : S.accent, function () {
-          cmd('mirv_filmmaker marker select ' + i);
-          cmd('mirv_filmmaker camtl scrub ' + st.markers[i].tick); // clicking a camera seeks to it
+        diamond(diamWrap, x, 11, sel ? 19 : 15, sel ? S.lineSel : S.accent, function () {
+          cmd('mirv_filmmaker camtl select ' + i);
         });
       })(i);
     }
@@ -336,7 +428,13 @@ R"TLJS(
       for (var c = 0; c < curve.lanes.length && c < laneGraphs.length; c++) {
         var lane = curve.lanes[c], g = laneGraphs[c];
         g.RemoveAndDeleteChildren();
+        g.style.backgroundColor = S.grid;
+        g.style.border = '1px solid #ffffff0d';
+        laneLabels[c].style.backgroundColor = 'transparent';
+        laneNames[c].style.color = S.accent;
         laneRange[c].text = lane.min.toFixed(1) + ' .. ' + lane.max.toFixed(1);
+        for (var gi = 1; gi < 10; gi++)
+          lineSeg(g, W * gi / 10, 0, W * gi / 10, LANE_H, gi === 5 ? S.gridMid : S.grid, 1);
         lineSeg(g, 0, LANE_H / 2, W, LANE_H / 2, S.gridMid, 1);
         var px = -1, py = -1;
         for (var i = 0; i < n; i++) {
@@ -353,9 +451,9 @@ R"TLJS(
             if (mt < t0 - 1 || mt > t1 + 1) return;
             var dx = frac(mt, t0, t1) * W, norm = (mk2[CH[c]] - lane.min) / span;
             if (norm < 0) norm = 0; if (norm > 1) norm = 1;
-            var sel = (m === st.selected);
-            diamond(g, dx, (1 - norm) * LANE_H, sel ? 11 : 8, sel ? S.lineSel : S.accent,
-              function () { selChannel = c; cmd('mirv_filmmaker marker select ' + m); cmd('mirv_filmmaker camtl scrub ' + mk2.tick); });
+            var sel = (m === st.selected && c === selChannel);
+            diamond(g, dx, (1 - norm) * LANE_H, sel ? 14 : 9, sel ? S.lineSel : S.accent,
+              function () { selectChannel(c); cmd('mirv_filmmaker camtl select ' + m); });
           })(c, m);
         }
       }
@@ -378,31 +476,42 @@ R"TLJS(
     var api = {};
     api.render = function () {
       var raw = root.GetAttributeString('state', '');
-      if (!raw) { root.visible = false; setNativeHidden(false); return; }
+      if (!raw) { root.visible = false; setNativeHidden(false); setGameHudHidden(false); return; }
       try { st = JSON.parse(raw); } catch (e) { return; }
 
       patchNativeBar(); // keep the native demo bar de-cluttered + our button present
+      setGameHudHidden(false);
 
       curView = st.view || 'timeline';
-      root.visible = !!st.open;
-      setNativeHidden(!!st.open);          // our bar REPLACES the native demo bar
-      if (!st.open) { catcher.visible = false; return; }
+      var previewHidden = !!st.previewHudHidden;
+      root.visible = !!st.open && !previewHidden;
+      // Hide the native demo bar when our panel is open (it replaces it) or when
+      // camera-path preview needs a clean frame.
+      setNativeHidden(!!st.open || previewHidden);
+      if (!st.open || previewHidden) { catcher.visible = false; return; }
 
-      // UI-mouse mode (G). The panel stays interactive; the input layer decides whether
-      // clicks reach it (free cam swallows them unless cursor mode is on). The catcher
-      // only absorbs stray clicks while cursor mode is on so the spectator can't switch.
+      // UI-mouse mode. The editor forces it on while open; the catcher absorbs stray
+      // clicks so spectator target switching cannot leak through behind the panel.
       var cur = !!st.cursor;
+      var forcedCur = !!st.cursorForced;
       catcher.visible = cur; catcher.hittest = cur;
       panel.hittest = true;
-      mouseLbl.text = cur ? 'Mouse: UI  ·  press G to fly' : 'Mouse: GAME  ·  press G to edit';
+      mouseLbl.text = forcedCur ? 'Mouse: UI  ·  editor cursor forced' : (cur ? 'Mouse: UI  ·  press G to toggle mouse' : 'Mouse: GAME  ·  press G to toggle mouse');
       mouseLbl.style.color = cur ? S.accent : S.label;
+      try {
+        var dc = ctx.GetDemoControllerState && ctx.GetDemoControllerState();
+        if (dc && typeof dc.fTimeScale === 'number') {
+          activeSpeed = dc.fTimeScale;
+          updateSpeedButtons();
+        }
+      } catch (speedErr) {}
 
       var freeze = (st.timing === 'Freeze');
       tl.visible = (curView === 'timeline');
       cv.visible = (curView === 'curve');
       viewBtn.__lbl.text = (curView === 'timeline') ? 'Curve Editor' : 'Timeline';
       hTitle.text = (curView === 'timeline') ? 'CAMERA TIMELINE' : 'CAMERA CURVE EDITOR';
-      hInfo.text = 'tick ' + st.tick + '   ·   ' + st.count + ' keys   ·   sel #'
+      hInfo.text = 'tick ' + activeTick() + '   ·   ' + st.count + ' keys   ·   sel #'
         + (st.selected >= 0 ? (st.selected + 1) : '-') + '   ·   seg ' + (st.segment + 1)
         + '   ·   ' + st.interp + (st.scrubbing ? '   ·   SCRUBBING' : '');
       if (!clearConfirm) { clearBtn.__lbl.text = 'Clear'; clearBtn.__lbl.style.color = S.value; }
@@ -410,9 +519,10 @@ R"TLJS(
       if (curView === 'timeline') {
         var t0 = st.tickMin, t1 = st.tickMax; if (t1 <= t0) t1 = t0 + 1;
         scrubT0 = t0; scrubT1 = t1;
-        if (!scrub.mousedown) scrub.value = clamp01((st.tick - t0) / (t1 - t0)); // normalized; don't fight a drag
+        var shownTick = activeTick();
+        if (!scrub.mousedown) scrub.value = clamp01((shownTick - t0) / (t1 - t0)); // normalized; don't fight a drag
         if (st.count < 2) tReadout.text = 'Place 2+ camera markers (K or + Add), then drag to scrub';
-        else if (!scrub.mousedown) tReadout.text = 'tick ' + (st.scrubbing ? st.scrubTick : st.tick) + '   time ' + (st.time != null ? st.time.toFixed(2) : '?') + 's';
+        else if (!scrub.mousedown) tReadout.text = 'tick ' + shownTick + '   time ' + (st.time != null ? st.time.toFixed(2) : '?') + 's';
         playBtn.__lbl.text = st.playing ? '⏸' : '▶';
         var sig = st.tickMin + ':' + st.tickMax + ':' + st.selected + ':' + (st.markers ? st.markers.map(function (m) { return m.tick; }).join(',') : '');
         if (sig !== lastTlSig) { lastTlSig = sig; rebuildTimelineDiamonds(); }
@@ -423,20 +533,32 @@ R"TLJS(
         if (rawc) { try { curve = JSON.parse(rawc); } catch (e2) { curve = null; } }
         if (curve) {
           var ct0 = curve.t0, ct1 = curve.t1; if (ct1 <= ct0) ct1 = ct0 + 1;
-          cInfo.text = 'view ' + ct0 + ' .. ' + ct1 + ' ticks';
-          if (curve.rev !== lastRev || lastView !== 'curve') { lastRev = curve.rev; rebuildCurveLanes(); }
+          cInfo.text = 'view ' + ct0 + ' .. ' + ct1 + ' ticks   ·   Ctrl+Z undo';
+          if (curve.rev !== lastRev || lastView !== 'curve' || st.selected !== lastCurveSelected || selChannel !== lastCurveChannel) {
+            lastRev = curve.rev;
+            lastCurveSelected = st.selected;
+            lastCurveChannel = selChannel;
+            rebuildCurveLanes();
+          }
           phT0 = ct0; phT1 = ct1;
-          if (!phSlider.mousedown) phSlider.value = clamp01((st.tick - ct0) / (ct1 - ct0));
-          phLine.style.position = (LABELW + frac(st.tick, ct0, ct1) * W).toFixed(1) + 'px 0px 0px';
+          var curveTick = activeTick();
+          if (!phSlider.mousedown) phSlider.value = clamp01((curveTick - ct0) / (ct1 - ct0));
+          phLine.style.position = (LABELW + frac(curveTick, ct0, ct1) * W).toFixed(1) + 'px 0px 0px';
 
           // value editor for the selected key + channel
-          if (st.selected >= 0 && curve.lanes && curve.lanes[selChannel] && st.markers && st.markers[st.selected]) {
+          if (selChannel >= 0 && st.selected >= 0 && curve.lanes && curve.lanes[selChannel] && st.markers && st.markers[st.selected]) {
             var lane = curve.lanes[selChannel];
             var lo = lane.min, hi = lane.max; if (hi <= lo) hi = lo + 1;
             var kv = st.markers[st.selected][CH[selChannel]];
             ceLabel.text = 'Edit Key #' + (st.selected + 1) + ' · ' + CHLBL[selChannel];
-            valLo = lo; valHi = hi;
-            if (!cevSlider.mousedown) cevSlider.value = clamp01((kv - lo) / (hi - lo));
+            if (!valueDragActive) {
+              valLo = lo; valHi = hi;
+              if (!cevSlider.mousedown) {
+                valueSyncing = true;
+                cevSlider.value = clamp01((kv - lo) / (hi - lo));
+                valueSyncing = false;
+              }
+            }
             cevVal.text = kv.toFixed(2);
             cedit.visible = true;
           } else { cedit.visible = false; }

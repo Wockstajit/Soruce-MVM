@@ -39,6 +39,11 @@ void CamMarkers::DeleteAll() {
 	m_selected = -1;
 }
 
+void CamMarkers::Restore(const std::vector<CamMarker>& markers, int selected) {
+	m_markers = markers;
+	SetSelected(selected);
+}
+
 bool CamMarkers::Save(const std::wstring& path, const PathSettings& st, int selected) const {
 	JsonBuilder jb;
 	jb.BeginObject();

@@ -165,4 +165,16 @@ CamPathEval::Pose CamPathEval::EvalAtTick(const CamMarkers& mk, double tick) con
 	return EvalSegP(mk, seg, p);
 }
 
+double CamPathEval::TimingAtTick(const CamMarkers& mk, double tick) const {
+	const int n = mk.Count();
+	if (n < 2 || (int)m_keyT.size() != n)
+		return 0.0;
+	int seg = 0;
+	while (seg < n - 2 && tick >= (double)mk.At(seg + 1).tick) ++seg;
+	const double ta = (double)mk.At(seg).tick, tb = (double)mk.At(seg + 1).tick;
+	double p = (tb > ta) ? (tick - ta) / (tb - ta) : 1.0;
+	if (p < 0.0) p = 0.0; else if (p > 1.0) p = 1.0;
+	return m_keyT[seg] + p * (m_keyT[seg + 1] - m_keyT[seg]);
+}
+
 } // namespace Filmmaker

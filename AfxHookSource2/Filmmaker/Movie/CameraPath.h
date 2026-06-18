@@ -50,6 +50,8 @@ public:
 	void DeleteAll(bool confirmed);     // menu (with confirm)
 	void SelectIndex(int index, bool teleport);
 	void SelectDelta(int delta);        // menu arrows (teleports to the camera)
+	void SelectForEditor(int index);    // timeline/curve: seek + hold the exact camera pose
+	void SelectEditorDelta(int delta);
 	void OpenMenu(int index);           // F (aimed)
 	void CloseMenu();
 
@@ -61,8 +63,12 @@ public:
 	// --- camera-path playback ---
 	void ArmPreview();                  // J: jump to first marker + pause; wait for Space
 	void StartPreviewPlay();            // Space: begin playback (BO2 arm flow)
+	void PlayFromTimeline();            // timeline Play: same path start as J+Space, editor stays visible
 	void PlayPath();                    // timeline play: Live, no jump, dolly only in marker range
+	void PlayFromEditor();              // Space / "Test" button: seek to the editor tick, then play
+	                                    // the demo + dolly together from there (no preview banner)
 	void Play() { ArmPreview(); }       // console/dashboard alias for the J arm step
+	void PausePreview();                // timeline pause: stop at current tick, keep position
 	void StopPreview();                 // X: stop + return to editing
 	void TogglePreviewHud();            // Tab: hide/show HUD during playback
 
@@ -88,7 +94,11 @@ public:
 	bool IsScrubbing() const { return m_play.Scrubbing(); }
 	double ScrubTick() const { return m_play.ScrubTick(); }
 	void MoveKey(int index, int newTick);                 // retime a marker (curve drag)
-	void SetChannelValue(int index, int channel, double v); // 0..6 = x,y,z,pitch,yaw,roll,fov
+	void SetChannelValue(int index, int channel, double v); // 0..6 = x,y,z,pitch,yaw,tilt(roll),fov
+	void BeginCurveValueEdit();
+	void PreviewChannelValue(int index, int channel, double v);
+	void EndCurveValueEdit();
+	void UndoCurveEdit();
 	void SetEaseIndex(int index, Ease e);
 	void SetSpeedMulIndex(int index, float mul);
 	// Pure pose at a demo tick (curve sampling + scrub readout). false => off-path.
@@ -101,6 +111,13 @@ public:
 	int HoveredAtomic() const { return m_hovered.load(); } // safe from WndProc thread
 	Mode GetMode() const { return (Mode)m_mode.load(); }   // safe from WndProc thread
 	bool IsPlaying() const { return m_play.Playing(); }
+	bool PlaybackPending() const { return m_editorPlayPending || m_timelinePlayPending; }
+	// True while an EDITOR-TEST playback (Space / Test button) is running -- the HUD
+	// suppresses the big "Playing Camera Path" preview banner for these.
+	bool EditorPlay() const {
+		Mode m = GetMode();
+		return m_editorPlay && (m == Mode::PreviewArmed || m == Mode::PreviewPlaying);
+	}
 	bool MenuOpen() const { return m_menuOpen.load() && GetMode() == Mode::Editing; }
 	bool WantsCursor() const { return MenuOpen(); } // suspend free-cam look + show cursor
 	bool HudHidden() const { return m_hudHidden; }
@@ -113,6 +130,10 @@ public:
 	bool AutoSnap() const { return m_autoSnap; }
 	bool SelectedIsLast() const { return m_data.SelectedIsLast(); }
 	int PlaySegment() const { return m_play.Segment(); } // current segment while playing (0-based)
+	bool HasPathRange() const { return m_data.Count() >= 2; }
+	int FirstPathTick() const;
+	int LastPathTick() const;
+	int ClampToPathTick(int tick) const;
 	const char* Notice() const;                     // transient on-screen message ("" if none)
 	const char* SpeedModeName() const;
 	const char* TimingName() const;
@@ -133,8 +154,13 @@ private:
 	void SyncDrawerStyle();  // push Freeze/Live colour + aimed-highlight to the drawer
 	void UpdateHover();      // crosshair pick -> m_hovered
 	void PushPose(const CamMarker& m); // push a marker pose to the camera this frame
+	void SeekDemoTick(int tick);
+	void HoldEditorAtMarker(int index);
+	void FinishPlaybackAtLastKey();
 	double NowSec();         // monotonic seconds (QPC) for the notice timer
 	void Notify(const char* msg);      // raise a transient on-screen message
+	void PushCurveUndo();
+	double* ChannelTarget(CamMarker& marker, int channel);
 	void SetMode(Mode m) { m_mode.store((int)m); }
 	std::wstring SidecarPath() const;
 	PathSettings MakeSettings() const; // gather the persisted settings for eval/save
@@ -143,6 +169,12 @@ private:
 	CamMarkers m_data;
 	CamPathEval m_eval;
 	CamPlayback m_play;
+
+	struct CurveUndoState {
+		std::vector<CamMarker> markers;
+		int selected = -1;
+	};
+	std::vector<CurveUndoState> m_curveUndo;
 
 	SpeedMode m_speedMode = SpeedMode::Manual;
 	Timing m_timing = Timing::Live;
@@ -155,7 +187,27 @@ private:
 	std::atomic<int> m_mode{ (int)Mode::Editing };
 	// Read off-thread (OnKey ESC + main.cpp GetSuspendMirvInput) -> atomic.
 	std::atomic<bool> m_menuOpen{ false };
-	bool m_hudHidden = false;       // Tab during preview hides the HUD overlays
+	bool m_hudHidden = false;       // while armed, Tab hides other UI but keeps preview prompt
+	bool m_editorPlay = false;      // current playback was started as an editor TEST (no banner)
+	bool m_timelinePlayPending = false; // wait for the first-marker seek to settle before play
+	int m_timelinePlayWaitFrames = 0;
+	bool m_editorPlayPending = false;
+	int m_editorPlayTargetTick = 0;
+	int m_editorPlayWaitFrames = 0;
+	double m_editorPlayStartTiming = 0.0;
+	int m_editorPoseHoldFrames = 0; // keep selection stable across asynchronous demo seeks
+	// demo_gototick leaves the demo auto-paused and the seek (a multi-100ms "Demo Skipping"
+	// stall) re-asserts that pause a frame or two after our demo_resume. While Live playback
+	// is starting we re-issue demo_resume for a short window so the dolly actually advances
+	// instead of unpausing for a single tick and freezing (the "Play does nothing" bug).
+	int m_liveResumeGuard = 0;
+	// The RunFrame fail-safe resets to Editing when the demo stops. IsPlayingDemo() blips
+	// false MID-SEEK, so require several consecutive stopped frames before tearing down a
+	// preview -- otherwise a freshly started play is killed one frame in by the seek itself.
+	int m_demoStoppedFrames = 0;
+	bool m_curveEditActive = false;
+	bool m_curveEditChanged = false;
+	CurveUndoState m_curveEditStart;
 	bool m_drawOn = false;
 	bool m_dirty = false;
 
