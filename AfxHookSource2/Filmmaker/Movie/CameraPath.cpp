@@ -760,6 +760,10 @@ bool CameraPath::EvalPoseAtTick(double tick, double out[7]) const {
 
 // --- hover picking ---
 
+// Opt-in: print "[campath] aiming at marker #N" on hover change. Off by default -- it floods
+// the console during freecam. Flip to true here (or wire a command) if you want the feedback.
+static bool s_LogAiming = false;
+
 void CameraPath::UpdateHover() {
 	const int n = m_data.Count();
 	if (n == 0) { m_hovered.store(-1); return; }
@@ -795,8 +799,11 @@ void CameraPath::UpdateHover() {
 
 		if (dot >= coneCos && dot > bestDot) { bestDot = dot; best = i; } // most-centred wins
 	}
+	// Track the hovered marker for the visual highlight. The per-frame "aiming at marker"
+	// console message was pure spam (the marker highlight already shows the aim), so it is
+	// gated behind an opt-in flag that defaults off to keep the console readable.
 	int prev = m_hovered.exchange(best);
-	if (prev != best && best >= 0)
+	if (s_LogAiming && prev != best && best >= 0)
 		advancedfx::Message("[campath] aiming at marker #%d.\n", best);
 }
 

@@ -13,6 +13,8 @@ set(AFXHOOKSOURCE2_SHADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_vs_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_ps_5_0.acs"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_ps_5_0.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0.acs"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0.acs"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_ps_5_0.acs"
@@ -24,6 +26,7 @@ set(AFXHOOKSOURCE2_SHADERS_SOURCES
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_line_ps_5_0.fxc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_vs_5_0.fxc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_ps_5_0.fxc"
+	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_blit_ps_5_0.fxc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_vs_5_0.fxc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_ps_5_0.fxc"
 )
@@ -36,6 +39,7 @@ add_custom_command(
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_line_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_line_ps_5_0"
     COMMAND ShaderBuilder.exe --profile vs_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_vs_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_vs_5_0"
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_ps_5_0"
+	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_blit_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0"
 	COMMAND ShaderBuilder.exe --profile vs_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_vs_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0"
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_ps_5_0"
 )
@@ -259,6 +263,9 @@ target_sources(${PROJECT_NAME} PRIVATE
 
     RenderSystemDX11Hooks.cpp
     RenderSystemDX11Hooks.h
+
+    ViewportScaler.cpp
+    ViewportScaler.h
 
     ReShadeAdvancedfx.cpp
     ReShadeAdvancedfx.h

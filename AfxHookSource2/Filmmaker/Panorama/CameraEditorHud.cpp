@@ -8,6 +8,8 @@
 
 #include "../../DeathMsg.h" // AfxHookSource2_GetPanoramaHudPanel + PanoramaUIPanel offsets
 #include "../../MirvTime.h"
+#include "../../ViewportScaler.h" // AfxViewportScaler scaled-preview bridge
+#include "../../WrpConsole.h" // advancedfx::Message (temporary diagnostics)
 
 #include "../../../deps/release/prop/AfxHookSource/SourceSdkShared.h"
 #include "../../../deps/release/prop/cs2/sdk_src/public/cdll_int.h"
@@ -80,6 +82,7 @@ bool CameraEditorHud::BuildIfNeeded() {
 	if (!m_bridge.RunScript(kCameraEditorJs))
 		return false;
 	m_symState = m_bridge.MakeSymbol("state");
+	m_symPreviewRect = m_bridge.MakeSymbol("previewrect");
 	m_root = FindRoot();
 	m_built = (m_root != nullptr);
 	m_lastState.clear();
@@ -111,6 +114,11 @@ void CameraEditorHud::OnEnter() {
 	tl.SetVisible(true);
 	tl.SetCursor(true); // start in UI-cursor so the inspector is immediately clickable
 
+	// Scale the live game into the preview rect by default -- that "shrunk viewport" IS the
+	// point of the editor (vs. the full-screen crop). `mirv_filmmaker editor scale off`
+	// reverts to the crop. Auto-disables itself while recording (engine-side check).
+	m_scaleEnabled = true;
+
 	CameraBridge_SetFreeCamEnabled(true);
 	if (cp.Count() > 0) cp.SelectForEditor(cp.Selected() >= 0 ? cp.Selected() : 0);
 }
@@ -125,6 +133,9 @@ void CameraEditorHud::OnExit() {
 	cp.StopScrub();
 
 	MovieHudRef().SetVisible(m_prevMovieHud);
+
+	// Drop any pending scaled-preview blit so the next full-screen frame renders normally.
+	AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);
 
 	Teardown();
 }
@@ -184,6 +195,7 @@ void CameraEditorHud::RunFrame() {
 	// the gameplay HUD hidden or the timeline orphaned.
 	if (!hud) {
 		if (m_wasEnabled) { m_enabled = false; OnExit(); m_wasEnabled = false; }
+		else AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);
 		m_built = false; m_root = nullptr; m_hudPanel = nullptr;
 		return;
 	}
@@ -194,16 +206,20 @@ void CameraEditorHud::RunFrame() {
 	if (m_enabled && !m_wasEnabled) { OnEnter(); m_wasEnabled = true; }
 	else if (!m_enabled && m_wasEnabled) { OnExit(); m_wasEnabled = false; }
 
-	if (!m_enabled)
+	if (!m_enabled) {
+		AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);
 		return;
+	}
 
 	// While enabled, re-assert hosting every frame (cheap) so a stray timeline close or
 	// HUD recreation can't leave the workspace half-torn-down.
 	CameraTimelineHudRef().SetEditorHosted(true);
 	CameraTimelineHudRef().SetVisible(true);
 
-	if (!BuildIfNeeded())
+	if (!BuildIfNeeded()) {
+		AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);
 		return;
+	}
 
 	// Live REPL (editor eval) in the panel context.
 	if (!m_evalQueue.empty()) {
@@ -213,15 +229,57 @@ void CameraEditorHud::RunFrame() {
 	}
 
 	m_root = FindRoot();
-	if (!m_root) { m_built = false; return; }
+	if (!m_root) {
+		m_built = false;
+		AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);
+		return;
+	}
 
 	std::string state = BuildStateJson();
 	if (state != m_lastState) {
 		m_bridge.SetAttributeString(m_root, m_symState, state.c_str());
 		m_lastState = state;
 	}
-	// Always render while enabled so the chrome re-asserts its layout each frame.
+	// Always render while enabled so the chrome re-asserts its layout each frame. render()
+	// (re)publishes the "previewrect" attribute -- the normalised preview-rect fractions --
+	// as the single source of truth shared with the D3D blit.
 	m_bridge.RunScript("$.CamEditor && $.CamEditor.render();");
+
+	// TRUE scaled preview: forward the rect render() just published to the viewport scaler.
+	// The blit only actually runs engine-side when not recording (full-screen capture wins).
+	UpdateScaleRequest();
+}
+
+// Reads the "previewrect" fractions the editor JS published this frame and forwards them to
+// the render-layer scaler. When scaling is off (or the rect is missing/degenerate) the request
+// is cleared, so the preview falls back to the Panorama crop.
+void CameraEditorHud::UpdateScaleRequest() {
+	float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+	std::string pr;
+	bool parsed = false, valid = false;
+
+	// Read the published rect whenever the editor is open (cheap), independent of the scale
+	// toggle, so diagnostics show the JS->C++ round-trip status even with scaling off.
+	if (m_root) {
+		pr = m_bridge.GetAttributeString(m_root, m_symPreviewRect, "");
+		std::istringstream is(pr);
+		parsed = (bool)(is >> x0 >> y0 >> x1 >> y1);
+		valid = parsed && (x1 - x0 > 0.01f) && (y1 - y0 > 0.01f)
+			&& x0 >= 0 && y0 >= 0 && x1 <= 1.0001f && y1 <= 1.0001f;
+	}
+
+	const bool active = m_scaleEnabled && valid;
+
+	// Diagnostics: log only when the decision inputs CHANGE (no per-frame spam).
+	static int s_prev = -1;
+	int now = (m_scaleEnabled ? 1 : 0) | (valid ? 2 : 0);
+	if (now != s_prev) {
+		s_prev = now;
+		advancedfx::Message("[vpscale] req: scaleOn=%d raw='%s' parsed=%d valid=%d\n",
+			(int)m_scaleEnabled, pr.c_str(), (int)parsed, (int)valid);
+	}
+
+	AfxViewportScaler::SetRequest(active, x0, y0, x1, y1);
 }
 
 } // namespace Filmmaker

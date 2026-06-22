@@ -86,6 +86,13 @@ void CameraEditor_Toggle();
 // the UI/GAME mouse (to fly the free cam) even though the timeline panel is open.
 bool CameraEditor_Active();
 
+// TRUE scaled preview viewport (render-layer): scales the whole rendered frame into the
+// preview rect instead of showing a crop. Driven by "mirv_filmmaker editor scale on|off|
+// toggle"; only takes visible effect while the editor is open and not recording.
+void CameraEditor_SetScale(bool enabled);
+void CameraEditor_ToggleScale();
+bool CameraEditor_ScaleActive();
+
 // True when non-preview UI should be hidden: always during full path playback,
 // and while the armed preview has its background HUD toggled off with Tab.
 bool CameraPath_PreviewHudHidden();

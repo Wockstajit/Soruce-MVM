@@ -239,6 +239,12 @@ void CameraEditor_Set(bool enabled) { CameraEditorHudRef().SetEnabled(enabled); 
 void CameraEditor_Toggle() { CameraEditorHudRef().Toggle(); }
 bool CameraEditor_Active() { return CameraEditorHudRef().Enabled(); }
 
+// Scaled-preview viewport (render-layer): scales the whole frame into the preview rect
+// instead of showing a crop. Only renders while the editor is open and not recording.
+void CameraEditor_SetScale(bool enabled) { CameraEditorHudRef().SetScale(enabled); }
+void CameraEditor_ToggleScale() { CameraEditorHudRef().ToggleScale(); }
+bool CameraEditor_ScaleActive() { return CameraEditorHudRef().ScaleEnabled(); }
+
 // --- Camera-path preview: HUD masked (Tab) -> MovieHud hides itself this frame ---
 bool CameraPath_PreviewHudHidden() { return CameraPathRef().PreviewHudHidden(); }
 

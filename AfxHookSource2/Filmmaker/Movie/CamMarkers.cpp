@@ -18,8 +18,18 @@ void CamMarkers::SetSelected(int i) {
 }
 
 int CamMarkers::Add(const CamMarker& m) {
-	m_markers.push_back(m);
-	m_selected = (int)m_markers.size() - 1;
+	// Keep the list ordered by tick. Placing a marker while the playhead sits BETWEEN
+	// two existing markers must insert it there (and renumber the later markers), not
+	// append it to the end. Insert before the first marker whose tick is strictly
+	// greater, so a marker placed between #3 and #4 becomes the new #4 and everything
+	// after shifts down. The rest of the path math (MoveKey clamping, segment timing,
+	// eval) assumes this tick ordering.
+	int idx = (int)m_markers.size();
+	for (int i = 0; i < (int)m_markers.size(); ++i) {
+		if (m_markers[i].tick > m.tick) { idx = i; break; }
+	}
+	m_markers.insert(m_markers.begin() + idx, m);
+	m_selected = idx;
 	return m_selected;
 }
 

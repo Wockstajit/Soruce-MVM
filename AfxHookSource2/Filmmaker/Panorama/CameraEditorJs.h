@@ -96,14 +96,25 @@ R"EDJS(
     // 'PREVIEW' tag pinned to the top-left of the live preview.
     var tag = mk('Panel', root); tag.hittest = false;
     tag.style.position = '18px 14px 0px'; tag.style.flowChildren = 'right';
+    tag.style.height = '22px';
     tag.style.backgroundColor = 'rgba(12,14,18,0.65)'; tag.style.borderRadius = '3px';
     tag.style.paddingLeft = '8px'; tag.style.paddingRight = '10px';
-    tag.style.paddingTop = '3px'; tag.style.paddingBottom = '3px';
-    var dot = mk('Panel', tag); dot.style.width = '8px'; dot.style.height = '8px';
+    var dot = mk('Panel', tag); dot.style.width = '7px'; dot.style.height = '7px';
     dot.style.backgroundColor = S.danger; dot.style.borderRadius = '4px';
     dot.style.verticalAlign = 'center'; dot.style.marginRight = '7px';
     var tagLbl = lbl(tag, 'PREVIEW', S.value, 11); tagLbl.style.fontWeight = 'bold';
     tagLbl.style.letterSpacing = '2px'; tagLbl.style.verticalAlign = 'center';
+
+    // Recording-style status pulse. Only opacity changes, so the tag never shifts or
+    // reflows while flashing.
+    var previewPulseBright = true;
+    function pulsePreviewDot() {
+      if (!dot || !dot.IsValid || !dot.IsValid()) return;
+      previewPulseBright = !previewPulseBright;
+      dot.style.opacity = previewPulseBright ? '1.0' : '0.22';
+      $.Schedule(previewPulseBright ? 0.75 : 0.30, pulsePreviewDot);
+    }
+    $.Schedule(0.75, pulsePreviewDot);
 
     // Bottom backdrop (sits BEHIND the CameraTimeline panel, which is z55) = workspace
     // footer under the preview.
@@ -123,18 +134,27 @@ R"EDJS(
     inspector.style.fontFamily = S.font;
 
     // Aspect-ratio letterbox: the live preview is sized to the GAME's aspect ratio
-    // (rootW/rootH) in the top-left, and the leftover preview area is masked with black
-    // bars; an accent frame outlines the 16:9 rect. Geometry is computed each render
-    // from the laid-out root size. (The game still renders full-screen behind, so the
-    // preview is a CROP shaped to the render aspect, not a scaled copy.)
+    // (rootW/rootH) and CENTRED in the available area (screen minus the right inspector and
+    // the bottom bar); the leftover is masked with black bars on all four sides and an accent
+    // frame outlines the rect. Geometry is computed each render from the laid-out root size.
+    // (The game still renders full-screen behind, so the preview is a CROP shaped to the
+    // render aspect when the scaler is off, or a true scaled blit when it is on.)
     var barBottom = mk('Panel', root); barBottom.hittest = false; barBottom.visible = false;
     barBottom.style.backgroundColor = '#000000ff'; barBottom.style.horizontalAlign = 'left'; barBottom.style.verticalAlign = 'top';
     var barRight = mk('Panel', root); barRight.hittest = false; barRight.visible = false;
     barRight.style.backgroundColor = '#000000ff'; barRight.style.horizontalAlign = 'left'; barRight.style.verticalAlign = 'top';
+    var barLeft = mk('Panel', root); barLeft.hittest = false; barLeft.visible = false;
+    barLeft.style.backgroundColor = '#000000ff'; barLeft.style.horizontalAlign = 'left'; barLeft.style.verticalAlign = 'top';
+    var barTop = mk('Panel', root); barTop.hittest = false; barTop.visible = false;
+    barTop.style.backgroundColor = '#000000ff'; barTop.style.horizontalAlign = 'left'; barTop.style.verticalAlign = 'top';
     var frameV = mk('Panel', root); frameV.hittest = false; frameV.visible = false;
     frameV.style.width = '2px'; frameV.style.backgroundColor = S.accent; frameV.style.horizontalAlign = 'left'; frameV.style.verticalAlign = 'top';
     var frameH = mk('Panel', root); frameH.hittest = false; frameH.visible = false;
     frameH.style.height = '2px'; frameH.style.backgroundColor = S.accent; frameH.style.horizontalAlign = 'left'; frameH.style.verticalAlign = 'top';
+    var frameL = mk('Panel', root); frameL.hittest = false; frameL.visible = false;
+    frameL.style.width = '2px'; frameL.style.backgroundColor = S.accent; frameL.style.horizontalAlign = 'left'; frameL.style.verticalAlign = 'top';
+    var frameT = mk('Panel', root); frameT.hittest = false; frameT.visible = false;
+    frameT.style.height = '2px'; frameT.style.backgroundColor = S.accent; frameT.style.horizontalAlign = 'left'; frameT.style.verticalAlign = 'top';
 
     // ===================== HEADER =======================================
     var head = row(inspector); head.style.marginTop = '0px';
@@ -287,21 +307,61 @@ R"EDJS(
       // Aspect-ratio letterbox. Virtual px = actuallayout / uiscale (matches style px).
       var rsx = root.actualuiscale_x || 1, rsy = root.actualuiscale_y || 1;
       var rw = (root.actuallayoutwidth || 0) / rsx, rh = (root.actuallayoutheight || 0) / rsy;
+      // The hosted CameraTimeline bar (#CamTimelineBar) is fit-children, so it grows tall when
+      // the curve editor opens. Read its ACTUAL height so the preview shrinks to sit exactly
+      // above it and the backdrop matches -- no shared constant, no manual sync. Fall back to
+      // BOTTOM_H until the bar exists / has laid out.
+      var bottomH = BOTTOM_H;
+      try {
+        var tlBar = ctx.FindChildTraverse && ctx.FindChildTraverse('CamTimelineBar');
+        if (tlBar && tlBar.visible && tlBar.actuallayoutheight > 10) bottomH = tlBar.actuallayoutheight / rsy;
+      } catch (eBar) {}
+      backdrop.style.height = Math.floor(bottomH) + 'px';
       if (rw > 10 && rh > 10) {
-        var areaW = rw - INSPECTOR_W, areaH = rh - BOTTOM_H;
+        var areaW = rw - INSPECTOR_W, areaH = rh - bottomH;
         var aspect = rw / rh;            // the game's render aspect (full window)
         var pw = areaW, ph = pw / aspect;
         if (ph > areaH) { ph = areaH; pw = ph * aspect; } // fit the rect inside the area
         pw = Math.floor(pw); ph = Math.floor(ph);
-        var bb = areaH - ph, br = areaW - pw;
-        barBottom.style.position = '0px ' + ph + 'px 0px';
-        barBottom.style.width = areaW + 'px'; barBottom.style.height = (bb > 0 ? bb : 0) + 'px';
-        barBottom.visible = bb > 1;
-        barRight.style.position = pw + 'px 0px 0px';
-        barRight.style.width = (br > 0 ? br : 0) + 'px'; barRight.style.height = ph + 'px';
-        barRight.visible = br > 1;
-        frameV.style.position = (pw - 2) + 'px 0px 0px'; frameV.style.height = ph + 'px'; frameV.visible = true;
-        frameH.style.position = '0px ' + (ph - 2) + 'px 0px'; frameH.style.width = pw + 'px'; frameH.visible = true;
+        // Centre the shrunk preview in the available area so the black letterbox is even on
+        // all sides instead of pinned top-left with one fat gap (the curve editor grows the
+        // bottom bar, shrinking the preview -- this keeps it middled).
+        var ox = Math.floor((areaW - pw) / 2); if (ox < 0) ox = 0;
+        var oy = Math.floor((areaH - ph) / 2); if (oy < 0) oy = 0;
+        var rgt = ox + pw, bot = oy + ph; // preview right / bottom edges (area space)
+
+        // Four black mask bars: full-height left & right columns + top & bottom caps over the
+        // preview column. Together they cover the whole area except the preview rect.
+        barLeft.style.position = '0px 0px 0px';
+        barLeft.style.width = ox + 'px'; barLeft.style.height = areaH + 'px';
+        barLeft.visible = ox > 1;
+        barRight.style.position = rgt + 'px 0px 0px';
+        barRight.style.width = (areaW - rgt) + 'px'; barRight.style.height = areaH + 'px';
+        barRight.visible = (areaW - rgt) > 1;
+        barTop.style.position = ox + 'px 0px 0px';
+        barTop.style.width = pw + 'px'; barTop.style.height = oy + 'px';
+        barTop.visible = oy > 1;
+        barBottom.style.position = ox + 'px ' + bot + 'px 0px';
+        barBottom.style.width = pw + 'px'; barBottom.style.height = (areaH - bot) + 'px';
+        barBottom.visible = (areaH - bot) > 1;
+
+        // Accent frame: full rectangle around the centred preview.
+        frameL.style.position = ox + 'px ' + oy + 'px 0px'; frameL.style.height = ph + 'px'; frameL.visible = true;
+        frameV.style.position = (rgt - 2) + 'px ' + oy + 'px 0px'; frameV.style.height = ph + 'px'; frameV.visible = true;
+        frameT.style.position = ox + 'px ' + oy + 'px 0px'; frameT.style.width = pw + 'px'; frameT.visible = true;
+        frameH.style.position = ox + 'px ' + (bot - 2) + 'px 0px'; frameH.style.width = pw + 'px'; frameH.visible = true;
+
+        // Keep the PREVIEW tag pinned to the centred preview's top-left corner.
+        tag.style.position = (ox + 18) + 'px ' + (oy + 14) + 'px 0px';
+
+        // Publish the preview rect as NORMALISED root fractions (x0 y0 x1 y1 corners) so the
+        // render-layer scaler (CViewportScaler) blits the whole frame into exactly this centred
+        // rect when "editor scale" is on (it clears the rest black). Single source of truth
+        // shared between Panorama (virtual px) and D3D (physical px); fractions stay resolution/
+        // uiscale-independent so the two passes line up. The bars double as the visual frame
+        // when scaling is OFF (crop mode); when ON they sit black-on-black.
+        root.SetAttributeString('previewrect',
+          (ox / rw).toFixed(5) + ' ' + (oy / rh).toFixed(5) + ' ' + (rgt / rw).toFixed(5) + ' ' + (bot / rh).toFixed(5));
       }
 
       // NOTE: keep this a real BOOLEAN. Assigning the st.sel OBJECT to panel.visible

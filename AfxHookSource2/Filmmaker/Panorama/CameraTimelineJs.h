@@ -39,8 +39,9 @@ inline const char* kCameraTimelineJs = R"TLJS(
       label: '#9aa4b0ff', value: '#eef2f6ff', btnBg: '#ffffff14', btnOn: '#f0b32333',
       font: 'Stratum2, "Arial Unicode MS"'
     };
-    var W = 1250, LANE_H = 42, LANE_GAP = 8, LABELW = 132;
-    var EDITOR_INSPECTOR_W = 372; // keep in sync with CameraEditorJs INSPECTOR_W (dock centering)
+    var W = 1250, W_DEFAULT = 1250, LANE_H = 42, LANE_GAP = 8, LABELW = 132;
+    var EDITOR_INSPECTOR_W = 372; // keep in sync with CameraEditorJs INSPECTOR_W
+    var EDITOR_BOTTOM_H = 176;    // keep in sync with CameraEditorJs BOTTOM_H
     var LANES_H = (LANE_H + LANE_GAP) * 7;
     var CH = ['x','y','z','pitch','yaw','roll','fov'];
     var CHLBL = ['X','Y','Z','PITCH','YAW','TILT','FOV'];
@@ -184,7 +185,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
     catcher.style.width = '100%'; catcher.style.height = '100%';
     catcher.SetPanelEvent('onactivate', function () { /* swallow stray clicks */ });
 
-    var panel = mk('Panel', root); panel.hittest = true;
+    var panel = $.CreatePanel('Panel', root, 'CamTimelineBar', {}); panel.hittest = true;
     var ps = panel.style;
     ps.horizontalAlign = 'center'; ps.verticalAlign = 'bottom'; ps.marginBottom = '0px';
     ps.width = (LABELW + W + 28) + 'px';
@@ -330,7 +331,7 @@ R"TLJS(
 
     // =====================================================================
     var st = null, curve = null, curView = 'timeline', selChannel = -1;
-    var lastRev = -1, lastView = '', lastTlSig = '';
+    var lastRev = -1, lastView = '', lastTlSig = '', lastContentW = -1;
     var lastCurveSelected = -2, lastCurveChannel = -1;
     // Dynamically-created Panorama sliders work in their default 0..1 range (setting
     // min/max/out-of-range value is unreliable and leaves the thumb stuck mid-track), so
@@ -476,6 +477,34 @@ R"TLJS(
     }
 )TLJS"
 R"TLJS(
+    // Responsive width: in hosted (editor) mode the bottom bar fills the space left of the
+    // inspector, which varies with resolution / uiscale -- so the graph width can't be the
+    // fixed build-time W. Recompute the inner content width each render and restyle every
+    // width-dependent panel, then invalidate the diamond/curve caches so they relayout at the
+    // new W. Wrapped in try/catch: render() has no outer guard and a throw here would abort
+    // the whole render (which also drops the injected native-bar MOUSE / CAM EDITOR buttons).
+    function applyLayout(contentW) {
+      try {
+        contentW = Math.floor(contentW);
+        if (contentW < 360) contentW = 360;
+        if (contentW === lastContentW) return;
+        lastContentW = contentW;
+        W = contentW - LABELW; TLW = contentW;
+        tl.style.width = contentW + 'px';
+        srow.style.width = contentW + 'px';
+        diamWrap.style.width = contentW + 'px';
+        scrub.style.width = contentW + 'px';
+        cv.style.width = contentW + 'px';
+        phrow.style.width = contentW + 'px';
+        phSlider.style.width = W + 'px';
+        graphArea.style.width = contentW + 'px';
+        for (var i = 0; i < laneGraphs.length; i++) laneGraphs[i].style.width = W + 'px';
+        var ceW = contentW - 210 - 80; if (ceW < 120) ceW = 120;
+        cevSlider.style.width = ceW + 'px';
+        lastTlSig = ''; lastRev = -1; lastView = ''; // force diamond + curve relayout at new W
+      } catch (e) { $.Msg('[camtl] applyLayout error: ' + e + '\n'); }
+    }
+
     var api = {};
     api.render = function () {
       var raw = root.GetAttributeString('state', '');
@@ -488,20 +517,33 @@ R"TLJS(
       var hosted = !!st.hosted;
       setGameHudHidden(hosted);
       closeBtn.visible = !hosted; // editor mode exits via its own "✕ Exit" button
-      // When hosted, the right inspector takes the screen's right edge, so dock the
-      // timeline left-aligned and centered UNDER the preview area (screen width minus the
-      // inspector) instead of the whole screen. Standalone: centered on the full screen.
+      // When hosted, this panel IS the editor's bottom bar under the preview. It fills the
+      // entire width left of the inspector instead of floating as a card inside that bar.
+      // Standalone timeline mode keeps the compact native-style card.
       if (hosted) {
         var rsx = root.actualuiscale_x || 1;
         var rw = (root.actuallayoutwidth || 0) / rsx;
-        var panelW = LABELW + W + 28;
-        var ml = (rw > 10) ? Math.floor(((rw - EDITOR_INSPECTOR_W) - panelW) / 2) : 0;
-        if (ml < 0) ml = 0;
+        var barW = (rw > EDITOR_INSPECTOR_W) ? Math.floor(rw - EDITOR_INSPECTOR_W) : (LABELW + W_DEFAULT + 28);
         panel.style.horizontalAlign = 'left';
-        panel.style.marginLeft = ml + 'px';
+        panel.style.marginLeft = '0px';
+        panel.style.width = barW + 'px';
+        // fit-children (NOT a fixed height): compact in timeline view, grows to fit all 7
+        // lanes in curve view. CameraEditorJs reads this panel's actual height (#CamTimelineBar)
+        // to shrink the preview + letterbox the rest, so the two stay in sync automatically.
+        panel.style.height = 'fit-children';
+        panel.style.borderRadius = '0px';
+        panel.style.border = '0px solid transparent';
+        panel.style.boxShadow = 'none';
+        applyLayout(barW - 28); // inner content fills the bar minus L/R padding
       } else {
         panel.style.horizontalAlign = 'center';
         panel.style.marginLeft = '0px';
+        panel.style.width = (LABELW + W_DEFAULT + 28) + 'px';
+        panel.style.height = 'fit-children';
+        panel.style.borderRadius = '6px';
+        panel.style.border = '1px solid ' + S.panelBorder;
+        panel.style.boxShadow = '#000000cc 0px 0px 12px 2px';
+        applyLayout(LABELW + W_DEFAULT); // restore the standalone default width
       }
 
       curView = st.view || 'timeline';

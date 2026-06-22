@@ -44,6 +44,13 @@ public:
 	void Toggle() { m_enabled = !m_enabled; }
 	bool Enabled() const { return m_enabled; }
 
+	// TRUE scaled preview viewport (render-layer): when on, the whole rendered frame is
+	// scaled down into the preview rect via CViewportScaler instead of showing a crop.
+	// Only takes effect while the editor is open and not recording. Safe to toggle anytime.
+	void SetScale(bool v) { m_scaleEnabled = v; }
+	void ToggleScale() { m_scaleEnabled = !m_scaleEnabled; }
+	bool ScaleEnabled() const { return m_scaleEnabled; }
+
 	void RequestEval(const std::string& js) { m_evalQueue.push_back(js); }
 
 private:
@@ -53,13 +60,16 @@ private:
 	std::string BuildStateJson();
 	void OnEnter(); // one-shot: host the timeline, hide MovieHud, enable freecam, select a key
 	void OnExit();  // one-shot: un-host the timeline, restore MovieHud, stop scrub
+	void UpdateScaleRequest(); // publish the preview rect to the render-layer viewport scaler
 
 	PanoramaBridge m_bridge;
 	void* m_hudPanel = nullptr; // HUD context we built against (rebuild if it changes)
 	void* m_root = nullptr;     // #CamEditorRoot
 	short m_symState = -1;
+	short m_symPreviewRect = -1; // "previewrect" -- JS publishes the preview rect fractions
 	bool m_built = false;
 	bool m_enabled = false;     // Camera Editor Mode on/off
+	bool m_scaleEnabled = false; // true scaled-preview viewport (render-layer blit)
 	bool m_wasEnabled = false;  // for enter/exit edge detection
 	bool m_prevMovieHud = false; // MovieHud visibility to restore on exit
 	std::string m_lastState;

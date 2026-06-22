@@ -3,6 +3,7 @@
 #include "RenderSystemDX11Hooks.h"
 
 #include "CampathDrawer.h"
+#include "ViewportScaler.h"
 #include "RenderServiceHooks.h"
 #include "ReShadeAdvancedfx.h"
 #include "WrpConsole.h"
@@ -63,6 +64,10 @@ extern void ExecuteClientCmd(const char * value);
 int g_iRenderContextDebug = 0;
 
 CRenderCommands g_RenderCommands;
+
+// Camera-editor scaled-preview viewport. Created/released with the device alongside
+// g_CampathDrawer; driven through the AfxViewportScaler bridge at the bottom of this file.
+CViewportScaler g_ViewportScaler;
 
 bool g_bEnableReShade = true;
 bool g_bReShadeCompositeSmoke = true;
@@ -1404,6 +1409,7 @@ HRESULT STDMETHODCALLTYPE New_CreateRenderTargetView(  ID3D11Device * This,
                     g_DepthCompositor.OnTargetEnd();
                     //CAfxShaderResourceViews::Clear();
                     g_CampathDrawer.EndDevice();
+                    g_ViewportScaler.EndDevice();
                     g_pDevice->Release();
                     g_pDevice = nullptr;
                 }
@@ -1412,6 +1418,7 @@ HRESULT STDMETHODCALLTYPE New_CreateRenderTargetView(  ID3D11Device * This,
                 g_pDevice = This;
                 g_pDevice->AddRef();
                 g_CampathDrawer.BeginDevice(This);
+                g_ViewportScaler.BeginDevice(This);
             }
             pTexture->Release();
         }
@@ -4236,6 +4243,56 @@ void CAfxStreams::RecordEnd()
 bool AfxStreams_IsRcording() {
     return g_AfxStreams.GetRecording();
 }
+
+// --- Camera-editor scaled-preview bridge ----------------------------------------------------
+// The editor host (Filmmaker module, main/UI thread) only publishes a request; the actual
+// BeforeUi2 push happens on the engine thread in RenderSystemDX11_EngineThread_Prepare, exactly
+// like the WantsClearBeforeUi clear, so we never touch g_RenderCommands off the engine thread.
+namespace AfxViewportScaler {
+
+    static std::mutex s_RequestMutex;
+    static bool s_Active = false;
+    static float s_Rect[4] = { 0, 0, 0, 0 };
+
+    void SetRequest(bool active, float x0, float y0, float x1, float y1) {
+        std::unique_lock<std::mutex> lock(s_RequestMutex);
+        s_Active = active;
+        s_Rect[0] = x0; s_Rect[1] = y0; s_Rect[2] = x1; s_Rect[3] = y1;
+    }
+
+    void EngineThread_RunFrame() {
+        bool active; float rect[4];
+        {
+            std::unique_lock<std::mutex> lock(s_RequestMutex);
+            active = s_Active;
+            rect[0] = s_Rect[0]; rect[1] = s_Rect[1]; rect[2] = s_Rect[2]; rect[3] = s_Rect[3];
+        }
+
+        // Never bake the shrink into a recording -- the captured output must stay full-screen.
+        bool recording = g_AfxStreams.GetRecording();
+        bool ready = g_ViewportScaler.Ready();
+
+        // Diagnostics: log only when the gate decision CHANGES (no per-frame spam).
+        static int s_prev = -1;
+        int now = (active ? 1 : 0) | (ready ? 2 : 0) | (recording ? 4 : 0);
+        if (now != s_prev) {
+            s_prev = now;
+            advancedfx::Message("[vpscale] eng: active=%d ready=%d rec=%d rect=%.3f %.3f %.3f %.3f\n",
+                (int)active, (int)ready, (int)recording, rect[0], rect[1], rect[2], rect[3]);
+        }
+
+        if (!active || recording || !ready)
+            return;
+
+        CViewportScaler* scaler = &g_ViewportScaler;
+        float x0 = rect[0], y0 = rect[1], x1 = rect[2], y1 = rect[3];
+        g_RenderCommands.EngineThread_GetCommands().BeforeUi2.Push(
+            [scaler, x0, y0, x1, y1](ID3D11DeviceContext* pDeviceContext, ID3D11RenderTargetView* pTarget) {
+                scaler->Blit(pDeviceContext, pTarget, x0, y0, x1, y1);
+            });
+    }
+
+} // namespace AfxViewportScaler
 const wchar_t * AfxStreams_GetTakeDir() {
     return g_AfxStreams.GetTakeDir();
 }
@@ -4250,6 +4307,9 @@ void RenderSystemDX11_EngineThread_Prepare() {
     }
 
     g_AfxStreams.EngineThread_Prepare();
+
+    // Queue this frame's camera-editor scaled-preview blit (if requested + not recording).
+    AfxViewportScaler::EngineThread_RunFrame();
 
     {
         auto& pRenderPassCommands = g_RenderCommands.EngineThread_GetCommands();

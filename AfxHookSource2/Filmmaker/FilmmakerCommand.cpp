@@ -65,7 +65,8 @@ void PrintHelp(const char* cmd) {
 		"%s marker [...] - full marker/path control (run for sub-help).\n"
 		"%s camtl [...] - camera TIMELINE + curve editor (scrub, keys, easing; run for sub-help).\n"
 		"%s editor [on|off|toggle] - dedicated CAMERA EDITOR workspace (preview + inspector + timeline).\n"
-		, cmd, cmd, cmd
+		"%s editor scale [on|off|toggle] - TRUE scaled preview viewport (whole frame shrunk, not a crop).\n"
+		, cmd, cmd, cmd, cmd
 	);
 }
 
@@ -461,11 +462,21 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		// Dedicated camera-editor workspace. Bind it to a key, e.g.
 		//   bind "F9" "mirv_filmmaker editor toggle"
 		const char* arg = (argc >= 3) ? args->ArgV(2) : "toggle";
-		if (0 == _stricmp(arg, "on") || 0 == _stricmp(arg, "open") || 0 == _stricmp(arg, "1")) Filmmaker::CameraEditor_Set(true);
-		else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "close") || 0 == _stricmp(arg, "0")) Filmmaker::CameraEditor_Set(false);
-		else Filmmaker::CameraEditor_Toggle();
-		advancedfx::Message("mirv_filmmaker: camera editor mode %s (must be in a demo).\n",
-			Filmmaker::CameraEditor_Active() ? "ON" : "off");
+		if (0 == _stricmp(arg, "scale")) {
+			// TRUE scaled preview viewport (render-layer). Falls back to the crop when off.
+			const char* a2 = (argc >= 4) ? args->ArgV(3) : "toggle";
+			if (0 == _stricmp(a2, "on") || 0 == _stricmp(a2, "1")) Filmmaker::CameraEditor_SetScale(true);
+			else if (0 == _stricmp(a2, "off") || 0 == _stricmp(a2, "0")) Filmmaker::CameraEditor_SetScale(false);
+			else Filmmaker::CameraEditor_ToggleScale();
+			advancedfx::Message("mirv_filmmaker: camera editor scaled preview %s (auto-off while recording).\n",
+				Filmmaker::CameraEditor_ScaleActive() ? "ON" : "off");
+		} else {
+			if (0 == _stricmp(arg, "on") || 0 == _stricmp(arg, "open") || 0 == _stricmp(arg, "1")) Filmmaker::CameraEditor_Set(true);
+			else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "close") || 0 == _stricmp(arg, "0")) Filmmaker::CameraEditor_Set(false);
+			else Filmmaker::CameraEditor_Toggle();
+			advancedfx::Message("mirv_filmmaker: camera editor mode %s (must be in a demo).\n",
+				Filmmaker::CameraEditor_Active() ? "ON" : "off");
+		}
 	} else {
 		PrintHelp(cmd);
 	}
