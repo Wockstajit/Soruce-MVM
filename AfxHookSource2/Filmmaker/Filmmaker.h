@@ -77,6 +77,15 @@ bool CameraTimeline_WantsCursor();
 // input layer to decide whether G should toggle the panel's UI-mouse mode.
 bool CameraTimeline_Visible();
 
+// --- Camera Editor Mode (dedicated editor workspace) ---
+// Toggleable workspace that frames the live game as a preview and surrounds it with the
+// camera inspector + timeline. Driven by "mirv_filmmaker editor on|off|toggle".
+void CameraEditor_Set(bool enabled);
+void CameraEditor_Toggle();
+// True while Camera Editor Mode is active. Read by the input layer so G keeps toggling
+// the UI/GAME mouse (to fly the free cam) even though the timeline panel is open.
+bool CameraEditor_Active();
+
 // True when non-preview UI should be hidden: always during full path playback,
 // and while the armed preview has its background HUD toggled off with Tab.
 bool CameraPath_PreviewHudHidden();

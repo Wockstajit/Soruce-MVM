@@ -147,6 +147,7 @@ std::string CameraTimelineHud::BuildStateJson() {
 	std::ostringstream o;
 	o << "{";
 	o << "\"open\":" << (m_visible ? "true" : "false");
+	o << ",\"hosted\":" << (m_editorHosted ? "true" : "false");
 	o << ",\"cursor\":" << (Cursor() ? "true" : "false");
 	o << ",\"cursorForced\":" << (CursorForced() ? "true" : "false");
 	o << ",\"view\":\"" << (m_view == 1 ? "curve" : "timeline") << "\"";

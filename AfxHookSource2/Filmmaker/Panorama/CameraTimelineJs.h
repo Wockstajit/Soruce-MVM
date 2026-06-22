@@ -40,6 +40,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
       font: 'Stratum2, "Arial Unicode MS"'
     };
     var W = 1250, LANE_H = 42, LANE_GAP = 8, LABELW = 132;
+    var EDITOR_INSPECTOR_W = 372; // keep in sync with CameraEditorJs INSPECTOR_W (dock centering)
     var LANES_H = (LANE_H + LANE_GAP) * 7;
     var CH = ['x','y','z','pitch','yaw','roll','fov'];
     var CHLBL = ['X','Y','Z','PITCH','YAW','TILT','FOV'];
@@ -48,6 +49,8 @@ inline const char* kCameraTimelineJs = R"TLJS(
     var EASE_LBL = ['None','Ease In','Ease Out','Ease In/Out'];
 
     function cmd(c) {
+      // Any action disarms a pending "Clear — sure?" confirm (render restores the label).
+      clearConfirm = false;
       try { GameInterfaceAPI.ConsoleCommand(c); }
       catch (e) { $.Msg('[camtl] cmd failed: ' + e + '\n'); }
     }
@@ -150,14 +153,14 @@ inline const char* kCameraTimelineJs = R"TLJS(
       var curOn = !!(st && st.cursor);
       mb.style.backgroundColor = curOn ? '#c92a2acc' : '#ffffff14';
       mb.__lbl.style.color = curOn ? '#ffffffff' : S.label;
-      var cb = nativeBtn('CamEditorBtn', 'CAM EDITOR', function () { cmd('mirv_filmmaker camtl toggle'); });
+      var cb = nativeBtn('CamEditorBtn', 'CAM EDITOR', function () { cmd('mirv_filmmaker editor toggle'); });
       cb.style.backgroundColor = '#f0b32333';
       cb.__lbl.style.color = S.accent;
     }
 
     // Legacy cleanup hook: if an older build hid native HUD siblings, restore them. The
     // camera timeline HUD toggle is disabled; this must not hide anything anymore.
-    var OURS = { 'CamTimelineRoot': 1, 'MarkerHudRoot': 1, 'MovieHudRoot': 1 };
+    var OURS = { 'CamTimelineRoot': 1, 'MarkerHudRoot': 1, 'MovieHudRoot': 1, 'CamEditorRoot': 1 };
     var hiddenNatives = null; // [{p, v}] captured while hidden; null while the HUD is shown
     function setGameHudHidden(hide) {
       if (hide) {
@@ -246,8 +249,8 @@ R"TLJS(
     var srow = mk('Panel', tl); srow.style.width = TLW + 'px'; srow.style.height = '40px';
     var diamWrap = mk('Panel', srow); diamWrap.hittest = false;
     diamWrap.style.width = TLW + 'px'; diamWrap.style.height = '22px'; diamWrap.style.position = '0px 0px 0px';
-    var trackBg = mk('Panel', srow); trackBg.style.width = TLW + 'px'; trackBg.style.height = '4px';
-    trackBg.style.position = '0px 20px 0px'; trackBg.style.backgroundColor = S.track; trackBg.style.borderRadius = '2px';
+    // (No separate track panel: the native Slider draws its own groove, so a second
+    // trackBg here produced a doubled line that ran past the keyframes.)
     // Native CS2 sliders need BOTH the class (styling) and the direction ATTRIBUTE
     // (drag axis): e.g. <Slider class="HorizontalSlider" direction="horizontal"/>.
     // Without direction the Slider defaults to vertical, so the thumb drags up/down
@@ -480,7 +483,26 @@ R"TLJS(
       try { st = JSON.parse(raw); } catch (e) { return; }
 
       patchNativeBar(); // keep the native demo bar de-cluttered + our button present
-      setGameHudHidden(false);
+      // Camera Editor Mode hosts this panel and wants a clean workspace: hide the whole
+      // gameplay HUD (radar/health/ammo/scoreboard/native demo bar). Restored on exit.
+      var hosted = !!st.hosted;
+      setGameHudHidden(hosted);
+      closeBtn.visible = !hosted; // editor mode exits via its own "✕ Exit" button
+      // When hosted, the right inspector takes the screen's right edge, so dock the
+      // timeline left-aligned and centered UNDER the preview area (screen width minus the
+      // inspector) instead of the whole screen. Standalone: centered on the full screen.
+      if (hosted) {
+        var rsx = root.actualuiscale_x || 1;
+        var rw = (root.actuallayoutwidth || 0) / rsx;
+        var panelW = LABELW + W + 28;
+        var ml = (rw > 10) ? Math.floor(((rw - EDITOR_INSPECTOR_W) - panelW) / 2) : 0;
+        if (ml < 0) ml = 0;
+        panel.style.horizontalAlign = 'left';
+        panel.style.marginLeft = ml + 'px';
+      } else {
+        panel.style.horizontalAlign = 'center';
+        panel.style.marginLeft = '0px';
+      }
 
       curView = st.view || 'timeline';
       var previewHidden = !!st.previewHudHidden;
@@ -494,7 +516,10 @@ R"TLJS(
       // clicks so spectator target switching cannot leak through behind the panel.
       var cur = !!st.cursor;
       var forcedCur = !!st.cursorForced;
-      catcher.visible = cur; catcher.hittest = cur;
+      // When hosted by the editor, the editor draws its own click-catcher (at a lower
+      // z-index than this panel) so its inspector stays clickable; suppress ours here so
+      // this full-screen catcher (z55) can't sit on top of the editor's inspector.
+      catcher.visible = cur && !hosted; catcher.hittest = cur && !hosted;
       panel.hittest = true;
       mouseLbl.text = forcedCur ? 'Mouse: UI  ·  editor cursor forced' : (cur ? 'Mouse: UI  ·  press G to toggle mouse' : 'Mouse: GAME  ·  press G to toggle mouse');
       mouseLbl.style.color = cur ? S.accent : S.label;

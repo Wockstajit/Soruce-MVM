@@ -64,7 +64,8 @@ void PrintHelp(const char* cmd) {
 		"   K = place, L = delete aimed, F = edit aimed. Camera-path playback is disabled pending rewrite.\n"
 		"%s marker [...] - full marker/path control (run for sub-help).\n"
 		"%s camtl [...] - camera TIMELINE + curve editor (scrub, keys, easing; run for sub-help).\n"
-		, cmd, cmd
+		"%s editor [on|off|toggle] - dedicated CAMERA EDITOR workspace (preview + inspector + timeline).\n"
+		, cmd, cmd, cmd
 	);
 }
 
@@ -339,7 +340,10 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 		advancedfx::Message("mirv_filmmaker: camera timeline HUD toggle is disabled.\n");
 	}
 	else if (0 == _stricmp(a, "cursor")) {
-		if (!RegularCursorToggleAllowed()) {
+		// In Camera Editor Mode the free cam is always on and the cursor is the user's
+		// way to flip between clicking the inspector and flying, so allow it regardless
+		// of the spectator mode gate.
+		if (!tl.EditorHosted() && !RegularCursorToggleAllowed()) {
 			tl.SetCursor(false);
 			advancedfx::Message("mirv_filmmaker: cursor toggle is available in third-person/freecam.\n");
 			return;
@@ -453,6 +457,15 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		DoMarker(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "camtl")) {
 		DoCamTimeline(argc, args, cmd);
+	} else if (0 == _stricmp(sub, "editor")) {
+		// Dedicated camera-editor workspace. Bind it to a key, e.g.
+		//   bind "F9" "mirv_filmmaker editor toggle"
+		const char* arg = (argc >= 3) ? args->ArgV(2) : "toggle";
+		if (0 == _stricmp(arg, "on") || 0 == _stricmp(arg, "open") || 0 == _stricmp(arg, "1")) Filmmaker::CameraEditor_Set(true);
+		else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "close") || 0 == _stricmp(arg, "0")) Filmmaker::CameraEditor_Set(false);
+		else Filmmaker::CameraEditor_Toggle();
+		advancedfx::Message("mirv_filmmaker: camera editor mode %s (must be in a demo).\n",
+			Filmmaker::CameraEditor_Active() ? "ON" : "off");
 	} else {
 		PrintHelp(cmd);
 	}

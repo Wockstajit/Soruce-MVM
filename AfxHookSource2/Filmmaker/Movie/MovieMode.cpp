@@ -135,8 +135,14 @@ bool MovieMode::OnKey(int vkey, bool down) {
 
 	// G toggles the native-demo-bar UI cursor only in regular viewing mode, and only
 	// from third-person/freecam. The camera timeline / curve editor is always a UI
-	// surface, so G is swallowed there and cannot turn the cursor off.
+	// surface, so G is swallowed there and cannot turn the cursor off -- EXCEPT in
+	// Camera Editor Mode, where G must keep flipping UI<->GAME so the user can fly the
+	// free cam to frame a shot (the editor decouples the timeline's forced cursor).
 	if (vkey == kVK_G) {
+		if (CameraEditor_Active()) {
+			if (down) EnqueueCmd("mirv_filmmaker camtl cursor toggle");
+			return true;
+		}
 		if (CameraTimeline_Visible())
 			return true;
 		const Mode mode = GetMode();

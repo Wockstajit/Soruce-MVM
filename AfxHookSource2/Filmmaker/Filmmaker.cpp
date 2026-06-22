@@ -5,6 +5,7 @@
 #include "Panorama/MovieHud.h"
 #include "Panorama/MarkerHud.h"
 #include "Panorama/CameraTimelineHud.h"
+#include "Panorama/CameraEditorHud.h"
 #include "Panorama/DemoBarButtons.h"
 #include "Movie/MovieMode.h"
 #include "Movie/CameraPath.h"
@@ -195,6 +196,10 @@ void RunMainThreadFrame() {
 
 	// Native demo-bar inline speed buttons (replaces the timescale dropdown).
 	DemoBarButtonsRef().RunFrame();
+
+	// Camera Editor Mode workspace shell. Runs LAST so its host orchestration (timeline
+	// hosting + gameplay-HUD hide) is applied on top of every other panel this frame.
+	CameraEditorHudRef().RunFrame();
 }
 
 void Shutdown() {
@@ -228,6 +233,11 @@ bool CameraTimeline_WantsCursor() {
 	return tl.Cursor();
 }
 bool CameraTimeline_Visible() { return CameraTimelineHudRef().Visible(); }
+
+// --- Camera Editor Mode (dedicated editor workspace) ---
+void CameraEditor_Set(bool enabled) { CameraEditorHudRef().SetEnabled(enabled); }
+void CameraEditor_Toggle() { CameraEditorHudRef().Toggle(); }
+bool CameraEditor_Active() { return CameraEditorHudRef().Enabled(); }
 
 // --- Camera-path preview: HUD masked (Tab) -> MovieHud hides itself this frame ---
 bool CameraPath_PreviewHudHidden() { return CameraPathRef().PreviewHudHidden(); }

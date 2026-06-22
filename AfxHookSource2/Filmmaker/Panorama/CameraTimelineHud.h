@@ -34,12 +34,21 @@ public:
 	bool Visible() const { return m_visible; }
 
 	// UI-mouse mode: MirvInput is suspended so the OS cursor shows. While the camera
-	// timeline / curve editor is open this is forced on; otherwise it is the regular
-	// native-demo-bar mouse toggle.
+	// timeline / curve editor is open standalone this is forced on; otherwise it is the
+	// regular native-demo-bar mouse toggle.
+	//
+	// EDITOR-HOSTED exception: inside Camera Editor Mode the cursor is NOT forced -- the
+	// user must still be able to press G to drop into GAME mouse and fly the free cam to
+	// frame a shot. So when hosted the cursor follows the toggle (m_cursor) only.
 	void SetCursor(bool v) { m_cursor = v; }
 	void ToggleCursor() { m_cursor = !m_cursor; }
-	bool Cursor() const { return m_visible || m_cursor; }
-	bool CursorForced() const { return m_visible; }
+	bool Cursor() const { return m_editorHosted ? m_cursor : (m_visible || m_cursor); }
+	bool CursorForced() const { return m_editorHosted ? false : m_visible; }
+
+	// Camera Editor Mode hosting: CameraEditorHud forces this panel open + docked and
+	// owns the gameplay-HUD hide (driven by the "hosted" state flag this pushes to JS).
+	void SetEditorHosted(bool v) { m_editorHosted = v; }
+	bool EditorHosted() const { return m_editorHosted; }
 
 	void SetView(int view) { m_view = (view != 0) ? 1 : 0; } // 0 timeline, 1 curve
 	void ToggleView() { m_view ^= 1; }
@@ -69,6 +78,7 @@ private:
 	bool m_built = false;
 	bool m_visible = false; // hidden until 'camtl open'
 	bool m_cursor = false;  // global freecam cursor mode (G toggles; never opens the editor)
+	bool m_editorHosted = false; // true while hosted inside Camera Editor Mode
 	int m_view = 0;         // 0 timeline, 1 curve
 
 	// Visible tick window for the curve editor (also the timeline scrub range).
