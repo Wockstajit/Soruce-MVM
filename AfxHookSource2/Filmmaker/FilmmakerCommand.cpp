@@ -302,6 +302,12 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	else if (0 == _stricmp(a, "playtimeline")) cp.PlayFromTimeline();
 	else if (0 == _stricmp(a, "playpath")) cp.PlayPath();
 	else if (0 == _stricmp(a, "pause")) cp.PausePreview();
+	else if (0 == _stricmp(a, "debug")) {
+		bool on = (argc >= 4) ? (atoi(a3) != 0) : !cp.Debug();
+		cp.SetDebug(on);
+		advancedfx::Warning("%s camtl debug %d ([campath]/[setupview] instrumentation %s).\n",
+			cmd, on ? 1 : 0, on ? "ON" : "OFF");
+	}
 	else if (0 == _stricmp(a, "stop")) { cp.StopPreview(); cp.StopScrub(); }
 	else if (0 == _stricmp(a, "addkey")) cp.PlaceMarker();
 	else if (0 == _stricmp(a, "delkey")) {

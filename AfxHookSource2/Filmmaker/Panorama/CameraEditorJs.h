@@ -272,13 +272,8 @@ R"EDJS(
     var timeBtn = btn(pathSec, 'Timing: Live', function () { cmd('mirv_filmmaker marker timing toggle'); }, S.value);
     timeBtn.style.marginTop = '5px';
 
-    // ===================== SMOOTHING (display-only) =====================
-    var smoothSec = section(inspector, 'SMOOTHING');
-    lbl(smoothSec, 'Playback low-pass: auto', S.value, 12);
-    lbl(smoothSec, 'Output pose is glide-smoothed during playback.', S.dim, 10);
-
     // ===================== PLAYBACK hints ===============================
-    var playSec = section(inspector, 'PLAYBACK');
+    var playSec = section(inspector, 'SHORTCUTS');
     lbl(playSec, 'Space  ▶ / ⏸     ←/→  ±15s', S.value, 12);
     lbl(playSec, 'Scrub + keyframes on the timeline below.', S.dim, 10);
 )EDJS"
@@ -303,7 +298,6 @@ R"EDJS(
       mouseBtn.__lbl.text = cur ? 'MOUSE: UI  (G)' : 'MOUSE: GAME  (G)';
       mouseBtn.style.backgroundColor = cur ? S.btnOn : S.btnBg;
       mouseBtn.__lbl.style.color = cur ? S.accent : S.label;
-
       // Aspect-ratio letterbox. Virtual px = actuallayout / uiscale (matches style px).
       var rsx = root.actualuiscale_x || 1, rsy = root.actualuiscale_y || 1;
       var rw = (root.actuallayoutwidth || 0) / rsx, rh = (root.actuallayoutheight || 0) / rsy;

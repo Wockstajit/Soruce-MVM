@@ -407,6 +407,14 @@ namespace Filmmaker {
 		mi->SetTx((float)x); mi->SetTy((float)y); mi->SetTz((float)z);
 		mi->SetRx((float)pitch); mi->SetRy((float)yaw); mi->SetRz((float)roll);
 		mi->SetFov((float)fov);
+		if (CampathDebug() && CameraPathOwnsView()) {
+			static unsigned s_bridgePoseLogThrottle = 0;
+			if ((s_bridgePoseLogThrottle++ % 15) == 0) {
+				advancedfx::Message(
+					"[campath][bridge] SetCameraPose queued pos=(%.1f %.1f %.1f) ang=(%.1f %.1f %.1f) fov=%.1f freecam=%d\n",
+					x, y, z, pitch, yaw, roll, fov, mi->GetCameraControlMode() ? 1 : 0);
+			}
+		}
 	}
 
 	void CameraBridge_SetPathDrawEnabled(bool enable) { g_CampathDrawer.Draw_set(enable); }
@@ -822,7 +830,8 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 
 	if(MirvFovOverride(Fov)) originOrAnglesOverriden = true;
 
-	if(g_MirvInputEx.m_MirvInput->Override(camDeltaT, Tx,Ty,Tz,Rx,Ry,Rz,Fov)) originOrAnglesOverriden = true;
+	const bool inputOverride = g_MirvInputEx.m_MirvInput->Override(camDeltaT, Tx,Ty,Tz,Rx,Ry,Rz,Fov);
+	if(inputOverride) originOrAnglesOverriden = true;
 
 	if(g_b_on_c_view_render_setup_view) {
 		AfxHookSourceRsView currentView = {Tx,Ty,Tz,Rx,Ry,Rz,Fov};
@@ -904,6 +913,27 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 	g_CurrentGameCamera.angles[2] = Rz;
 	g_CurrentGameCamera.time = curTime;
 
+	// VIEW OWNERSHIP: this trampoline stands in for CS2's internal IsPlayingDemo() check
+	// that gates the demo-view-override (TrueView) pass. Returning true lets that pass
+	// re-own the final view AFTER we wrote our pose -- the reason the dolly only "appeared"
+	// when the demo paused (the override pass stops re-asserting then). While the filmmaker
+	// camera PATH or MirvInput actively drives the view, return false so the engine keeps
+	// the pose we just wrote. Range-gated playpath out-of-range remains unaffected because
+	// it releases free cam and stops pushing a path pose before this hook runs.
+	const bool pathOwnsView = Filmmaker::CameraPathOwnsView();
+	const bool blockDemoViewOverride = inputOverride || pathOwnsView;
+
+	if (Filmmaker::CampathDebug()) {
+		static unsigned s_ownerLogThrottle = 0;
+		if (pathOwnsView && (s_ownerLogThrottle++ % 15 == 0))
+			advancedfx::Message(
+				"[setupview][owner] inputOverride=%d pathOwnsView=%d blockDemoViewOverride=%d wroteView=%d pos=(%.1f %.1f %.1f) ang=(%.1f %.1f %.1f) fov=%.1f\n",
+				inputOverride ? 1 : 0, pathOwnsView ? 1 : 0, blockDemoViewOverride ? 1 : 0,
+				originOrAnglesOverriden ? 1 : 0, Tx, Ty, Tz, Rx, Ry, Rz, Fov);
+	}
+
+	if (blockDemoViewOverride)
+		return false;
 	return g_pEngineToClient->IsPlayingDemo();
 }
 

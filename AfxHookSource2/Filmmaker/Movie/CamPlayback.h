@@ -28,10 +28,12 @@ public:
 		const char* interpName = "";
 		const char* speedModeName = "";
 		float constSpeed = 1.0f;
+		bool debug = false;              // gate the verbose [campath]/[push] playback logs
 	};
 
 	bool Playing() const { return m_playing; }
 	bool Scrubbing() const { return m_scrubbing; }
+	bool LiveEndSettling() const { return m_liveEndSettling; }
 	int Segment() const { return m_playSeg; }
 	double ScrubTick() const { return m_scrubTick; }
 
@@ -61,6 +63,8 @@ private:
 	bool m_rangeGated = false;   // Live: only drive the camera within the marker tick range
 	bool m_engaged = false;      // currently driving the free cam (range-gated playback)
 	bool m_engageApplied = false;// false => force the free-cam state on the next frame
+	bool m_liveEndSettling = false; // Live reached the last key; output pose is catching up
+	int m_liveEndSettleFrames = 0;
 	double m_scrubTick = 0.0;
 
 	double m_duration = 0.0;

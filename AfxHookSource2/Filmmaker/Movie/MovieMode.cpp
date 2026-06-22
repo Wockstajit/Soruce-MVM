@@ -128,6 +128,15 @@ bool MovieMode::OnKey(int vkey, bool down) {
 	if (!IsDemoActive())
 		return false; // director keys only act while a demo plays
 
+	// Swallow OS keyboard AUTO-REPEAT for Space: held Space streams WM_KEYDOWN (down=true)
+	// with no intervening up, and every camera-path transport branch below toggles on down,
+	// so a held key would start then immediately pause/restart. Act once per physical press;
+	// repeats are consumed (return true) so the game never sees them.
+	if (vkey == kVK_SPACE) {
+		if (down && m_spaceDown) return true;
+		m_spaceDown = down;
+	}
+
 	if (vkey == kVK_Z && down && m_controlDown && CameraTimeline_Visible()) {
 		EnqueueCmd("mirv_filmmaker camtl undo");
 		return true;

@@ -234,6 +234,10 @@ bool CameraTimeline_WantsCursor() {
 }
 bool CameraTimeline_Visible() { return CameraTimelineHudRef().Visible(); }
 
+// --- camera-path view ownership + debug gate (read by main.cpp's view-setup hook) ---
+bool CameraPathOwnsView() { return CameraPathRef().OwnsView(); }
+bool CampathDebug() { return CameraPathRef().Debug(); }
+
 // --- Camera Editor Mode (dedicated editor workspace) ---
 void CameraEditor_Set(bool enabled) { CameraEditorHudRef().SetEnabled(enabled); }
 void CameraEditor_Toggle() { CameraEditorHudRef().Toggle(); }

@@ -77,6 +77,13 @@ bool CameraTimeline_WantsCursor();
 // input layer to decide whether G should toggle the panel's UI-mouse mode.
 bool CameraTimeline_Visible();
 
+// True while the camera PATH is actively driving the final view (dolly playing + free cam
+// engaged). main.cpp's view-setup hook uses this to block CS2's demo-view-override
+// (TrueView) from re-owning the view each frame the demo advances. CampathDebug() gates the
+// verbose [campath]/[setupview] instrumentation (toggle via "camtl debug 0|1").
+bool CameraPathOwnsView();
+bool CampathDebug();
+
 // --- Camera Editor Mode (dedicated editor workspace) ---
 // Toggleable workspace that frames the live game as a preview and surrounds it with the
 // camera inspector + timeline. Driven by "mirv_filmmaker editor on|off|toggle".

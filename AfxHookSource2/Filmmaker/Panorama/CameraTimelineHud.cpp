@@ -215,6 +215,11 @@ std::string CameraTimelineHud::BuildCurveJson() {
 	}
 
 	static const char* names[7] = { "X", "Y", "Z", "Pitch", "Yaw", "Tilt", "FOV" };
+	static const double minVisualSpan[7] = {
+		64.0, 64.0, 64.0, // position lanes: keep small moves away from the lane edges
+		20.0, 20.0, 20.0, // angle lanes
+		10.0              // FOV
+	};
 	std::ostringstream o;
 	o << "{";
 	o << "\"t0\":" << (long long)(t0 + 0.5) << ",\"t1\":" << (long long)(t1 + 0.5) << ",\"n\":" << N;
@@ -225,6 +230,12 @@ std::string CameraTimelineHud::BuildCurveJson() {
 		double mx = any[c] ? hi[c] : 1.0;
 		double span = mx - mn;
 		if (span < 1e-6) span = 1.0;
+		const double center = (mn + mx) * 0.5;
+		double visualSpan = span * 1.35;
+		if (visualSpan < minVisualSpan[c]) visualSpan = minVisualSpan[c];
+		mn = center - visualSpan * 0.5;
+		mx = center + visualSpan * 0.5;
+		span = mx - mn;
 		o << "{\"name\":\"" << names[c] << "\",\"min\":" << r2(mn) << ",\"max\":" << r2(mx) << ",\"pts\":[";
 		for (int i = 0; i < N; ++i) {
 			if (i) o << ",";

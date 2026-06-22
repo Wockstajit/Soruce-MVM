@@ -120,7 +120,17 @@ CamPlayback::Context CameraPath::MakeContext() const {
 	c.interpName = InterpName();
 	c.speedModeName = SpeedModeName();
 	c.constSpeed = m_constSpeed;
+	c.debug = m_debug;
 	return c;
+}
+
+// True while the dolly is actively driving the final view: PreviewPlaying + playing AND
+// free cam engaged. The free-cam requirement keeps range-gated playpath honest -- it
+// releases free cam outside the marker range, so OwnsView() is false there (the normal
+// demo view is kept); inside the range (free cam on) the dolly owns the view.
+bool CameraPath::OwnsView() const {
+	return GetMode() == Mode::PreviewPlaying && m_play.Playing()
+		&& CameraBridge_GetFreeCamEnabled();
 }
 
 // --- internal frame helpers ---
@@ -544,6 +554,11 @@ void CameraPath::PlayFromEditor() {
 	if (m_play.Scrubbing()) tick = (int)(m_play.ScrubTick() + 0.5);
 	else { int dt = 0; if (g_MirvTime.GetCurrentDemoTick(dt)) tick = dt; }
 	tick = ClampToPathTick(tick);
+	const int firstTick = m_data.Front().tick;
+	const int lastTick = m_data.Back().tick;
+	const bool wrappedFromEnd = tick >= lastTick;
+	if (wrappedFromEnd)
+		tick = firstTick;
 
 	m_menuOpen = false;
 	m_hudHidden = false;
@@ -561,13 +576,12 @@ void CameraPath::PlayFromEditor() {
 	m_play.BeginScrub(tick);
 	SetMode(Mode::Editing);
 
-	const int lastTick = m_data.Back().tick;
 	advancedfx::Message(
 		"[campath][INPUT] editor play queued: start tick=%d, plays to LAST keyframe tick=%d (#%d), then stops; waiting for seek.\n",
 		tick, lastTick, n);
-	if (tick >= lastTick)
-		advancedfx::Message("[campath][INPUT] note: playhead is at/after the last keyframe (tick %d >= %d) -- play ends immediately.\n",
-			tick, lastTick);
+	if (wrappedFromEnd)
+		advancedfx::Message("[campath][INPUT] playhead was at/after the last keyframe -- wrapped to first keyframe tick %d.\n",
+			firstTick);
 }
 
 void CameraPath::PausePreview() {
@@ -895,6 +909,15 @@ void CameraPath::RunFrame() {
 	}
 
 	Mode mode = GetMode();
+	if (m_debug) {
+		static Mode s_lastLoggedMode = (Mode)-1;
+		if (mode != s_lastLoggedMode) {
+			s_lastLoggedMode = mode;
+			advancedfx::Message("[campath][state] mode=%s timing=%s playing=%d pending=%d scrubbing=%d guard=%d\n",
+				ModeName(), TimingName(), m_play.Playing() ? 1 : 0, PlaybackPending() ? 1 : 0,
+				m_play.Scrubbing() ? 1 : 0, m_liveStartPauseGuard);
+		}
+	}
 	if (mode == Mode::PreviewArmed && !m_data.Empty()) {
 		PushPose(m_data.Front()); // hold the camera at the start frame
 		if (m_timelinePlayPending) {
@@ -914,6 +937,13 @@ void CameraPath::RunFrame() {
 			}
 		}
 	} else if (mode == Mode::PreviewPlaying) {
+		// Editor / timeline transport playback re-claims free-cam ownership every frame:
+		// while the demo advances in Live timing the engine re-establishes the spectator
+		// view each frame, which can override the pushed path pose so the dolly only
+		// "appears" to update when the demo pauses. Gated to m_editorPlay so it never
+		// fights the range-gated playpath mode (which intentionally toggles free cam as the
+		// playhead enters/leaves the marker range).
+		if (m_editorPlay) CameraBridge_SetFreeCamEnabled(true);
 		// Keep the demo running in Live timing: the lingering demo_gototick auto-pause
 		// (and any one-frame seek pause) would otherwise freeze the dolly right after it
 		// starts. Re-resume while the guard is active and the demo is paused -- nothing the
@@ -923,7 +953,23 @@ void CameraPath::RunFrame() {
 			if (m_timing == Timing::Live && DemoIsPaused()) DemoCmd("demo_resume");
 			--m_liveResumeGuard;
 		}
-		if (m_play.TickPlay(m_data, m_eval, MakeContext())) {
+		if (m_debug) {
+			static unsigned s_playFrameLogThrottle = 0;
+			if ((s_playFrameLogThrottle++ % 30) == 0) {
+				int tick = -1;
+				double time = 0.0;
+				g_MirvTime.GetCurrentDemoTick(tick);
+				g_MirvTime.GetCurrentDemoTime(time);
+				advancedfx::Message(
+					"[campath][frame] timing=%s demoTick=%d demoTime=%.2f paused=%d freecam=%d resumeGuard=%d\n",
+					TimingName(), tick, time, DemoIsPaused() ? 1 : 0,
+					CameraBridge_GetFreeCamEnabled() ? 1 : 0, m_liveResumeGuard);
+			}
+		}
+		const bool playDone = m_play.TickPlay(m_data, m_eval, MakeContext());
+		if (m_timing == Timing::Live && m_play.LiveEndSettling() && !playDone && !DemoIsPaused())
+			DemoCmd("demo_pause");
+		if (playDone) {
 			// Reached the LAST keyframe tick. The timeline only covers the marker range, so
 			// HALT the demo here (Live) instead of letting it roll past the path -- the whole
 			// point of the timeline is to bound playback to where the cam path ends. Freeze is

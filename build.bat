@@ -72,4 +72,4 @@ echo.
 echo === BUILD OK ===
 echo Output: %~dp0build\staging-release\bin\HLAE.exe
 echo Run launch.bat to start it.
-pause
+exit /b 0

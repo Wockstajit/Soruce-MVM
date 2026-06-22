@@ -51,6 +51,8 @@ void CamPlayback::Reset() {
 	m_poseSmoothInit = false;
 	m_engaged = false;
 	m_engageApplied = false;
+	m_liveEndSettling = false;
+	m_liveEndSettleFrames = 0;
 }
 
 void CamPlayback::StartPlay(double duration, bool rangeGated, double startTiming) {
@@ -75,11 +77,20 @@ void CamPlayback::BeginScrub(double tick) {
 }
 
 bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const Context& ctx) {
-	if (!m_playing)
+	if (!m_playing) {
+		if (ctx.debug) {
+			static unsigned s_notPlayingTrace = 0;
+			if ((s_notPlayingTrace++ % 15) == 0)
+				advancedfx::Message("[campath][tick] skipped: playback engine not playing.\n");
+		}
 		return false;
+	}
 	const int n = mk.Count();
-	if (n < 2 || m_duration <= 0.0)
+	if (n < 2 || m_duration <= 0.0) {
+		if (ctx.debug)
+			advancedfx::Message("[campath][tick] invalid playback data: markers=%d duration=%.3f.\n", n, m_duration);
 		return true; // nothing sensible to play -> signal "end" so the facade stops
+	}
 
 	const double wallDt = WallDt();
 	const bool freeze = (ctx.timing == kTimingFreeze);
@@ -137,33 +148,39 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 		}
 		const double clk = m_liveClock; // predicted demo TICK
 		const double tFirst = (double)mk.Front().tick, tLast = (double)mk.Back().tick;
+		atEnd = (demoTick >= tLast - 0.5) || (clk >= tLast - 0.5);
+		if (atEnd) m_liveEndSettling = true;
+		else { m_liveEndSettling = false; m_liveEndSettleFrames = 0; }
 
 		// Range-gated (timeline play): hand the camera back to the normal demo view
 		// until the REAL playhead reaches the first marker's tick, so the dolly never
-		// moves / holds outside its keyframe range. Use the raw demoTick (not the
-		// predicted clock) for the gate so the camera can't anticipate the start. The
-		// free-cam state is forced on the first frame (m_engageApplied) and then only
-		// on transitions.
+		// moves / holds before its keyframe range. Use the raw demoTick (not the
+		// predicted clock) for the gate so the camera can't anticipate the start. Once
+		// the range has been reached, keep ownership through the last-key stop frame;
+		// otherwise a lagging predicted clock can let the demo roll past the final key
+		// while the range gate has already released the view.
 		if (m_rangeGated) {
-			bool wantEngage = (demoTick >= tFirst - 0.5 && demoTick <= tLast + 0.5);
+			const bool beforeRange = demoTick < tFirst - 0.5;
+			const bool wantEngage = !beforeRange;
 			if (!m_engageApplied || wantEngage != m_engaged) {
 				CameraBridge_SetFreeCamEnabled(wantEngage);
 				m_engaged = wantEngage;
 				m_engageApplied = true;
 				m_poseSmoothInit = false;
 			}
-			advancedfx::Message(
-				"[campath][gate] demoTick=%.1f first=%.1f last=%.1f wantEngage=%d freecam=%d\n",
-				demoTick, tFirst, tLast, wantEngage ? 1 : 0,
-				CameraBridge_GetFreeCamEnabled() ? 1 : 0);
-			if (!wantEngage) {
+			if (ctx.debug) {
+				advancedfx::Message(
+					"[campath][gate] demoTick=%.1f first=%.1f last=%.1f wantEngage=%d freecam=%d\n",
+					demoTick, tFirst, tLast, wantEngage ? 1 : 0,
+					CameraBridge_GetFreeCamEnabled() ? 1 : 0);
+			}
+			if (beforeRange) {
 				m_playSeg = 0;
 				return false; // outside the path's tick range (not the end)
 			}
 		}
 
-		pose = eval.EvalAtTick(mk, clk);
-		atEnd = (clk >= tLast - 0.5);
+		pose = eval.EvalAtTick(mk, atEnd ? tLast : clk);
 	} else {
 		// Freeze: advance along the speed-mode TIMING axis on wall-clock.
 		m_playT += wallDt;
@@ -173,6 +190,8 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 	m_playSeg = pose.seg;
 
 	double poseX = 0, poseY = 0, poseZ = 0, posePitch = 0, poseYaw = 0, poseFov = 0;
+	bool pushedPose = false;
+	bool endSettled = !atEnd || freeze;
 	if (pose.valid) {
 		// Low-pass the OUTPUT pose: rounds the velocity "corner" at each marker so the
 		// move glides through keyframes and mops up any residual clock roughness.
@@ -182,7 +201,8 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 			m_sPitch = pose.pitch; m_sYaw = pose.yaw; m_sRoll = pose.roll; m_sFov = pose.fov;
 			m_poseSmoothInit = true;
 		} else {
-			double a = 1.0 - std::exp(-wallDt / kPoseSmoothTau);
+			const double poseTau = m_liveEndSettling ? 0.025 : kPoseSmoothTau;
+			double a = 1.0 - std::exp(-wallDt / poseTau);
 			m_sX += (pose.x - m_sX) * a; m_sY += (pose.y - m_sY) * a; m_sZ += (pose.z - m_sZ) * a;
 			m_sFov += (pose.fov - m_sFov) * a;
 			m_sPitch += WrapDeg(pose.pitch - m_sPitch) * a;
@@ -190,7 +210,24 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 			m_sRoll  += WrapDeg(pose.roll  - m_sRoll)  * a;
 		}
 		CameraBridge_SetCameraPose(m_sX, m_sY, m_sZ, m_sPitch, m_sYaw, m_sRoll, m_sFov);
+		pushedPose = true;
 		poseX = m_sX; poseY = m_sY; poseZ = m_sZ; posePitch = m_sPitch; poseYaw = m_sYaw; poseFov = m_sFov;
+		if (m_liveEndSettling) {
+			++m_liveEndSettleFrames;
+			const double posErr = std::sqrt((pose.x - m_sX) * (pose.x - m_sX)
+				+ (pose.y - m_sY) * (pose.y - m_sY) + (pose.z - m_sZ) * (pose.z - m_sZ));
+			const double angErr = std::fmax(std::fabs(WrapDeg(pose.pitch - m_sPitch)),
+				std::fmax(std::fabs(WrapDeg(pose.yaw - m_sYaw)), std::fabs(WrapDeg(pose.roll - m_sRoll))));
+			const double fovErr = std::fabs(pose.fov - m_sFov);
+			endSettled = (m_liveEndSettleFrames >= 2 && posErr <= 2.0 && angErr <= 0.25 && fovErr <= 0.25)
+				|| m_liveEndSettleFrames >= 90;
+			if (endSettled) {
+				m_sX = pose.x; m_sY = pose.y; m_sZ = pose.z;
+				m_sPitch = pose.pitch; m_sYaw = pose.yaw; m_sRoll = pose.roll; m_sFov = pose.fov;
+				CameraBridge_SetCameraPose(m_sX, m_sY, m_sZ, m_sPitch, m_sYaw, m_sRoll, m_sFov);
+				poseX = m_sX; poseY = m_sY; poseZ = m_sZ; posePitch = m_sPitch; poseYaw = m_sYaw; poseFov = m_sFov;
+			}
+		}
 	}
 
 	// Debug: log on every segment change + a throttled progress line.
@@ -204,22 +241,32 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 		: (ctx.speedMode == 2 /*PerSegment*/ ? mk.At(seg).speedMul : 1.0f);
 	bool segChanged = (seg != m_lastLogSeg);
 	m_logAccum += 1.0;
-	if (segChanged || m_logAccum >= 30.0 || atEnd) {
+	if (ctx.debug && (segChanged || m_logAccum >= 15.0 || atEnd || !pushedPose)) {
 		advancedfx::Message(
-			"[campath] play clock=%s seg=%d/%d prog=%.0f%% mk #%d->#%d interp=%s speed=%s x%.2f "
+			"[campath][tick] clock=%s seg=%d/%d prog=%.0f%% mk #%d->#%d interp=%s speed=%s x%.2f "
 			"camClk=%.2f demoTime=%.2f behind=%+.2f target(tick=%d time=%.2f) "
+			"poseValid=%d pushed=%d atEnd=%d rangeGated=%d freecam=%d "
 			"pos=(%.1f %.1f %.1f) pitch=%.1f yaw=%.1f fov=%.1f%s.\n",
 			(freeze ? "Freeze(wall)" : "Live(replay)"),
 			seg + 1, (n > 1 ? n - 1 : 1), pose.p * 100.0,
 			seg, tgtSeg, ctx.interpName, ctx.speedModeName, segSpeed,
 			camClk, demoNow, behind, mk.At(tgtSeg).tick, mk.At(tgtSeg).time,
+			pose.valid ? 1 : 0, pushedPose ? 1 : 0, atEnd ? 1 : 0, m_rangeGated ? 1 : 0,
+			CameraBridge_GetFreeCamEnabled() ? 1 : 0,
 			poseX, poseY, poseZ, posePitch, poseYaw, poseFov,
 			pose.valid ? "" : " (no pose)");
+		// [push]: proves a pose is handed to the bridge on a continuing cadence, and reports
+		// the free-cam ownership flag the view-setup hook keys on (freecam=0 here would mean
+		// the dolly isn't owning the view, so CameraPathOwnsView would not block TrueView).
+		advancedfx::Message(
+			"[campath][push] live=%d camClk=%.2f seg=%d valid=%d pos=(%.1f %.1f %.1f) fov=%.1f freecam=%d\n",
+			freeze ? 0 : 1, camClk, seg, pose.valid ? 1 : 0,
+			poseX, poseY, poseZ, poseFov, CameraBridge_GetFreeCamEnabled() ? 1 : 0);
 		m_lastLogSeg = seg;
 		m_logAccum = 0.0;
 	}
 
-	return atEnd;
+	return atEnd && endSettled;
 }
 
 void CamPlayback::TickScrub(const CamMarkers& mk, const CamPathEval& eval) {

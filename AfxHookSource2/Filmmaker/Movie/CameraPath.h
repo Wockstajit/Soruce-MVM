@@ -112,6 +112,12 @@ public:
 	Mode GetMode() const { return (Mode)m_mode.load(); }   // safe from WndProc thread
 	bool IsPlaying() const { return m_play.Playing(); }
 	bool PlaybackPending() const { return m_editorPlayPending || m_timelinePlayPending; }
+	// True while the dolly is actively driving the FINAL view (PreviewPlaying + playing +
+	// free cam engaged). main.cpp's view-setup hook reads this (via CameraPathOwnsView) to
+	// block CS2's demo-view-override / TrueView from re-owning the view mid-playback.
+	bool OwnsView() const;
+	bool Debug() const { return m_debug; }       // verbose [campath]/[setupview] logging
+	void SetDebug(bool on) { m_debug = on; }
 	// True while an EDITOR-TEST playback (Space / Test button) is running -- the HUD
 	// suppresses the big "Playing Camera Path" preview banner for these.
 	bool EditorPlay() const {
@@ -210,6 +216,7 @@ private:
 	// false MID-SEEK, so require several consecutive stopped frames before tearing down a
 	// preview -- otherwise a freshly started play is killed one frame in by the seek itself.
 	int m_demoStoppedFrames = 0;
+	bool m_debug = false; // verbose [campath]/[setupview] logging ([state]/[push]/[owner]); toggle via "camtl debug 0|1"
 	bool m_curveEditActive = false;
 	bool m_curveEditChanged = false;
 	CurveUndoState m_curveEditStart;

@@ -39,7 +39,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
       label: '#9aa4b0ff', value: '#eef2f6ff', btnBg: '#ffffff14', btnOn: '#f0b32333',
       font: 'Stratum2, "Arial Unicode MS"'
     };
-    var W = 1250, W_DEFAULT = 1250, LANE_H = 42, LANE_GAP = 8, LABELW = 132;
+    var W = 1250, W_DEFAULT = 1250, LANE_H = 54, LANE_GAP = 9, LABELW = 132;
     var EDITOR_INSPECTOR_W = 372; // keep in sync with CameraEditorJs INSPECTOR_W
     var EDITOR_BOTTOM_H = 176;    // keep in sync with CameraEditorJs BOTTOM_H
     var LANES_H = (LANE_H + LANE_GAP) * 7;
@@ -49,9 +49,16 @@ inline const char* kCameraTimelineJs = R"TLJS(
     var EASE = ['none','in','out','inout'];
     var EASE_LBL = ['None','Ease In','Ease Out','Ease In/Out'];
 
-    function cmd(c) {
-      // Any action disarms a pending "Clear — sure?" confirm (render restores the label).
+    function disarmClear() {
       clearConfirm = false;
+      if (clearBtn && clearBtn.__lbl) {
+        clearBtn.__lbl.text = 'Clear';
+        clearBtn.__lbl.style.color = S.value;
+      }
+    }
+    function cmd(c) {
+      // Any action disarms a pending "Clear — sure?" confirm.
+      disarmClear();
       try { GameInterfaceAPI.ConsoleCommand(c); }
       catch (e) { $.Msg('[camtl] cmd failed: ' + e + '\n'); }
     }
@@ -70,7 +77,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
       b.style.paddingLeft = '9px'; b.style.paddingRight = '9px';
       b.style.marginRight = '5px'; b.style.verticalAlign = 'center';
       var l = lbl(b, text, color || S.value, 13); l.style.fontWeight = 'bold';
-      b.SetPanelEvent('onactivate', onClick);
+      b.SetPanelEvent('onactivate', function () { if (b !== clearBtn) disarmClear(); onClick(); });
       b.__lbl = l; return b;
     }
     // A thin rotated panel from (x0,y0) to (x1,y1): the Panorama "line" trick.
@@ -214,12 +221,20 @@ inline const char* kCameraTimelineJs = R"TLJS(
     var closeBtn = btn(header, '✕', function () { cmd('mirv_filmmaker camtl close'); }, S.value);
 )TLJS"
 R"TLJS(
-    // ===================== TIMELINE VIEW ================================
-    var tl = mk('Panel', panel); tl.style.flowChildren = 'down'; tl.style.width = (LABELW + W) + 'px';
-    var trow = mk('Panel', tl); trow.style.flowChildren = 'right'; trow.style.width = '100%'; trow.style.marginBottom = '8px';
+    // ===================== SHARED TRANSPORT =============================
+    var trow = mk('Panel', panel); trow.style.flowChildren = 'right'; trow.style.width = '100%'; trow.style.marginBottom = '8px';
     var playBtn = btn(trow, '▶', function () {
-      cmd('mirv_filmmaker camtl play');
+      var isPlaying = transportShownPlaying();
+      transportOverride = !isPlaying;
+      transportOverrideUntil = nowMs() + 2500;
+      setTransportButton(transportOverride);
+      cmd(isPlaying ? 'mirv_filmmaker camtl pause' : 'mirv_filmmaker camtl play');
     }, S.accent);
+    playBtn.style.width = '33px';
+    playBtn.style.paddingLeft = '0px';
+    playBtn.style.paddingRight = '0px';
+    playBtn.__lbl.style.width = '100%';
+    playBtn.__lbl.style.textAlign = 'center';
     btn(trow, '⏮', function () { gotoKey(-1); }, S.value);
     btn(trow, '⏭', function () { gotoKey(1); }, S.value);
     btn(trow, '◀ 1', function () { if (st) cmd('mirv_filmmaker camtl scrub ' + (activeTick() - 1)); }, S.value);
@@ -243,12 +258,15 @@ R"TLJS(
     })(SPD[si]);
     updateSpeedButtons();
 
+    // ===================== TIMELINE VIEW ================================
+    var tl = mk('Panel', panel); tl.style.flowChildren = 'down'; tl.style.width = (LABELW + W) + 'px';
+
     // Timeline scrubber spans the FULL content width (no label gutter -- that column is
     // only for the curve editor's per-channel lane labels).
     var TLW = LABELW + W;
     var srow = mk('Panel', tl); srow.style.width = TLW + 'px'; srow.style.height = '40px';
     var diamWrap = mk('Panel', srow); diamWrap.hittest = false;
-    diamWrap.style.width = TLW + 'px'; diamWrap.style.height = '22px'; diamWrap.style.position = '0px 0px 0px';
+    diamWrap.style.width = TLW + 'px'; diamWrap.style.height = '18px'; diamWrap.style.position = '0px 0px 0px';
     // (No separate track panel: the native Slider draws its own groove, so a second
     // trackBg here produced a doubled line that ran past the keyframes.)
     // Native CS2 sliders need BOTH the class (styling) and the direction ATTRIBUTE
@@ -256,7 +274,7 @@ R"TLJS(
     // Without direction the Slider defaults to vertical, so the thumb drags up/down
     // instead of left/right -- pass it in the CreatePanel construction props.
     var scrub = $.CreatePanel('Slider', srow, 'CamScrub', { direction: 'horizontal' }); scrub.AddClass('HorizontalSlider');
-    scrub.style.width = TLW + 'px'; scrub.style.height = '24px'; scrub.style.position = '0px 10px 0px';
+    scrub.style.width = TLW + 'px'; scrub.style.height = '24px'; scrub.style.position = '0px 16px 0px';
 
     // ===================== CURVE VIEW ===================================
     var cv = mk('Panel', panel); cv.style.flowChildren = 'down'; cv.style.width = (LABELW + W) + 'px'; cv.visible = false;
@@ -336,6 +354,22 @@ R"TLJS(
     // min/max/out-of-range value is unreliable and leaves the thumb stuck mid-track), so
     // we keep value normalized and map 0..1 <-> tick / channel-value ourselves.
     var scrubT0 = 0, scrubT1 = 1, phT0 = 0, phT1 = 1, valLo = 0, valHi = 1;
+    var scrubSyncing = false, phSyncing = false;
+    var transportOverride = null, transportOverrideUntil = 0;
+    function nowMs() { return (new Date()).getTime(); }
+    function transportShownPlaying() {
+      return transportOverride !== null ? transportOverride : !!(st && st.playing);
+    }
+    function syncTransportButton() {
+      if (st && transportOverride !== null && (st.playing === transportOverride || nowMs() > transportOverrideUntil)) {
+        transportOverride = null;
+      }
+      setTransportButton(transportShownPlaying());
+    }
+    function setTransportButton(playing) {
+      playBtn.__lbl.text = playing ? '▮▮' : '▶';
+      playBtn.__lbl.style.fontSize = playing ? '15px' : '13px';
+    }
     function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
     function sliderTick(v, a, b) { return Math.round(a + v * (b - a)); }
 
@@ -344,6 +378,7 @@ R"TLJS(
       return st && st.scrubbing ? st.scrubTick : (st ? st.tick : 0);
     }
     function selectChannel(ci) {
+      disarmClear();
       selChannel = ci;
       if (curve) rebuildCurveLanes();
       if (api && api.render) api.render();
@@ -378,17 +413,21 @@ R"TLJS(
     // 'onvaluechanged' panel event. While dragging we PREVIEW the camera (smooth, no
     // world seek); on release we seek the demo world to the final tick.
     $.RegisterEventHandler('SliderValueChanged', scrub, function (panel, v) {
+      if (scrubSyncing || (st && st.playing)) return;
       var t = sliderTick(v, scrubT0, scrubT1);
       tReadout.text = 'tick ' + t + '   (release to seek)';
       cmd('mirv_filmmaker camtl scrubpreview ' + t);
     });
     $.RegisterEventHandler('SliderReleased', scrub, function (panel, v) {
+      if (st && st.playing) return;
       cmd('mirv_filmmaker camtl scrub ' + sliderTick(v, scrubT0, scrubT1));
     });
     $.RegisterEventHandler('SliderValueChanged', phSlider, function (panel, v) {
+      if (phSyncing || (st && st.playing)) return;
       cmd('mirv_filmmaker camtl scrubpreview ' + sliderTick(v, phT0, phT1));
     });
     $.RegisterEventHandler('SliderReleased', phSlider, function (panel, v) {
+      if (st && st.playing) return;
       cmd('mirv_filmmaker camtl scrub ' + sliderTick(v, phT0, phT1));
     });
     // Value editor: update the selected camera/property continuously while dragging.
@@ -420,7 +459,7 @@ R"TLJS(
       for (var i = 0; i < st.markers.length; i++) (function (i) {
         var x = frac(st.markers[i].tick, t0, t1) * TLW;
         var sel = (i === st.selected);
-        diamond(diamWrap, x, 11, sel ? 19 : 15, sel ? S.lineSel : S.accent, function () {
+        diamond(diamWrap, x, 8, 14, sel ? S.lineSel : S.accent, function () {
           cmd('mirv_filmmaker camtl select ' + i);
         });
       })(i);
@@ -562,6 +601,7 @@ R"TLJS(
       // this full-screen catcher (z55) can't sit on top of the editor's inspector.
       catcher.visible = cur && !hosted; catcher.hittest = cur && !hosted;
       panel.hittest = true;
+      keyFooter.visible = !hosted;
       mouseLbl.text = forcedCur ? 'Mouse: UI  ·  editor cursor forced' : (cur ? 'Mouse: UI  ·  press G to toggle mouse' : 'Mouse: GAME  ·  press G to toggle mouse');
       mouseLbl.style.color = cur ? S.accent : S.label;
       try {
@@ -575,6 +615,7 @@ R"TLJS(
       var freeze = (st.timing === 'Freeze');
       tl.visible = (curView === 'timeline');
       cv.visible = (curView === 'curve');
+      ctb.visible = (curView === 'curve');
       viewBtn.__lbl.text = (curView === 'timeline') ? 'Curve Editor' : 'Timeline';
       hTitle.text = (curView === 'timeline') ? 'CAMERA TIMELINE' : 'CAMERA CURVE EDITOR';
       hInfo.text = 'tick ' + activeTick() + '   ·   ' + st.count + ' keys   ·   sel #'
@@ -586,10 +627,14 @@ R"TLJS(
         var t0 = st.tickMin, t1 = st.tickMax; if (t1 <= t0) t1 = t0 + 1;
         scrubT0 = t0; scrubT1 = t1;
         var shownTick = activeTick();
-        if (!scrub.mousedown) scrub.value = clamp01((shownTick - t0) / (t1 - t0)); // normalized; don't fight a drag
+        if (!scrub.mousedown) {
+          scrubSyncing = true;
+          scrub.value = clamp01((shownTick - t0) / (t1 - t0)); // normalized; don't fight a drag
+          scrubSyncing = false;
+        }
         if (st.count < 2) tReadout.text = 'Place 2+ camera markers (K or + Add), then drag to scrub';
         else if (!scrub.mousedown) tReadout.text = 'tick ' + shownTick + '   time ' + (st.time != null ? st.time.toFixed(2) : '?') + 's';
-        playBtn.__lbl.text = st.playing ? '⏸' : '▶';
+        syncTransportButton();
         var sig = st.tickMin + ':' + st.tickMax + ':' + st.selected + ':' + (st.markers ? st.markers.map(function (m) { return m.tick; }).join(',') : '');
         if (sig !== lastTlSig) { lastTlSig = sig; rebuildTimelineDiamonds(); }
       }
@@ -608,7 +653,11 @@ R"TLJS(
           }
           phT0 = ct0; phT1 = ct1;
           var curveTick = activeTick();
-          if (!phSlider.mousedown) phSlider.value = clamp01((curveTick - ct0) / (ct1 - ct0));
+          if (!phSlider.mousedown) {
+            phSyncing = true;
+            phSlider.value = clamp01((curveTick - ct0) / (ct1 - ct0));
+            phSyncing = false;
+          }
           phLine.style.position = (LABELW + frac(curveTick, ct0, ct1) * W).toFixed(1) + 'px 0px 0px';
 
           // value editor for the selected key + channel
