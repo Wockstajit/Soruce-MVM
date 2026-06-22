@@ -85,30 +85,36 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 	const bool freeze = (ctx.timing == kTimingFreeze);
 
 	double demoNow = 0.0; g_MirvTime.GetCurrentDemoTime(demoNow);
+	int demoTickInt = 0; g_MirvTime.GetCurrentDemoTick(demoTickInt);
+	const double demoTick = (double)demoTickInt;
 	bool atEnd = false;
 	CamPathEval::Pose pose;
 
 	if (!freeze) {
-		// PREDICTIVE demo clock -- the root fix for slow-timescale jitter. The engine's
-		// demo time arrives COARSE and occasionally reversed at low timescale. Instead
-		// of following it directly: (1) estimate the demo-time RATE (low-passed),
-		// (2) ADVANCE the clock at that rate each frame, (3) gently CORRECT toward the
-		// true demo time, and (4) SNAP on a genuine seek.
-		if (m_liveClock < 0.0 || std::fabs(demoNow - m_liveClock) > 0.5) {
+		// PREDICTIVE demo clock in TICK SPACE -- two fixes in one. (a) marker.time can
+		// go STALE after retiming, while marker.tick is the axis the editor/timeline /
+		// scrubber are all built on; so Live evaluates by TICK to stay locked to the
+		// real playhead. (b) the engine's demo tick still arrives COARSE and sometimes
+		// reversed at low timescale, so we keep the predict/correct/snap machinery that
+		// killed the slow-timescale jitter -- just driven by ticks instead of seconds:
+		// (1) estimate the tick RATE (low-passed), (2) ADVANCE at that rate each frame,
+		// (3) gently CORRECT toward the true tick, and (4) SNAP on a genuine seek.
+		constexpr double kSeekTicks = 16.0; // ~0.25s @ 64tick: a real seek snaps the clock
+		if (m_liveClock < 0.0 || std::fabs(demoTick - m_liveClock) > kSeekTicks) {
 			// init / seek
-			m_liveClock = demoNow; m_liveClockRate = -1.0; m_prevDemoNow = demoNow;
-			m_prevLiveClock = demoNow; m_rateDemoAccum = 0.0; m_rateWallAccum = 0.0;
+			m_liveClock = demoTick; m_liveClockRate = -1.0; m_prevDemoNow = demoTick;
+			m_prevLiveClock = demoTick; m_rateDemoAccum = 0.0; m_rateWallAccum = 0.0;
 		} else {
-			double dDemo = demoNow - m_prevDemoNow; // >= 0 when advancing
-			m_prevDemoNow = demoNow;
+			double dDemo = demoTick - m_prevDemoNow; // >= 0 when advancing
+			m_prevDemoNow = demoTick;
 
-			// Unbiased rate: accumulate the demo advance AND the wall time across
-			// frames, then rate = demoAdvanced / wallElapsed over the window. Counting
-			// the FLAT frames (where the coarse demo clock didn't tick) in the
-			// denominator is what keeps the estimate honest -- the old code sampled
-			// dDemo/wallDt only on the tick frames, so a whole tick landing in one
-			// frame read as near real-time and the predictor raced ahead, then the
-			// corrector hauled it back: the visible back-and-forth wiggle.
+			// Unbiased rate: accumulate the tick advance AND the wall time across
+			// frames, then rate = ticksAdvanced / wallElapsed over the window. Counting
+			// the FLAT frames (where the coarse demo tick didn't change) in the
+			// denominator is what keeps the estimate honest -- sampling dDemo/wallDt
+			// only on the tick frames reads a whole tick landing in one frame as
+			// near real-time, so the predictor races ahead and the corrector hauls it
+			// back: the visible back-and-forth wiggle.
 			if (dDemo > 0.0) m_rateDemoAccum += dDemo; // skip tiny backward blips
 			m_rateWallAccum += wallDt;
 			if (m_rateWallAccum >= kClockRateTau) {
@@ -119,8 +125,8 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 			}
 
 			double rate = (m_liveClockRate > 0.0) ? m_liveClockRate : 0.0;
-			m_liveClock += rate * wallDt; // predict at the (now unbiased) demo rate
-			m_liveClock += (demoNow - m_liveClock) * (1.0 - std::exp(-wallDt / kClockCorrectTau));
+			m_liveClock += rate * wallDt; // predict at the (now unbiased) tick rate
+			m_liveClock += (demoTick - m_liveClock) * (1.0 - std::exp(-wallDt / kClockCorrectTau));
 
 			// Monotonic guard: a momentary over-predict + the correction pull must
 			// never dip the clock below its last value (would read as the camera
@@ -129,16 +135,17 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 			if (m_liveClock < m_prevLiveClock) m_liveClock = m_prevLiveClock;
 			m_prevLiveClock = m_liveClock;
 		}
-		const double clk = m_liveClock;
-		const double tFirst = mk.Front().time, tLast = mk.Back().time;
+		const double clk = m_liveClock; // predicted demo TICK
+		const double tFirst = (double)mk.Front().tick, tLast = (double)mk.Back().tick;
 
 		// Range-gated (timeline play): hand the camera back to the normal demo view
-		// until the REAL playhead reaches the first marker, so the dolly never moves /
-		// holds before its first keyframe. Use demoNow (not the predicted clock) for
-		// the gate so the camera can't anticipate the start. The free-cam state is
-		// forced on the first frame (m_engageApplied) and then only on transitions.
+		// until the REAL playhead reaches the first marker's tick, so the dolly never
+		// moves / holds outside its keyframe range. Use the raw demoTick (not the
+		// predicted clock) for the gate so the camera can't anticipate the start. The
+		// free-cam state is forced on the first frame (m_engageApplied) and then only
+		// on transitions.
 		if (m_rangeGated) {
-			bool wantEngage = (demoNow >= tFirst - 1e-4);
+			bool wantEngage = (demoTick >= tFirst - 0.5 && demoTick <= tLast + 0.5);
 			if (!m_engageApplied || wantEngage != m_engaged) {
 				CameraBridge_SetFreeCamEnabled(wantEngage);
 				m_engaged = wantEngage;
@@ -146,17 +153,17 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 				m_poseSmoothInit = false;
 			}
 			advancedfx::Message(
-				"[campath][gate] demoNow=%.3f first=%.3f last=%.3f wantEngage=%d freecam=%d\n",
-				demoNow, tFirst, tLast, wantEngage ? 1 : 0,
+				"[campath][gate] demoTick=%.1f first=%.1f last=%.1f wantEngage=%d freecam=%d\n",
+				demoTick, tFirst, tLast, wantEngage ? 1 : 0,
 				CameraBridge_GetFreeCamEnabled() ? 1 : 0);
 			if (!wantEngage) {
 				m_playSeg = 0;
-				return false; // waiting for the path to start (not the end)
+				return false; // outside the path's tick range (not the end)
 			}
 		}
 
-		pose = eval.EvalAtDemoTime(mk, clk);
-		atEnd = (clk >= tLast - 1e-4);
+		pose = eval.EvalAtTick(mk, clk);
+		atEnd = (clk >= tLast - 0.5);
 	} else {
 		// Freeze: advance along the speed-mode TIMING axis on wall-clock.
 		m_playT += wallDt;
@@ -188,8 +195,10 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 
 	// Debug: log on every segment change + a throttled progress line.
 	const int seg = pose.seg;
+	// Live: camClk is the predicted demo TICK; behind = how many ticks the camera
+	// trails the raw playhead. Freeze: camClk is the wall-clock timing cursor (s).
 	const double camClk = freeze ? m_playT : m_liveClock;
-	const double behind = freeze ? 0.0 : (demoNow - camClk);
+	const double behind = freeze ? 0.0 : (demoTick - camClk);
 	const int tgtSeg = (seg + 1 < n) ? seg + 1 : n - 1;
 	const float segSpeed = (ctx.speedMode == 1 /*Constant*/) ? ctx.constSpeed
 		: (ctx.speedMode == 2 /*PerSegment*/ ? mk.At(seg).speedMul : 1.0f);
@@ -198,7 +207,7 @@ bool CamPlayback::TickPlay(const CamMarkers& mk, const CamPathEval& eval, const 
 	if (segChanged || m_logAccum >= 30.0 || atEnd) {
 		advancedfx::Message(
 			"[campath] play clock=%s seg=%d/%d prog=%.0f%% mk #%d->#%d interp=%s speed=%s x%.2f "
-			"camClk=%.2f demoTime=%.2f behind=%+.2fs target(tick=%d time=%.2f) "
+			"camClk=%.2f demoTime=%.2f behind=%+.2f target(tick=%d time=%.2f) "
 			"pos=(%.1f %.1f %.1f) pitch=%.1f yaw=%.1f fov=%.1f%s.\n",
 			(freeze ? "Freeze(wall)" : "Live(replay)"),
 			seg + 1, (n > 1 ? n - 1 : 1), pose.p * 100.0,
