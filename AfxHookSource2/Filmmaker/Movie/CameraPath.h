@@ -201,6 +201,11 @@ private:
 	// is starting we re-issue demo_resume for a short window so the dolly actually advances
 	// instead of unpausing for a single tick and freezing (the "Play does nothing" bug).
 	int m_liveResumeGuard = 0;
+	// Frames after a play START during which PausePreview() is ignored. Defeats the stray
+	// "camtl pause" that a held / auto-repeating Space fires the instant the mode flips to
+	// PreviewPlaying (MovieMode's PreviewPlaying branch emits it), which otherwise killed
+	// Live playback one frame in. Set ~30 at each start site; counted down per frame in RunFrame.
+	int m_liveStartPauseGuard = 0;
 	// The RunFrame fail-safe resets to Editing when the demo stops. IsPlayingDemo() blips
 	// false MID-SEEK, so require several consecutive stopped frames before tearing down a
 	// preview -- otherwise a freshly started play is killed one frame in by the seek itself.

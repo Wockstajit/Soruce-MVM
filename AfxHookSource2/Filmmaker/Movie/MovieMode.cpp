@@ -196,7 +196,11 @@ bool MovieMode::OnKey(int vkey, bool down) {
 	}
 
 	if (vkey == kVK_SPACE && CameraEditor_Active() && cpMode == CPMode::Editing) {
-		if (down) EnqueueCmd("mirv_filmmaker camtl playtest");
+		// Skip re-issuing playtest while a start is PENDING (mode stays Editing during the
+		// seek settle) -- a held / repeated Space would otherwise restart the seek. Swallow
+		// the key regardless so it never leaks to the demo_pause fallback below.
+		if (down && !CameraPathRef().PlaybackPending())
+			EnqueueCmd("mirv_filmmaker camtl playtest");
 		return true;
 	}
 

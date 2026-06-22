@@ -454,6 +454,7 @@ void CameraPath::StartPreviewPlay() {
 
 	m_play.StartPlay(m_eval.Duration());
 	SetMode(Mode::PreviewPlaying);
+	m_liveStartPauseGuard = 30; // brief window where a stray pause (held/repeated Space) can't kill the start
 
 	// Insurance: the dolly drives the camera through MirvInput's free-cam override, so make
 	// sure free cam is on before we hand poses to it. Without this, if free cam was dropped
@@ -511,6 +512,7 @@ void CameraPath::PlayPath() {
 	if (m_timing == Timing::Freeze) CameraBridge_SetFreeCamEnabled(true);
 	m_play.StartPlay(m_eval.Duration(), /*rangeGated*/ m_timing == Timing::Live);
 	SetMode(Mode::PreviewPlaying);
+	m_liveStartPauseGuard = 30; // brief window where a stray pause (held/repeated Space) can't kill the start
 	// Resume UNCONDITIONALLY in Live: the demo is usually paused here (from a prior scrub)
 	// and the cached pause check could miss it, leaving the playhead stuck. demo_resume on
 	// an already-playing demo is a harmless no-op. The guard re-resumes for ~2s to defeat
@@ -569,6 +571,14 @@ void CameraPath::PlayFromEditor() {
 }
 
 void CameraPath::PausePreview() {
+	// Swallow the stray pause that a held / auto-repeating Space fires the instant the mode
+	// flips to PreviewPlaying (MovieMode's PreviewPlaying branch emits "camtl pause"). Without
+	// this, Live playback paused itself one frame after starting. X/Esc (StopPreview) still cancels.
+	if (m_liveStartPauseGuard > 0) {
+		advancedfx::Message("[campath] ignored early pause during start guard (%d frames left).\n",
+			m_liveStartPauseGuard);
+		return;
+	}
 	if (GetMode() != Mode::PreviewPlaying && !PlaybackPending())
 		return;
 	m_play.Stop();
@@ -828,6 +838,10 @@ void CameraPath::RunFrame() {
 		EnsureDrawState();
 	}
 
+	// Count down the post-start pause guard so PausePreview() ignores the stray "camtl pause"
+	// a held / repeated Space fires right after playback begins, then accepts pauses normally.
+	if (m_liveStartPauseGuard > 0) --m_liveStartPauseGuard;
+
 	// Fail-safe: if a mode/scrub was left active when the demo stopped, return to a
 	// clean editing state so MirvInput isn't left suspended with no closable panel.
 	// IsPlayingDemo() reports false transiently during a demo_gototick seek, so debounce:
@@ -872,10 +886,11 @@ void CameraPath::RunFrame() {
 			CameraBridge_SetFreeCamEnabled(true);
 			m_play.StartPlay(m_eval.Duration(), /*rangeGated*/ false, m_editorPlayStartTiming);
 			SetMode(Mode::PreviewPlaying);
+			m_liveStartPauseGuard = 30; // brief window where a stray pause (held/repeated Space) can't kill the start
 			if (m_timing == Timing::Live) { DemoCmd("demo_resume"); m_liveResumeGuard = 120; }
-			advancedfx::Message("[campath] editor play started from tick %d (atTarget=%d, waited %d frames, freecam=%d).\n",
+			advancedfx::Message("[campath] editor play started from tick %d (atTarget=%d, waited %d frames, freecam=%d, guard=%d).\n",
 				m_editorPlayTargetTick, atTarget ? 1 : 0, m_editorPlayWaitFrames,
-				CameraBridge_GetFreeCamEnabled() ? 1 : 0);
+				CameraBridge_GetFreeCamEnabled() ? 1 : 0, m_liveStartPauseGuard);
 		}
 	}
 
