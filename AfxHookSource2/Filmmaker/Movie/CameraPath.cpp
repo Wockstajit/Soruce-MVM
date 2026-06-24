@@ -1,7 +1,8 @@
 #include "CameraPath.h"
 
 #include "CameraBridge.h"
-#include "../Filmmaker.h"            // CurrentDemoPath()
+#include "../Filmmaker.h"            // PlayingDemoPath(), CurrentDemoPath()
+#include "../Demo/PlayingDemoPath.h" // CanonicalDemoPath()
 #include "../../MirvTime.h"
 
 #include "../../../shared/AfxConsole.h"
@@ -658,6 +659,7 @@ void CameraPath::PushCurveUndo() {
 	if (m_curveUndo.size() >= 64)
 		m_curveUndo.erase(m_curveUndo.begin());
 	m_curveUndo.push_back({ m_data.All(), m_data.Selected() });
+	m_curveRedo.clear(); // a fresh edit invalidates the redo stack
 }
 
 double* CameraPath::ChannelTarget(CamMarker& marker, int channel) {
@@ -699,6 +701,7 @@ void CameraPath::EndCurveValueEdit() {
 	if (m_curveEditChanged) {
 		if (m_curveUndo.size() >= 64) m_curveUndo.erase(m_curveUndo.begin());
 		m_curveUndo.push_back(m_curveEditStart);
+		m_curveRedo.clear(); // a fresh edit invalidates the redo stack
 		MarkDirty();
 	}
 	m_curveEditActive = false;
@@ -711,6 +714,8 @@ void CameraPath::UndoCurveEdit() {
 		Notify("Nothing to undo.");
 		return;
 	}
+	if (m_curveRedo.size() >= 64) m_curveRedo.erase(m_curveRedo.begin());
+	m_curveRedo.push_back({ m_data.All(), m_data.Selected() }); // current state, so Redo can return here
 	CurveUndoState state = m_curveUndo.back();
 	m_curveUndo.pop_back();
 	m_data.Restore(state.markers, state.selected);
@@ -718,6 +723,22 @@ void CameraPath::UndoCurveEdit() {
 	RebuildCamPath();
 	MarkDirty();
 	advancedfx::Message("[campath] curve edit undone.\n");
+}
+
+void CameraPath::RedoCurveEdit() {
+	if (m_curveRedo.empty()) {
+		Notify("Nothing to redo.");
+		return;
+	}
+	if (m_curveUndo.size() >= 64) m_curveUndo.erase(m_curveUndo.begin());
+	m_curveUndo.push_back({ m_data.All(), m_data.Selected() }); // so this redo is itself undoable
+	CurveUndoState state = m_curveRedo.back();
+	m_curveRedo.pop_back();
+	m_data.Restore(state.markers, state.selected);
+	m_play.EndScrub();
+	RebuildCamPath();
+	MarkDirty();
+	advancedfx::Message("[campath] curve edit redone.\n");
 }
 
 void CameraPath::MoveKey(int index, int newTick) {
@@ -834,12 +855,14 @@ void CameraPath::UpdateHover() {
 // --- per-frame ---
 
 void CameraPath::RunFrame() {
-	// Auto-load when the active demo changes (path tracked by Filmmaker::Watch).
-	std::wstring cur = CurrentDemoPath();
+	// Auto-load when the active demo changes. Keyed off the demo the ENGINE is actually
+	// playing (PlayingDemoPath), so the SAME .dem gets the SAME markers whether it was opened
+	// from our Downloaded tab, CS2's native Your Matches tab, or a console playdemo.
+	std::wstring cur = PlayingDemoPath();
 	if (cur != m_demoPath) {
 		m_demoPath = cur;
 		m_data.DeleteAll();
-		m_curveUndo.clear();
+		m_curveUndo.clear(); m_curveRedo.clear();
 		m_menuOpen = false;
 		m_play.Stop();
 		m_hudHidden = false;
@@ -1001,10 +1024,23 @@ void CameraPath::Save() {
 
 void CameraPath::Load() {
 	if (m_demoPath.empty()) return;
-	m_curveUndo.clear();
+	m_curveUndo.clear(); m_curveRedo.clear();
 	PathSettings st = MakeSettings(); // seed with current defaults
 	int sel = m_data.Selected();
-	if (m_data.Load(SidecarPath(), st, sel)) {
+	bool ok = m_data.Load(SidecarPath(), st, sel);
+	if (!ok) {
+		// Backward compatibility: older builds keyed the sidecar off the RAW path our Watch()
+		// recorded (pre-canonicalization). If the canonical sidecar is absent, try that legacy
+		// location -- but only when the recorded path is the SAME file as the one now playing
+		// (canonical match), so a stale CurrentDemoPath() from a previous demo can't load the
+		// wrong markers. Migrates to the canonical name on the next save.
+		std::wstring raw = CurrentDemoPath();
+		if (!raw.empty() && raw != m_demoPath && CanonicalDemoPath(raw) == m_demoPath) {
+			ok = m_data.Load(raw + L".campath.json", st, sel);
+			if (ok) MarkDirty();
+		}
+	}
+	if (ok) {
 		m_speedMode = (SpeedMode)st.speedMode;
 		m_timing = (Timing)st.timing;
 		m_interp = (Interp)st.interp;

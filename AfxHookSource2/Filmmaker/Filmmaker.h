@@ -34,17 +34,24 @@ void Watch(std::size_t index);
 DemoLibrary& Library();
 FilmmakerMenu& Menu();
 
-// Absolute path of the demo most recently launched via Watch(), or empty if a
-// demo was started another way (e.g. console playdemo). The camera-marker system
-// uses it to auto-load/save its per-demo sidecar. Returns a copy (thread-safe).
+// Absolute path of the demo most recently launched via OUR Watch(), or empty if a
+// demo was started another way (e.g. console playdemo or the native Your Matches tab).
+// Returns a copy (thread-safe). Prefer PlayingDemoPath() for the camera-path sidecar.
 std::wstring CurrentDemoPath();
+
+// Canonical absolute path of the demo the ENGINE is actually playing, irrespective of
+// how it started (our Downloaded tab, native Your Matches, or console playdemo). The
+// camera-marker system keys its per-demo sidecar off this so the same .dem always maps
+// to the same path. Falls back to CurrentDemoPath() (canonicalized) when the engine path
+// can't be recovered, so behavior is never worse than Watch()-only. Cheap to call per frame.
+std::wstring PlayingDemoPath();
 
 // --- Movie director (camera modes + in-game help HUD) ---
 // Input taps, called from the WndProc / input thread. Return true if the event
 // was consumed (the caller should then swallow it). Safe no-ops if unused.
 bool MovieInput_OnKey(int vkey, bool down);
 bool MovieInput_OnMouseButton(int button, bool down); // 0 = left, 1 = right
-bool MovieInput_OnMouseWheel(int delta, bool shiftDown);
+bool MovieInput_OnMouseWheel(int delta, bool shiftDown, bool ctrlDown);
 
 // HUD panel show/hide (driven by the mirv_filmmaker hud console command).
 void MovieHud_Set(bool visible);
@@ -99,6 +106,22 @@ bool CameraEditor_Active();
 void CameraEditor_SetScale(bool enabled);
 void CameraEditor_ToggleScale();
 bool CameraEditor_ScaleActive();
+
+// Bottom curve editor selection: false = graph editor (default), true = old camera timeline.
+// Driven by "mirv_filmmaker editor curveeditor graph|timeline|toggle".
+void CameraEditor_SetUseTimeline(bool useTimeline);
+void CameraEditor_ToggleUseTimeline();
+
+// --- Experimental After-Effects-style graph editor (isolated, opt-in overlay) ---
+// Default OFF; toggled by the "Experiment" button or "mirv_filmmaker grapheditor on|off|
+// toggle". OwnsView()/WantsCursor() are OR'd into the stable view-ownership + cursor-routing
+// hooks so the experiment can live-drive the camera and stay clickable while open. Deleting
+// the GraphEditor* files + reverting these hooks removes the feature entirely.
+void GraphEditorExperiment_Set(bool enabled);
+void GraphEditorExperiment_Toggle();
+bool GraphEditorExperiment_Enabled();
+bool GraphEditorExperiment_OwnsView();
+bool GraphEditorExperiment_WantsCursor();
 
 // True when non-preview UI should be hidden: always during full path playback,
 // and while the armed preview has its background HUD toggled off with Tab.

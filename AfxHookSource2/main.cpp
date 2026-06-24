@@ -318,10 +318,11 @@ public:
 private:
 	virtual bool GetSuspendMirvInput() override {
 		// Suspend free-cam mouse-look when the console, marker menu, camera timeline,
-		// or regular filmmaker cursor mode owns the mouse.
+		// the experimental graph editor, or regular filmmaker cursor mode owns the mouse.
 		return (g_pGameUIService && g_pGameUIService->Con_IsVisible())
 			|| Filmmaker::MarkerMenu_WantsCursor()
-			|| Filmmaker::CameraTimeline_WantsCursor();
+			|| Filmmaker::CameraTimeline_WantsCursor()
+			|| Filmmaker::GraphEditorExperiment_WantsCursor();
 	}
 
 	virtual void GetLastCameraData(double & x, double & y, double & z, double & rX, double & rY, double & rZ, double & fov) override {
@@ -367,15 +368,50 @@ float GetLastCameraFov() {
 	return (float)g_MirvInputEx.LastCameraFov;
 }
 
+// UI cursor probe for the experimental graph editor. Captured in the WndProc (below) from the
+// raw Windows mouse messages so the Panorama JS can do continuous After-Effects-style dragging
+// (Panorama itself has no mouse-move event). Plain scalars; written on the message thread and
+// read on the main thread once per frame -- a torn read is harmless (next frame corrects it).
+struct AfxUiCursorProbe { int x = 0, y = 0; bool lmb = false; bool rmb = false; unsigned seq = 0; HWND hwnd = nullptr; };
+static AfxUiCursorProbe g_UiCursorProbe;
+
 // --- Movie director <-> camera-input bridge (declared in Filmmaker/Movie/CameraBridge.h) ---
 // Defined here because g_MirvInputEx (the camera-input owner) lives in main.cpp.
 namespace Filmmaker {
+	void CameraBridge_GetUiCursor(int& x, int& y, bool& lmb, bool& rmb, bool& shift, unsigned& seq) {
+		// Position is read LIVE from the OS cursor (mapped into the game window's client space)
+		// rather than from streamed WM_MOUSEMOVE: in free-cam the game does not reliably deliver
+		// mouse-move messages while a button is held, which froze every DRAG (box-select, handle,
+		// shift-lock) at the press point. Polling the cursor each frame makes drag motion flow.
+		// Buttons stay edge-captured from the WndProc (down/up always arrive); fall back to the
+		// streamed position only if the window/cursor query fails.
+		x = g_UiCursorProbe.x; y = g_UiCursorProbe.y;
+		POINT pt;
+		if (g_UiCursorProbe.hwnd && GetCursorPos(&pt) && ScreenToClient(g_UiCursorProbe.hwnd, &pt)) {
+			x = pt.x; y = pt.y;
+		}
+		lmb = g_UiCursorProbe.lmb;
+		rmb = g_UiCursorProbe.rmb;
+		// Shift is read live here (main thread) rather than streamed from the WndProc: the graph
+		// editor only needs its CURRENT state (axis-lock while dragging), not edge events.
+		// GetAsyncKeyState = live physical state, independent of which thread pumps messages.
+		shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+		// The live x/y already land in the state JSON, so the state string changes every frame the
+		// cursor moves -- that is what re-triggers the JS render()/processInput during a drag.
+		seq = g_UiCursorProbe.seq;
+	}
 	bool  CameraBridge_GetFreeCamEnabled() { return g_MirvInputEx.m_MirvInput->GetCameraControlMode(); }
 	void  CameraBridge_SetFreeCamEnabled(bool enable) { g_MirvInputEx.m_MirvInput->SetCameraControlMode(enable); }
 	float CameraBridge_GetFreeCamSpeed() { return (float)g_MirvInputEx.m_MirvInput->GetCamSpeed(); }
 	void  CameraBridge_AdjustFreeCamSpeed(int dir) {
 		if (dir > 0) g_MirvInputEx.m_MirvInput->IncreaseCamSpeed();
 		else if (dir < 0) g_MirvInputEx.m_MirvInput->DecreaseCamSpeed();
+	}
+	void  CameraBridge_AdjustFreeCamFov(int dir) {
+		// Scroll up (dir>0) = zoom IN = lower FOV; scroll down = zoom OUT = higher FOV.
+		// Mirrors the keyboard Page Up/Down feel with a fixed degrees-per-notch step.
+		constexpr double kFovStepDeg = 4.0;
+		if (dir != 0) g_MirvInputEx.m_MirvInput->NudgeFov(dir > 0 ? -kFovStepDeg : kFovStepDeg);
 	}
 	void  CameraBridge_SetFreeCamSlow(bool slow) {
 		// Held while Shift is down: apply a transient slow factor to the free
@@ -447,6 +483,11 @@ LRESULT CALLBACK new_Afx_WindowProc(
 //	if (AfxHookSource::Gui::WndProcHandler(hwnd, uMsg, wParam, lParam))
 //		return 0;
 
+	// Remember the game window so the graph editor's cursor pipe can poll the LIVE cursor
+	// position (GetCursorPos) every frame -- WM_MOUSEMOVE is not reliably delivered during a
+	// held-button drag in free-cam, which froze drag-select / handle / shift-lock motion.
+	g_UiCursorProbe.hwnd = hwnd;
+
 	switch(uMsg)
 	{
 	case WM_ACTIVATE:
@@ -473,24 +514,31 @@ LRESULT CALLBACK new_Afx_WindowProc(
 	case WM_MOUSEWHEEL:
 		// Plain scroll = camera-mode cycle; in free cam, Shift+scroll = cam speed
 		// (handled by the director); otherwise defer to MirvInput (FOV).
-		if(Filmmaker::MovieInput_OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam), (GetKeyState(VK_SHIFT) & 0x8000) != 0))
+		if(Filmmaker::MovieInput_OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam), (GetKeyState(VK_SHIFT) & 0x8000) != 0, (GetKeyState(VK_CONTROL) & 0x8000) != 0))
 			return 0;
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam))
 			return 0;
 		break;
 	case WM_LBUTTONDOWN:
+		// Tap LMB-down + position for the experimental graph editor's drag pipe (additive;
+		// does not change whether the click is consumed below).
+		g_UiCursorProbe.lmb = true; g_UiCursorProbe.x = (short)LOWORD(lParam); g_UiCursorProbe.y = (short)HIWORD(lParam); g_UiCursorProbe.seq++;
 		if(Filmmaker::MovieInput_OnMouseButton(0, true)) return 0;
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam)) return 0;
 		break;
 	case WM_LBUTTONUP:
+		g_UiCursorProbe.lmb = false; g_UiCursorProbe.x = (short)LOWORD(lParam); g_UiCursorProbe.y = (short)HIWORD(lParam); g_UiCursorProbe.seq++;
 		if(Filmmaker::MovieInput_OnMouseButton(0, false)) return 0;
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam)) return 0;
 		break;
 	case WM_RBUTTONDOWN:
+		// Tap RMB-down + position for the graph editor's right-click ease menu (additive).
+		g_UiCursorProbe.rmb = true; g_UiCursorProbe.x = (short)LOWORD(lParam); g_UiCursorProbe.y = (short)HIWORD(lParam); g_UiCursorProbe.seq++;
 		if(Filmmaker::MovieInput_OnMouseButton(1, true)) return 0;
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam)) return 0;
 		break;
 	case WM_RBUTTONUP:
+		g_UiCursorProbe.rmb = false; g_UiCursorProbe.x = (short)LOWORD(lParam); g_UiCursorProbe.y = (short)HIWORD(lParam); g_UiCursorProbe.seq++;
 		if(Filmmaker::MovieInput_OnMouseButton(1, false)) return 0;
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam)) return 0;
 		break;
@@ -500,6 +548,8 @@ LRESULT CALLBACK new_Afx_WindowProc(
 	case WM_MBUTTONUP:
 	case WM_RBUTTONDBLCLK:
 	case WM_MOUSEMOVE:
+		// Stream the client-area cursor position to the experimental graph editor's drag pipe.
+		if (uMsg == WM_MOUSEMOVE) { g_UiCursorProbe.x = (short)LOWORD(lParam); g_UiCursorProbe.y = (short)HIWORD(lParam); g_UiCursorProbe.seq++; }
 		if (g_MirvInputEx.m_MirvInput->Supply_MouseEvent(uMsg, wParam, lParam))
 			return 0;
 		break;
@@ -920,7 +970,7 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 	// camera PATH or MirvInput actively drives the view, return false so the engine keeps
 	// the pose we just wrote. Range-gated playpath out-of-range remains unaffected because
 	// it releases free cam and stops pushing a path pose before this hook runs.
-	const bool pathOwnsView = Filmmaker::CameraPathOwnsView();
+	const bool pathOwnsView = Filmmaker::CameraPathOwnsView() || Filmmaker::GraphEditorExperiment_OwnsView();
 	const bool blockDemoViewOverride = inputOverride || pathOwnsView;
 
 	if (Filmmaker::CampathDebug()) {

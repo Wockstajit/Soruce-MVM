@@ -44,7 +44,6 @@ void* FindChildById(void* panel, const char* id, int depth = 0) {
 }
 
 double r2(double v) { double s = (v < 0) ? -1.0 : 1.0; return s * (long long)(v * s * 100.0 + 0.5) / 100.0; }
-double r3(double v) { double s = (v < 0) ? -1.0 : 1.0; return s * (long long)(v * s * 1000.0 + 0.5) / 1000.0; }
 
 bool PlayingDemo() {
 	if (g_pEngineToClient) {
@@ -64,41 +63,6 @@ CameraTimelineHud& CameraTimelineHudRef() {
 	return s_instance;
 }
 
-void CameraTimelineHud::ZoomIn() {
-	double c = (m_viewT0 + m_viewT1) * 0.5;
-	double h = (m_viewT1 - m_viewT0) * 0.5 * 0.7;
-	if (h < 16.0) h = 16.0; // don't zoom in past ~32 ticks of span
-	m_viewT0 = c - h; m_viewT1 = c + h; m_userZoomed = true;
-}
-void CameraTimelineHud::ZoomOut() {
-	double c = (m_viewT0 + m_viewT1) * 0.5;
-	double h = (m_viewT1 - m_viewT0) * 0.5 / 0.7;
-	m_viewT0 = c - h; m_viewT1 = c + h; m_userZoomed = true;
-}
-void CameraTimelineHud::ZoomReset() { m_userZoomed = false; m_zoomInit = false; }
-void CameraTimelineHud::Pan(int dir) {
-	double w = (m_viewT1 - m_viewT0);
-	double d = w * 0.2 * (dir < 0 ? -1.0 : 1.0);
-	m_viewT0 += d; m_viewT1 += d; m_userZoomed = true;
-}
-
-void CameraTimelineHud::EnsureZoomWindow(int tickMin, int tickMax) {
-	if (tickMax <= tickMin) {
-		m_viewT0 = tickMin; m_viewT1 = tickMin + 1.0; m_zoomInit = true;
-		m_lastTickMin = tickMin; m_lastTickMax = tickMax;
-		return;
-	}
-	// Auto-fit to the full path (with a little padding) until the user zooms/pans.
-	bool rangeChanged = (tickMin != m_lastTickMin || tickMax != m_lastTickMax);
-	if (!m_zoomInit || (!m_userZoomed && rangeChanged)) {
-		double pad = (tickMax - tickMin) * 0.04 + 1.0;
-		m_viewT0 = tickMin - pad; m_viewT1 = tickMax + pad;
-		m_zoomInit = true;
-	}
-	m_lastTickMin = tickMin; m_lastTickMax = tickMax;
-	if (m_viewT1 <= m_viewT0) m_viewT1 = m_viewT0 + 1.0;
-}
-
 void* CameraTimelineHud::FindRoot() {
 	void* ctx = m_bridge.ContextPanel();
 	if (!ctx) return nullptr;
@@ -113,12 +77,9 @@ bool CameraTimelineHud::BuildIfNeeded() {
 	if (!m_bridge.RunScript(kCameraTimelineJs))
 		return false;
 	m_symState = m_bridge.MakeSymbol("state");
-	m_symCurve = m_bridge.MakeSymbol("curve");
 	m_root = FindRoot();
 	m_built = (m_root != nullptr);
 	m_lastState.clear();
-	m_lastCurveBody.clear();
-	m_lastCurveJson.clear();
 	return m_built;
 }
 
@@ -131,9 +92,11 @@ void CameraTimelineHud::Teardown() {
 	m_root = nullptr;
 	m_hudPanel = nullptr;
 	m_lastState.clear();
-	m_lastCurveBody.clear();
-	m_lastCurveJson.clear();
 }
+
+// Declared in Filmmaker.cpp; queried so the timeline yields the curve zone to the experimental
+// graph editor (forces compact scrub view + hides its own curve-editor toggle) while it is on.
+bool GraphEditorExperiment_Enabled();
 
 std::string CameraTimelineHud::BuildStateJson() {
 	CameraPath& cp = CameraPathRef();
@@ -153,7 +116,8 @@ std::string CameraTimelineHud::BuildStateJson() {
 	o << ",\"hosted\":" << (m_editorHosted ? "true" : "false");
 	o << ",\"cursor\":" << (Cursor() ? "true" : "false");
 	o << ",\"cursorForced\":" << (CursorForced() ? "true" : "false");
-	o << ",\"view\":\"" << (m_view == 1 ? "curve" : "timeline") << "\"";
+	o << ",\"view\":\"timeline\"";
+	o << ",\"graphExp\":" << (GraphEditorExperiment_Enabled() ? "true" : "false");
 	o << ",\"count\":" << n;
 	o << ",\"selected\":" << sel;
 	o << ",\"segment\":" << cp.PlaySegment();
@@ -185,69 +149,6 @@ std::string CameraTimelineHud::BuildStateJson() {
 	return o.str();
 }
 
-std::string CameraTimelineHud::BuildCurveJson() {
-	CameraPath& cp = CameraPathRef();
-	const int N = 48;
-	double t0 = m_viewT0, t1 = m_viewT1;
-	if (t1 <= t0) t1 = t0 + 1.0;
-
-	double vals[7][48];
-	bool ok[7][48];
-	double lo[7], hi[7];
-	bool any[7];
-	for (int c = 0; c < 7; ++c) { lo[c] = 1e30; hi[c] = -1e30; any[c] = false; }
-
-	for (int i = 0; i < N; ++i) {
-		double tick = t0 + (t1 - t0) * ((double)i / (double)(N - 1));
-		double pose[7];
-		bool v = cp.EvalPoseAtTick(tick, pose);
-		for (int c = 0; c < 7; ++c) {
-			ok[c][i] = v;
-			if (v) {
-				vals[c][i] = pose[c];
-				if (pose[c] < lo[c]) lo[c] = pose[c];
-				if (pose[c] > hi[c]) hi[c] = pose[c];
-				any[c] = true;
-			} else {
-				vals[c][i] = 0.0;
-			}
-		}
-	}
-
-	static const char* names[7] = { "X", "Y", "Z", "Pitch", "Yaw", "Tilt", "FOV" };
-	static const double minVisualSpan[7] = {
-		64.0, 64.0, 64.0, // position lanes: keep small moves away from the lane edges
-		20.0, 20.0, 20.0, // angle lanes
-		10.0              // FOV
-	};
-	std::ostringstream o;
-	o << "{";
-	o << "\"t0\":" << (long long)(t0 + 0.5) << ",\"t1\":" << (long long)(t1 + 0.5) << ",\"n\":" << N;
-	o << ",\"lanes\":[";
-	for (int c = 0; c < 7; ++c) {
-		if (c) o << ",";
-		double mn = any[c] ? lo[c] : 0.0;
-		double mx = any[c] ? hi[c] : 1.0;
-		double span = mx - mn;
-		if (span < 1e-6) span = 1.0;
-		const double center = (mn + mx) * 0.5;
-		double visualSpan = span * 1.35;
-		if (visualSpan < minVisualSpan[c]) visualSpan = minVisualSpan[c];
-		mn = center - visualSpan * 0.5;
-		mx = center + visualSpan * 0.5;
-		span = mx - mn;
-		o << "{\"name\":\"" << names[c] << "\",\"min\":" << r2(mn) << ",\"max\":" << r2(mx) << ",\"pts\":[";
-		for (int i = 0; i < N; ++i) {
-			if (i) o << ",";
-			if (!ok[c][i]) o << "null";
-			else o << r3((vals[c][i] - mn) / span);
-		}
-		o << "]}";
-	}
-	o << "]}";
-	return o.str();
-}
-
 void CameraTimelineHud::RunFrame() {
 	m_bridge.Init();
 
@@ -269,39 +170,16 @@ void CameraTimelineHud::RunFrame() {
 	m_root = FindRoot();
 	if (!m_root) { m_built = false; return; }
 
-	// Keep the curve window fitted to the path (until the user zooms/pans).
-	{
-		const std::vector<CamMarker>& mk = CameraPathRef().Markers();
-		int tickMin = mk.empty() ? 0 : mk.front().tick;
-		int tickMax = mk.empty() ? 0 : mk.back().tick;
-		EnsureZoomWindow(tickMin, tickMax);
-	}
-
-	bool changed = false;
-
 	std::string state = BuildStateJson();
 	if (state != m_lastState) {
 		m_bridge.SetAttributeString(m_root, m_symState, state.c_str());
 		m_lastState = state;
-		changed = true;
 	}
 
-	// Heavy curve samples only while the curve view is actually shown.
-	if (m_visible && m_view == 1) {
-		std::string body = BuildCurveJson();
-		if (body != m_lastCurveBody) { ++m_curveRev; m_lastCurveBody = body; }
-		std::ostringstream cj;
-		cj << "{\"rev\":" << m_curveRev << "," << body.substr(1); // splice rev in front
-		std::string curve = cj.str();
-		if (curve != m_lastCurveJson) {
-			m_bridge.SetAttributeString(m_root, m_symCurve, curve.c_str());
-			m_lastCurveJson = curve;
-			changed = true;
-		}
-	}
-
-	if (changed)
-		m_bridge.RunScript("$.CamTimeline && $.CamTimeline.render();");
+	// Timeline geometry is derived from Panorama's live root layout, not just
+	// from the state JSON. Render every frame so opening during an unsettled
+	// layout cannot leave the bar stuck at its fallback width.
+	m_bridge.RunScript("$.CamTimeline && $.CamTimeline.render();");
 }
 
 } // namespace Filmmaker

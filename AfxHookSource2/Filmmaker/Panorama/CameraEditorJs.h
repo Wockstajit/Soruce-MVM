@@ -41,6 +41,8 @@ inline const char* kCameraEditorJs = R"EDJS(
       font: 'Stratum2, "Arial Unicode MS"'
     };
     var INSPECTOR_W = 372, BOTTOM_H = 176;
+    var GRAPH_DOCK_H = 556; // experimental graph-editor dock height; when open it REPLACES the timeline
+                            // and fills the whole bottom (keep in sync with GraphEditorJs DOCK_H).
     var CH_ROLL = 5, CH_FOV = 6;
 
     function cmd(c) {
@@ -80,6 +82,7 @@ inline const char* kCameraEditorJs = R"EDJS(
     }
     function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
     function num(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
+    function finitePositive(v) { return typeof v === 'number' && isFinite(v) && v > 1; }
 )EDJS"
 R"EDJS(
     // ---- root: full-screen, non-hittest. Children draw bottom -> top. ----
@@ -156,11 +159,20 @@ R"EDJS(
     var frameT = mk('Panel', root); frameT.hittest = false; frameT.visible = false;
     frameT.style.height = '2px'; frameT.style.backgroundColor = S.accent; frameT.style.horizontalAlign = 'left'; frameT.style.verticalAlign = 'top';
 
+    function hidePreviewLayout() {
+      frameL.visible = frameV.visible = frameT.visible = frameH.visible = false;
+      barLeft.visible = barRight.visible = barTop.visible = barBottom.visible = false;
+      tag.visible = false;
+      root.SetAttributeString('previewrect', '');
+    }
+
     // ===================== HEADER =======================================
     var head = row(inspector); head.style.marginTop = '0px';
     var hTitle = lbl(head, 'CAMERA EDITOR', S.value, 16); hTitle.style.fontWeight = 'bold';
     hTitle.style.letterSpacing = '2px'; hTitle.style.width = 'fill-parent-flow(1.0)';
     hTitle.style.verticalAlign = 'center';
+    // The graph editor is the default curve editor now (auto-opened with the workspace), so the
+    // old opt-in "Experiment" launcher is gone.
     var exitBtn = btn(head, '✕ Exit', function () { cmd('mirv_filmmaker editor close'); }, S.value);
     exitBtn.style.marginRight = '0px';
 
@@ -229,13 +241,21 @@ R"EDJS(
 
     // ===================== PATH (interp / ease / speed / timing) ========
     var pathSec = section(inspector, 'PATH');
-    var interpBtn = btn(pathSec, 'Curve: Linear', function () { cmd('mirv_filmmaker marker interp cycle'); }, S.value);
+    var interpBtn = btn(pathSec, 'Curve: Linear', function () {
+      cmd('mirv_filmmaker marker interp cycle');
+      // Mirror onto the experimental graph editor (the curve editor): the path interp is binary,
+      // so flip the graph to match the value it is ABOUT to become (opposite of the current one).
+      cmd('mirv_filmmaker grapheditor ' + ((st && st.interp === 'Linear') ? 'smooth' : 'linear'));
+    }, S.value);
     interpBtn.style.marginTop = '2px';
     var EASE = ['none', 'in', 'out', 'inout'], EASE_LBL = ['None', 'Ease In', 'Ease Out', 'Ease In/Out'];
     var easeBtn = btn(pathSec, 'Ease: None', function () {
       if (!st || st.selected < 0) return;
       var nx = (((st.sel && st.sel.ease) || 0) + 1) % 4;
       cmd('mirv_filmmaker camtl ease ' + st.selected + ' ' + EASE[nx]);
+      // Mirror onto the experimental graph editor (whole graph): None clears handles back to
+      // straight lines; In/Out/In-Out flatten the matching tangents on every keyframe.
+      cmd('mirv_filmmaker grapheditor ' + (nx === 0 ? 'linear' : ('ease ' + EASE[nx] + ' all')));
     }, S.value);
     easeBtn.style.marginTop = '5px';
     var smBtn = btn(pathSec, 'Speed: Manual', function () { cmd('mirv_filmmaker marker speedmode cycle'); }, S.value);
@@ -299,24 +319,47 @@ R"EDJS(
       mouseBtn.style.backgroundColor = cur ? S.btnOn : S.btnBg;
       mouseBtn.__lbl.style.color = cur ? S.accent : S.label;
       // Aspect-ratio letterbox. Virtual px = actuallayout / uiscale (matches style px).
-      var rsx = root.actualuiscale_x || 1, rsy = root.actualuiscale_y || 1;
-      var rw = (root.actuallayoutwidth || 0) / rsx, rh = (root.actuallayoutheight || 0) / rsy;
-      // The hosted CameraTimeline bar (#CamTimelineBar) is fit-children, so it grows tall when
-      // the curve editor opens. Read its ACTUAL height so the preview shrinks to sit exactly
-      // above it and the backdrop matches -- no shared constant, no manual sync. Fall back to
-      // BOTTOM_H until the bar exists / has laid out.
-      var bottomH = BOTTOM_H;
-      try {
-        var tlBar = ctx.FindChildTraverse && ctx.FindChildTraverse('CamTimelineBar');
-        if (tlBar && tlBar.visible && tlBar.actuallayoutheight > 10) bottomH = tlBar.actuallayoutheight / rsy;
-      } catch (eBar) {}
+      // Measure from the ALREADY-laid-out HUD context panel when our fresh root still reports 0
+      // (the first layout passes after a build / resolution switch) -- otherwise the preview +
+      // inspector squish into the top-left for ~half a second until root settles.
+      var rsx = root.actualuiscale_x || ctx.actualuiscale_x || 1, rsy = root.actualuiscale_y || ctx.actualuiscale_y || 1;
+      var rawW = root.actuallayoutwidth || 0, rawH = root.actuallayoutheight || 0;
+      if (rawW < 16) { rawW = ctx.actuallayoutwidth || 0; rawH = ctx.actuallayoutheight || 0; }
+      var rw = rawW / rsx, rh = rawH / rsy;
+      if (!finitePositive(rw) || !finitePositive(rh)) {
+        hidePreviewLayout();
+      } else {
+      var bottomH;
+      if (st.graphExp) {
+        // The experimental graph editor REPLACES the timeline and fills the whole bottom: reserve
+        // exactly its (expanded) height so the preview shrinks to sit above it. The timeline is
+        // hidden while it's open, so we do NOT also add the bar height.
+        bottomH = GRAPH_DOCK_H;
+      } else {
+        // The hosted CameraTimeline bar (#CamTimelineBar) is fit-children, so it grows tall when
+        // the curve editor opens. Read its ACTUAL height so the preview shrinks to sit exactly
+        // above it and the backdrop matches -- no shared constant, no manual sync. Fall back to
+        // BOTTOM_H until the bar exists / has laid out.
+        bottomH = BOTTOM_H;
+        try {
+          var tlBar = ctx.FindChildTraverse && ctx.FindChildTraverse('CamTimelineBar');
+          // Only trust a SANE bar height (a half-laid-out panel can momentarily report a huge
+          // value, which would collapse the preview and leave it stuck off to the side).
+          var bh = (tlBar && tlBar.visible) ? tlBar.actuallayoutheight / rsy : 0;
+          if (bh > 10 && bh < rh * 0.6) bottomH = bh;
+        } catch (eBar) {}
+      }
+      bottomH = Math.max(0, Math.min(bottomH, Math.max(0, rh - 160)));
       backdrop.style.height = Math.floor(bottomH) + 'px';
-      if (rw > 10 && rh > 10) {
-        var areaW = rw - INSPECTOR_W, areaH = rh - bottomH;
+      var areaW = rw - INSPECTOR_W, areaH = rh - bottomH;
+      if (finitePositive(areaW) && finitePositive(areaH)) {
         var aspect = rw / rh;            // the game's render aspect (full window)
         var pw = areaW, ph = pw / aspect;
         if (ph > areaH) { ph = areaH; pw = ph * aspect; } // fit the rect inside the area
         pw = Math.floor(pw); ph = Math.floor(ph);
+        if (!finitePositive(pw) || !finitePositive(ph)) {
+          hidePreviewLayout();
+        } else {
         // Centre the shrunk preview in the available area so the black letterbox is even on
         // all sides instead of pinned top-left with one fat gap (the curve editor grows the
         // bottom bar, shrinking the preview -- this keeps it middled).
@@ -346,6 +389,7 @@ R"EDJS(
         frameH.style.position = ox + 'px ' + (bot - 2) + 'px 0px'; frameH.style.width = pw + 'px'; frameH.visible = true;
 
         // Keep the PREVIEW tag pinned to the centred preview's top-left corner.
+        tag.visible = true;
         tag.style.position = (ox + 18) + 'px ' + (oy + 14) + 'px 0px';
 
         // Publish the preview rect as NORMALISED root fractions (x0 y0 x1 y1 corners) so the
@@ -356,6 +400,10 @@ R"EDJS(
         // when scaling is OFF (crop mode); when ON they sit black-on-black.
         root.SetAttributeString('previewrect',
           (ox / rw).toFixed(5) + ' ' + (oy / rh).toFixed(5) + ' ' + (rgt / rw).toFixed(5) + ' ' + (bot / rh).toFixed(5));
+        }
+      } else {
+        hidePreviewLayout();
+      }
       }
 
       // NOTE: keep this a real BOOLEAN. Assigning the st.sel OBJECT to panel.visible

@@ -71,6 +71,12 @@ inline const char* kFilmmakerGuiJs = R"FMJS(
       return p.score;
     }
     function mapDisplay(map) { if (!map) return 'Demo'; var t = '#SFUI_Map_' + map; var l = $.Localize(t); return (l === t) ? map : l; }
+    // Friendly demo name for the detail title: file basename without the .dem extension.
+    function demoName(demo) {
+      var f = (demo && demo.fileName) || '';
+      f = f.replace(/^.*[\\/]/, '').replace(/\.dem$/i, '');
+      return f || mapDisplay(demo && demo.map);
+    }
     function setMapIcon(img, map) {
       if (!img) return;
       try { $.RegisterEventHandler('ImageFailedLoad', img, function () { try { img.SetImage('s2r://panorama/images/map_icons/map_icon_none_png.vtex'); } catch (e) {} }); } catch (e) {}
@@ -106,7 +112,7 @@ inline const char* kFilmmakerGuiJs = R"FMJS(
     var tilePanels = [], playerRowPanels = [];
     var renderedKeys = [], tileSigs = [];  // for diffing the left list across refreshes
     var detailSig = null, detailRendered = false;
-    var body = null, listPanel = null, info = null, emptyMsg = null;
+    var body = null, listPanel = null, info = null, emptyMsg = null, demoTitle = null;
     var scoreboardPanel = null, labelsRow = null, ctTable = null, tTable = null;
     var playerStats = null, roundContainer = null, tickLabels = null, watchBtn = null;
     var statHeadersBuilt = false, detailBuilt = false;
@@ -140,6 +146,15 @@ R"FMJS(
       var btn = root3.FindChildTraverse('MainMenuNavBarWatch');
       if (!btn) return;
       for (var i = 0; i < btn.GetChildCount(); ++i) { try { btn.GetChild(i).SetImage(FILM); break; } catch (e) {} }
+      // Rename the section to "Movie Making". The nav button is icon-only, so its
+      // HOVER TOOLTIP is effectively its name -- override the native "Watch matches
+      // and tournaments" tooltip with our movie-making purpose. SetPanelEvent
+      // replaces the native tooltip handler, so the old text no longer shows.
+      if (!btn.__fmTip) {
+        btn.__fmTip = true;
+        btn.SetPanelEvent('onmouseover', function () { try { UiToolkitAPI.ShowTextTooltipOnPanel(btn, 'Movie Making'); } catch (e) {} });
+        btn.SetPanelEvent('onmouseout', function () { try { UiToolkitAPI.HideTextTooltip(); } catch (e) {} });
+      }
     }
 
     function removeMajors(page) {
@@ -169,6 +184,16 @@ R"FMJS(
       // (non-flowing) native container -- that overlap hid the Refresh button.
       var bar = page.FindChildTraverse('FmNavBtns');
       if (!bar) bar = $.CreatePanel('Panel', right, 'FmNavBtns', { class: 'left-right-flow vertical-center' });
+      // Search button (same magnifying-glass icon as the settings UI). Sits left of
+      // Refresh; toggles the demo search input + suggestion dropdown.
+      if (!page.FindChildTraverse('FmSearchBtn')) {
+        var srb = $.CreatePanel('Button', bar, 'FmSearchBtn', { class: 'IconButton' });
+        srb.style.marginRight = '4px';
+        $.CreatePanel('Image', srb, '', { src: 's2r://panorama/images/icons/ui/search.vsvg' });
+        srb.SetPanelEvent('onactivate', function () { toggleSearch(page); });
+        srb.SetPanelEvent('onmouseover', function () { UiToolkitAPI.ShowTextTooltipOnPanel(srb, 'Search demos'); });
+        srb.SetPanelEvent('onmouseout', function () { UiToolkitAPI.HideTextTooltip(); });
+      }
       if (!page.FindChildTraverse('FmRefreshBtn')) {
         var refb = $.CreatePanel('Button', bar, 'FmRefreshBtn', { class: 'IconButton' });
         refb.style.marginRight = '4px';
@@ -275,6 +300,7 @@ R"FMJS(
       // Right detail host. matchinfo.xml is loaded into FmMatchInfo (a child) so
       // FmInfo keeps its own background classes and can also hold the empty msg.
       info = mk(row, 'Panel', 'FmInfo', 'subsection-content__background-color full-width full-height no-flow');
+      var infoOuter = info; // FmInfo stays put; `info` is reassigned to the matchinfo host below.
 
       var detailHost = mk(info, 'Panel', 'FmMatchInfo', '');
       detailHost.style.width = '100%'; detailHost.style.height = '100%';
@@ -285,6 +311,19 @@ R"FMJS(
       try { ei.SetImage('s2r://panorama/images/icons/ui/info.vsvg'); } catch (e) {}
       mk(emptyMsg, 'Label', '', 'Info-Message', { text: 'No demos found. Use the + button in the top-right to add a demo folder.' });
       emptyMsg.visible = false;
+
+      // Demo NAME title, shown in the empty banner area above the map/duration/date
+      // meta (the red-square spot in the reference). Created LAST on the persistent
+      // FmInfo host so it overlays on top of the matchinfo content and survives
+      // matchinfo.xml (re)loads into FmMatchInfo.
+      demoTitle = mk(infoOuter, 'Label', 'FmDemoTitle', '');
+      demoTitle.style.horizontalAlign = 'center'; demoTitle.style.verticalAlign = 'top';
+      demoTitle.style.marginTop = '18px'; demoTitle.style.width = '80%';
+      demoTitle.style.fontSize = '22px'; demoTitle.style.fontWeight = 'bold';
+      demoTitle.style.color = '#ffffffff'; demoTitle.style.textAlign = 'center';
+      demoTitle.style.textOverflow = 'ellipsis'; demoTitle.style.fontFamily = 'Stratum2, "Arial Unicode MS"';
+      demoTitle.style.textShadow = '0px 2px 4px 1.0 #000000cc';
+      demoTitle.visible = false;
 
       if (!listPanel) $.Msg('[filmmaker] body build incomplete (FmMatchList missing).');
     }
@@ -309,9 +348,18 @@ R"FMJS(
         roundContainer = detailHost.FindChildTraverse('id-mi-round-stats__container');
         tickLabels = detailHost.FindChildTraverse('id-mi-round-stats__tick-labels');
         watchBtn = detailHost.FindChildTraverse('id-mi-watch');
-        // Hide native action buttons we do not implement.
-        ['id-mi-error-delete', 'id-mi-downloading', 'id-mi-download', 'id-mi-souvenir', 'id-mi-copy', 'id-mi-delete'].forEach(function (id) {
+        // Fully collapse buttons that make no sense for a local demo (download is
+        // already done; no souvenir / error / downloading spinner).
+        ['id-mi-error-delete', 'id-mi-downloading', 'id-mi-download', 'id-mi-souvenir'].forEach(function (id) {
           var b = detailHost.FindChildTraverse(id); if (b) { b.visible = false; b.AddClass('hide'); }
+        });
+        // Keep the copy/delete buttons' FOOTPRINT (invisible + non-interactive) so the
+        // green Watch button keeps the SAME horizontal position as the native Your
+        // Matches tab. Collapsing them slid our Watch button hard to the right edge,
+        // which is the misalignment between the two tabs.
+        ['id-mi-copy', 'id-mi-delete'].forEach(function (id) {
+          var b = detailHost.FindChildTraverse(id);
+          if (b) { b.style.opacity = '0'; b.hittest = false; b.enabled = false; b.RemoveClass('hide'); b.visible = true; }
         });
         detailBuilt = !!(scoreboardPanel && ctTable && tTable && watchBtn);
       }
@@ -474,6 +522,7 @@ R"FMJS(
 
     function renderDetail(demo) {
       if (!info) return;
+      if (demoTitle) { demoTitle.text = demoName(demo); demoTitle.visible = true; }
       info.SetDialogVariable('map_name', mapDisplay(demo.map));
       info.SetDialogVariable('durationLabel', $.Localize('#CSGO_Watch_Info_1'));
       var mins = demo.duration ? Math.max(Math.floor(demo.duration / 60), 1) : 0;
@@ -621,6 +670,7 @@ R"FMJS(
       reconcileList();  // stable: only rebuilds rows when the demo SET changes
       if (!demos.length) {
         if (info) info.visible = false;
+        if (demoTitle) demoTitle.visible = false;
         if (emptyMsg) emptyMsg.visible = true;
         selKey = null; sel = -1; detailRendered = false;
         return;
@@ -636,6 +686,102 @@ R"FMJS(
         setCheckedTile(idx);
         maybeRefreshDetail(demos[idx]);
       }
+    }
+)FMJS"
+// ---- demo search (button -> input + suggestion dropdown) ----
+R"FMJS(
+    var searchWrap = null, searchInput = null, searchResults = null;
+
+    // Lazily build the search input + dropdown once, parented to the watch page so it
+    // floats below the navbar (right side, clear of the friends rail). Inline-styled so
+    // it does not depend on the settings stylesheet being in scope on this page.
+    function buildSearch(page) {
+      if (searchWrap && searchWrap.IsValid && searchWrap.IsValid()) return;
+      var hostPanel = page.FindChildTraverse('main-content') || page;
+      searchWrap = $.CreatePanel('Panel', hostPanel, 'FmSearchWrap', {});
+      searchWrap.style.flowChildren = 'down';
+      searchWrap.style.horizontalAlign = 'right'; searchWrap.style.verticalAlign = 'top';
+      searchWrap.style.marginTop = '52px'; searchWrap.style.marginRight = '72px';
+      searchWrap.style.width = '340px'; searchWrap.style.zIndex = '100';
+      searchWrap.visible = false;
+
+      searchInput = $.CreatePanel('TextEntry', searchWrap, 'FmSearchInput', { placeholder: 'Search map, player or demo name' });
+      searchInput.style.width = '100%'; searchInput.style.height = '34px';
+      searchInput.style.backgroundColor = 'rgba(0,0,0,0.65)';
+      searchInput.style.border = '1px solid rgba(255,255,255,0.12)';
+      searchInput.style.borderRadius = '3px'; searchInput.style.color = '#eef2f6ff';
+      searchInput.style.paddingLeft = '10px'; searchInput.style.paddingRight = '10px';
+      searchInput.style.fontSize = '15px';
+      searchInput.SetPanelEvent('ontextentrychange', function () { updateSuggestions(); });
+      try { $.RegisterEventHandler('TextEntryChanged', searchInput, function () { updateSuggestions(); }); } catch (e) {}
+
+      searchResults = $.CreatePanel('Panel', searchWrap, 'FmSearchResults', {});
+      searchResults.style.flowChildren = 'down'; searchResults.style.width = '100%';
+      searchResults.style.marginTop = '2px'; searchResults.style.maxHeight = '320px';
+      searchResults.style.overflow = 'squish scroll';
+      searchResults.style.backgroundColor = 'rgba(14,16,20,0.98)';
+      searchResults.style.border = '1px solid rgba(255,255,255,0.10)';
+      searchResults.visible = false;
+    }
+
+    function toggleSearch(page) {
+      buildSearch(page);
+      if (!searchWrap) return;
+      var show = !searchWrap.visible;
+      searchWrap.visible = show;
+      if (show) { try { searchInput.SetFocus(); } catch (e) {} updateSuggestions(); }
+      else { try { searchInput.text = ''; } catch (e) {} if (searchResults) searchResults.visible = false; }
+    }
+
+    // Return the matched text (for the gray sub-line) if this demo matches q, else null.
+    function demoMatches(demo, q) {
+      if (mapDisplay(demo.map).toLowerCase().indexOf(q) >= 0) return 'map: ' + mapDisplay(demo.map);
+      if (demoName(demo).toLowerCase().indexOf(q) >= 0) return 'demo: ' + demoName(demo);
+      var pl = demo.players || [];
+      for (var i = 0; i < pl.length; ++i) { var n = pl[i].name || ''; if (n && n.toLowerCase().indexOf(q) >= 0) return 'player: ' + n; }
+      return null;
+    }
+
+    function updateSuggestions() {
+      if (!searchResults) return;
+      searchResults.RemoveAndDeleteChildren();
+      var q = ''; try { q = (searchInput.text || '').toLowerCase().trim(); } catch (e) {}
+      if (!q) { searchResults.visible = false; return; }
+      var shown = 0;
+      for (var i = 0; i < demos.length && shown < 12; ++i) {
+        var why = demoMatches(demos[i], q);
+        if (why == null) continue;
+        (function (demo, why) {
+          var rowBtn = $.CreatePanel('Button', searchResults, '', {});
+          rowBtn.style.flowChildren = 'down'; rowBtn.style.width = '100%';
+          rowBtn.style.paddingTop = '6px'; rowBtn.style.paddingBottom = '6px';
+          rowBtn.style.paddingLeft = '10px'; rowBtn.style.paddingRight = '10px';
+          var t = $.CreatePanel('Label', rowBtn, '', { text: mapDisplay(demo.map) + '  -  ' + demoName(demo) });
+          t.style.color = '#eef2f6ff'; t.style.fontSize = '14px';
+          var sub = $.CreatePanel('Label', rowBtn, '', { text: why }); // gray hint of WHY it matched
+          sub.style.color = '#8a93a0ff'; sub.style.fontSize = '12px';
+          rowBtn.SetPanelEvent('onactivate', (function (key) { return function () { revealDemo(key); }; })(tileKey(demo)));
+        })(demos[i], why);
+        ++shown;
+      }
+      searchResults.visible = shown > 0;
+    }
+
+    // Jump to a demo from a suggestion: switch to the Downloaded tab, select it, and
+    // scroll its tile into view; then close the search.
+    function revealDemo(key) {
+      var page = watchPage();
+      var dlBtn = page && downloadedButton(page);
+      if (dlBtn) { try { dlBtn.checked = true; } catch (e) {} try { $.DispatchEvent('Activated', dlBtn); } catch (e) {} }
+      $.Schedule(0.05, function () {
+        takeoverDownloaded(page);
+        selectByKey(key);
+        var idx = indexOfKey(key);
+        if (idx >= 0 && tilePanels[idx]) { try { tilePanels[idx].ScrollParentToMakePanelFit(3, false); } catch (e) {} }
+      });
+      if (searchWrap) searchWrap.visible = false;
+      try { searchInput.text = ''; } catch (e) {}
+      if (searchResults) searchResults.visible = false;
     }
 )FMJS"
 // ---- bridge API + bootstrap ----

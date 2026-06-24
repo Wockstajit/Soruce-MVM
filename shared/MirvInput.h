@@ -208,6 +208,17 @@ public:
 		m_SetFovValue = value;
 	}
 
+	// Discrete FOV step (mouse-wheel zoom): nudge the free-cam FOV by dFovDegrees and let it
+	// persist. Builds on the absolute SetFov override (applied in Override() and fed back into
+	// m_InputFov), so each call is one clean step independent of frame time -- unlike the
+	// dT-scaled mouse-move FOV accumulator. Accumulates correctly across multiple wheel notches
+	// in the same frame by reading the still-pending SetFov value when one is queued.
+	void NudgeFov(double dFovDegrees)
+	{
+		double base = m_SetFov ? (double)m_SetFovValue : m_InputFov;
+		SetFov((float)LimitFov(base + dFovDegrees));
+	}
+
 	void ConCommand(advancedfx::ICommandArgs * args);
 
 private:

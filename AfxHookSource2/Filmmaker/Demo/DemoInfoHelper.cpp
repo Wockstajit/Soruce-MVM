@@ -12,7 +12,7 @@ namespace {
 
 // Must match FilmmakerDemoInfo's DemoInfo.SchemaVersion. A cached "<demo>.fmjson"
 // whose "v" differs was produced by an older helper and is discarded.
-constexpr int kSchemaVersion = 3;
+constexpr int kSchemaVersion = 4;
 
 // Directory containing this DLL (HLAE's bin\x64 when injected from staging).
 std::wstring SelfModuleDir() {

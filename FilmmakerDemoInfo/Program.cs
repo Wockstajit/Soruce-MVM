@@ -62,7 +62,9 @@ static class DemoInfo
     // Bumped whenever the JSON shape or parse semantics change; the C++ caller
     // discards any cached "<demo>.fmjson" whose "v" does not match this.
     // v3: added per-player "perRound" (the round-performance timeline).
-    const int SchemaVersion = 3;
+    // v4: "team" now reports the side held at the last scored round (the side the
+    //     player ended the match on), not the last side seen in the GOTV wind-down.
+    const int SchemaVersion = 4;
 
     // In names-fast mode, give up waiting for a straggler name after this many
     // commands so a player who connects very late never forces a full decode.
@@ -73,7 +75,8 @@ static class DemoInfo
     {
         public ulong SteamId;
         public string Name = "";
-        public int Team = -1; // 0 = CT, 1 = T, -1 = unknown/spectator
+        public int Team = -1; // 0 = CT, 1 = T, -1 = unknown/spectator (last seen, any phase)
+        public int FinalTeam = -1; // side held as of the last scored round (the side "ended on")
         public int Kills, Deaths, Assists, Score, Mvps;
 
         // Per-round timeline (full parse only). Each entry: this player's result
@@ -211,7 +214,8 @@ static class DemoInfo
                 int winnerTeam = w == 3 ? 0 : (w == 2 ? 1 : -1);
                 foreach (var r in roster.Values)
                 {
-                    int side = r.Team; // 0 CT / 1 T (last known)
+                    int side = r.Team; // 0 CT / 1 T (side held this round)
+                    if (side >= 0) r.FinalTeam = side; // remember the last scored-round side
                     int won = (side >= 0 && side == winnerTeam) ? 1 : 0;
                     r.Rounds.Add(new[] { r.curKills, r.curHeadshots, r.curDied, won, side, r.curMvp });
                     r.curKills = r.curHeadshots = r.curDied = r.curMvp = 0;
@@ -254,6 +258,9 @@ static class DemoInfo
         foreach (var r in recs)
         {
             uint accountId = r.SteamId > SteamId64Base ? (uint)(r.SteamId - SteamId64Base) : 0;
+            // Report the side the player FINISHED the match on (last scored round),
+            // not whatever side they were on in the post-match GOTV wind-down.
+            int reportTeam = r.FinalTeam >= 0 ? r.FinalTeam : r.Team;
             var perRound = new List<object>(r.Rounds.Count);
             foreach (var rr in r.Rounds)
                 perRound.Add(new { k = rr[0], hs = rr[1], d = rr[2], w = rr[3], side = rr[4], mvp = rr[5] });
@@ -262,7 +269,7 @@ static class DemoInfo
                 name = string.IsNullOrEmpty(r.Name) ? "[unknown]" : r.Name,
                 steamId = r.SteamId.ToString(),
                 accountId,
-                team = r.Team,
+                team = reportTeam,
                 k = r.Kills,
                 a = r.Assists,
                 d = r.Deaths,

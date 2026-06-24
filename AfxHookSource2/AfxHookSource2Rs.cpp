@@ -141,9 +141,11 @@ extern "C" FFIBool afx_hook_source2_is_demo_paused() {
     return FFIBOOL_FALSE;
 }
 
+// Currently-playing demo file path, or nullptr if none. Mirrors HLAE upstream commit 4f25fb5
+// (ISource2EngineToClient::GetDemoFilePath, vtable :043); backs mirv.getDemoFilePath() in JS.
 extern "C" const char * afx_hook_source2_get_demo_file_path() {
     if(g_pEngineToClient) {
-		return g_pEngineToClient->GetDemoFilePath();
+        return g_pEngineToClient->GetDemoFilePath();
     }
     return nullptr;
 }

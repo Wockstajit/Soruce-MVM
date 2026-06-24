@@ -104,9 +104,15 @@ void CameraEditorHud::Teardown() {
 	m_lastState.clear();
 }
 
-// One-shot enter: host the timeline (decouples its forced cursor so G can still toggle
-// to fly), hide the floating movie-director cards, enable free cam, and select a key so
-// the inspector has something to edit. Idempotent on re-entry is handled by the caller.
+// Declared in Filmmaker.cpp. The experimental graph editor is now the DEFAULT curve editor:
+// the camera editor turns it on with the workspace (replacing the old timeline curve view).
+bool GraphEditorExperiment_Enabled();
+void GraphEditorExperiment_Set(bool enabled);
+
+// One-shot enter: host the timeline (kept hidden -- only its cursor/mouse-mode state still
+// feeds the editor's MOUSE button; its curve view is retired, the experimental graph editor is
+// the curve editor now), hide the floating movie-director cards, enable free cam, turn the graph
+// editor on, and select a key so the inspector has something to edit. Re-entry handled by caller.
 void CameraEditorHud::OnEnter() {
 	CameraTimelineHud& tl = CameraTimelineHudRef();
 	CameraPath& cp = CameraPathRef();
@@ -115,8 +121,13 @@ void CameraEditorHud::OnEnter() {
 	MovieHudRef().SetVisible(false);
 
 	tl.SetEditorHosted(true);
-	tl.SetVisible(true);
+	tl.SetVisible(false); // hosted for its cursor state only; the graph editor is the curve editor
 	tl.SetCursor(true); // start in UI-cursor so the inspector is immediately clickable
+
+	// Start on the graph editor (the default curve editor); the "≡ Timeline" button can flip to
+	// the old timeline later. Turning the graph on here seeds it; RunFrame re-asserts visibility.
+	m_useTimeline = false;
+	GraphEditorExperiment_Set(true);
 
 	// Scale the live game into the preview rect by default -- that "shrunk viewport" IS the
 	// point of the editor (vs. the full-screen crop). `mirv_filmmaker editor scale off`
@@ -134,6 +145,7 @@ void CameraEditorHud::OnExit() {
 
 	tl.SetEditorHosted(false);
 	tl.SetVisible(false);
+	GraphEditorExperiment_Set(false); // graph editor is part of the workspace; leave with it
 	cp.StopScrub();
 
 	MovieHudRef().SetVisible(m_prevMovieHud);
@@ -162,6 +174,7 @@ std::string CameraEditorHud::BuildStateJson() {
 	std::ostringstream o;
 	o << "{";
 	o << "\"enabled\":" << (m_enabled ? "true" : "false");
+	o << ",\"graphExp\":" << (GraphEditorExperiment_Enabled() ? "true" : "false");
 	o << ",\"cursor\":" << (tl.Cursor() ? "true" : "false");
 	o << ",\"tick\":" << curTick;
 	o << ",\"time\":" << r2(curTime);
@@ -216,10 +229,14 @@ void CameraEditorHud::RunFrame() {
 		return;
 	}
 
-	// While enabled, re-assert hosting every frame (cheap) so a stray timeline close or
-	// HUD recreation can't leave the workspace half-torn-down.
+	// While enabled, re-assert hosting every frame (cheap) so a stray timeline close or HUD
+	// recreation can't leave the workspace half-torn-down. The bottom curve editor is the graph
+	// editor by default; the "≡ Timeline" button flips m_useTimeline to bring back the old camera
+	// timeline (and the timeline's "≡ Graph" button flips it back). Exactly one is shown.
+	const bool useGraph = !m_useTimeline;
+	GraphEditorExperiment_Set(useGraph);
 	CameraTimelineHudRef().SetEditorHosted(true);
-	CameraTimelineHudRef().SetVisible(true);
+	CameraTimelineHudRef().SetVisible(!useGraph);
 
 	if (!BuildIfNeeded()) {
 		AfxViewportScaler::SetRequest(false, 0, 0, 0, 0);

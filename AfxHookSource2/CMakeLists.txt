@@ -300,6 +300,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Demo/DemoLibrary.h
     Filmmaker/Demo/DemoScanner.cpp
     Filmmaker/Demo/DemoScanner.h
+    Filmmaker/Demo/PlayingDemoPath.cpp
+    Filmmaker/Demo/PlayingDemoPath.h
 
     Filmmaker/Panorama/FilmmakerGuiJs.h
     Filmmaker/Panorama/FilmmakerMenu.cpp
@@ -318,6 +320,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/CameraEditorHud.cpp
     Filmmaker/Panorama/CameraEditorHud.h
     Filmmaker/Panorama/CameraEditorJs.h
+    Filmmaker/Panorama/GraphEditorExperimentHud.cpp
+    Filmmaker/Panorama/GraphEditorExperimentHud.h
+    Filmmaker/Panorama/GraphEditorJs.h
     Filmmaker/Panorama/DemoBarButtons.cpp
     Filmmaker/Panorama/DemoBarButtons.h
     Filmmaker/Panorama/DemoBarButtonsJs.h
@@ -331,6 +336,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/CamPlayback.h
     Filmmaker/Movie/CameraPath.cpp
     Filmmaker/Movie/CameraPath.h
+    Filmmaker/Movie/GraphExpModel.cpp
+    Filmmaker/Movie/GraphExpModel.h
     Filmmaker/Movie/MovieMode.cpp
     Filmmaker/Movie/MovieMode.h
 

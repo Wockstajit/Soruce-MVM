@@ -33,6 +33,7 @@ namespace {
 	constexpr int kVK_F = 0x46;     // edit the aimed-at marker
 	constexpr int kVK_G = 0x47;     // toggle UI-mouse for the camera timeline panel
 	constexpr int kVK_Z = 0x5A;     // Ctrl+Z: undo last curve edit
+	constexpr int kVK_A = 0x41;     // Ctrl+A: select all keyframes (graph editor)
 
 	constexpr int kSkipSeconds = 15; // arrow-key demo skip step
 
@@ -63,24 +64,26 @@ void MovieMode::EnqueueCmd(const std::string& c) {
 	m_cmdQueue.push_back(c);
 }
 
-bool MovieMode::OnMouseWheel(int delta, bool shiftDown) {
+bool MovieMode::OnMouseWheel(int delta, bool shiftDown, bool ctrlDown) {
 	if (!IsDemoActive())
 		return false;
 	if (delta == 0)
 		return false;
 
-	// Inside the camera editor the wheel navigates camera keys and always moves to
-	// their exact pose/tick. Do not cycle first/third/free camera modes here.
-	if (CameraTimeline_Visible()) {
-		EnqueueCmd(delta > 0
-			? "mirv_filmmaker camtl selectdelta -1"
-			: "mirv_filmmaker camtl selectdelta 1");
+	// Scrolling must NOT move, select, or change keyframes in the camera timeline or the
+	// experimental graph editor (it used to step the selected camera). Swallow the wheel there
+	// so nothing changes -- but still block the mode-cycle fall-through below.
+	if (CameraTimeline_Visible() || GraphEditorExperiment_Enabled())
 		return true;
-	}
 
-	// In free cam, Shift+scroll adjusts free-cam SPEED (documented control).
-	if (CameraBridge_GetFreeCamEnabled() && shiftDown) {
-		CameraBridge_AdjustFreeCamSpeed(delta > 0 ? +1 : -1);
+	// In the director FREE CAM the wheel can drive the camera (modifier held):
+	//   Ctrl+scroll  = FOV zoom -- up = zoom in (lower FOV), down = zoom out (higher FOV),
+	//   Shift+scroll = move SPEED (documented control).
+	// Plain scroll still falls through to the camera-mode cycle below (so you can scroll
+	// back out of free cam).
+	if (CameraBridge_GetFreeCamEnabled() && (ctrlDown || shiftDown)) {
+		if (ctrlDown) CameraBridge_AdjustFreeCamFov(delta > 0 ? +1 : -1);
+		else CameraBridge_AdjustFreeCamSpeed(delta > 0 ? +1 : -1);
 		return true;
 	}
 
@@ -105,15 +108,25 @@ bool MovieMode::OnMouseButton(int button, bool down) {
 		if (down) EnqueueCmd("mirv_filmmaker marker repositionplace");
 		return true;
 	}
+	// While the EXPERIMENTAL graph editor is open, swallow RIGHT-click: it drives the editor's
+	// ease context menu through the cursor pipe (not Panorama events), so it must not reach CS2's
+	// spectator switch. Left-click still passes through (the editor's panels/buttons need it; its
+	// full-screen catcher absorbs strays).
+	if (button == 1 && IsDemoActive() && GraphEditorExperiment_WantsCursor())
+		return true;
 	// In FREE CAM, swallow LMB/RMB so CS2's spectator doesn't yank the view to a
-	// different player while the director is flying the camera. EXCEPTIONS: when the
-	// marker edit menu is open, OR the camera timeline's UI-mouse mode is on (G), we
-	// must let the click reach Panorama -- those panels draw a full-screen hit-test
-	// catcher that absorbs stray clicks (so they still can't switch players) while
-	// keeping their own buttons/sliders clickable. This is what makes the timeline /
-	// curve editor usable in free cam.
-	if (IsDemoActive() && GetMode() == Mode::FreeCam
-		&& !CameraPathRef().MenuOpen() && !CameraTimeline_WantsCursor())
+	// different player while the director is flying the camera. Gate on the ACTUAL free-cam
+	// state (MirvInput camera control), not the tracked spectator mode: free cam is enabled
+	// from many places (camera editor, camera paths, ...) that don't run through the scroll
+	// mode-cycle, so GetMode() can still read First/Third while the cam is really flying --
+	// and an unswallowed click there silently switches the spectated player.
+	// EXCEPTIONS: when the marker edit menu is open, OR the camera timeline's UI-mouse mode is
+	// on (G), we must let the click reach Panorama -- those panels draw a full-screen hit-test
+	// catcher that absorbs stray clicks (so they still can't switch players) while keeping
+	// their own buttons/sliders clickable. This is what makes the timeline / curve editor usable.
+	if (IsDemoActive() && (CameraBridge_GetFreeCamEnabled() || GetMode() == Mode::FreeCam)
+		&& !CameraPathRef().MenuOpen() && !CameraTimeline_WantsCursor()
+		&& !GraphEditorExperiment_WantsCursor())
 		return true;
 	// Otherwise never consume clicks: first/third-person spectator switches players on
 	// LMB/RMB and the native demo UI (demoui) needs clicks to reach Panorama.
@@ -125,6 +138,10 @@ bool MovieMode::OnKey(int vkey, bool down) {
 		m_controlDown = down;
 		return false;
 	}
+	// Track Shift for chord detection (Ctrl+Shift+Z = redo). Don't return -- Shift still drives
+	// the free-cam slow modifier further below.
+	if (vkey == kVK_SHIFT)
+		m_shiftDown = down;
 	if (!IsDemoActive())
 		return false; // director keys only act while a demo plays
 
@@ -137,8 +154,23 @@ bool MovieMode::OnKey(int vkey, bool down) {
 		m_spaceDown = down;
 	}
 
-	if (vkey == kVK_Z && down && m_controlDown && CameraTimeline_Visible()) {
-		EnqueueCmd("mirv_filmmaker camtl undo");
+	if (vkey == kVK_Z && down && m_controlDown) {
+		// Ctrl+Z = undo, Ctrl+Shift+Z = redo. Route to whichever curve surface is open: the
+		// experimental graph editor owns it while enabled, otherwise the camera path/timeline.
+		const bool redo = m_shiftDown;
+		if (GraphEditorExperiment_Enabled()) {
+			EnqueueCmd(redo ? "mirv_filmmaker grapheditor redo" : "mirv_filmmaker grapheditor undo");
+			return true;
+		}
+		if (CameraTimeline_Visible()) {
+			EnqueueCmd(redo ? "mirv_filmmaker camtl redo" : "mirv_filmmaker camtl undo");
+			return true;
+		}
+	}
+
+	if (vkey == kVK_A && down && m_controlDown && GraphEditorExperiment_Enabled()) {
+		// Ctrl+A selects every keyframe in the graph editor.
+		EnqueueCmd("mirv_filmmaker grapheditor selall");
 		return true;
 	}
 

@@ -99,6 +99,7 @@ public:
 	void PreviewChannelValue(int index, int channel, double v);
 	void EndCurveValueEdit();
 	void UndoCurveEdit();
+	void RedoCurveEdit();
 	void SetEaseIndex(int index, Ease e);
 	void SetSpeedMulIndex(int index, float mul);
 	// Pure pose at a demo tick (curve sampling + scrub readout). false => off-path.
@@ -181,6 +182,7 @@ private:
 		int selected = -1;
 	};
 	std::vector<CurveUndoState> m_curveUndo;
+	std::vector<CurveUndoState> m_curveRedo; // states popped by Undo, for Redo (cleared on a new edit)
 
 	SpeedMode m_speedMode = SpeedMode::Manual;
 	Timing m_timing = Timing::Live;

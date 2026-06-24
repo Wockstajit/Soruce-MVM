@@ -51,6 +51,12 @@ public:
 	void ToggleScale() { m_scaleEnabled = !m_scaleEnabled; }
 	bool ScaleEnabled() const { return m_scaleEnabled; }
 
+	// Bottom curve-editor selection: false = the (default) graph editor, true = the old camera
+	// timeline. The "≡ Timeline" / "≡ Graph" buttons flip this; RunFrame shows the chosen one.
+	void SetUseTimeline(bool v) { m_useTimeline = v; }
+	void ToggleUseTimeline() { m_useTimeline = !m_useTimeline; }
+	bool UseTimeline() const { return m_useTimeline; }
+
 	void RequestEval(const std::string& js) { m_evalQueue.push_back(js); }
 
 private:
@@ -70,6 +76,7 @@ private:
 	bool m_built = false;
 	bool m_enabled = false;     // Camera Editor Mode on/off
 	bool m_scaleEnabled = false; // true scaled-preview viewport (render-layer blit)
+	bool m_useTimeline = false; // false = graph editor (default), true = old camera timeline
 	bool m_wasEnabled = false;  // for enter/exit edge detection
 	bool m_prevMovieHud = false; // MovieHud visibility to restore on exit
 	std::string m_lastState;

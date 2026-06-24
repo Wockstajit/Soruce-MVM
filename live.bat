@@ -14,7 +14,7 @@ cd /d "%~dp0"
 
 set "PORT=29010"
 set "WEBPORT=8765"
-set "WIDTH=1920"
+set "WIDTH=2560"
 set "HEIGHT=1080"
 
 if not exist "misc\cs2-live.ps1" (

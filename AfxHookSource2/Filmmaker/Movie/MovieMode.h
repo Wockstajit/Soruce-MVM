@@ -28,7 +28,7 @@ public:
 	// --- input taps (WndProc / input thread). Return true if consumed. ---
 	bool OnKey(int vkey, bool down);
 	bool OnMouseButton(int button, bool down); // 0 = left, 1 = right
-	bool OnMouseWheel(int delta, bool shiftDown);
+	bool OnMouseWheel(int delta, bool shiftDown, bool ctrlDown);
 
 	// --- main thread ---
 	void FlushActions();
@@ -54,6 +54,7 @@ private:
 	// them), so this stays true and is informational.
 	bool m_cursor = true;
 	bool m_controlDown = false; // input-thread modifier state for Ctrl+Z curve undo
+	bool m_shiftDown = false;   // input-thread modifier state for Ctrl+Shift+Z curve redo
 	bool m_spaceDown = false;   // input-thread Space state; swallows OS auto-repeat so transport toggles once per press
 	bool m_modeDirty = false;
 	Mode m_pendingMode = Mode::Default;

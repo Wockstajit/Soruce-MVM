@@ -19,6 +19,10 @@ void  CameraBridge_SetFreeCamEnabled(bool enable);
 float CameraBridge_GetFreeCamSpeed();
 void  CameraBridge_AdjustFreeCamSpeed(int dir);
 
+// Free-cam FOV (zoom), one step per call. dir > 0 = scroll up = zoom IN (lower FOV);
+// dir < 0 = scroll down = zoom OUT (higher FOV). The new FOV persists frame-over-frame.
+void  CameraBridge_AdjustFreeCamFov(int dir);
+
 // Temporarily scale free-cam keyboard+mouse sensitivity for fine/slow movement
 // (held while Shift is down). Saves/restores the base sensitivity internally and
 // is idempotent, so repeated true/true or false/false calls are safe.
@@ -40,6 +44,15 @@ void CameraBridge_SetCameraPose(double x, double y, double z,
 
 // Enable/disable the in-world camera-path keyframe gizmos (g_CampathDrawer).
 void CameraBridge_SetPathDrawEnabled(bool enable);
+
+// UI cursor probe for the EXPERIMENTAL graph editor. Returns the latest client-area cursor
+// position + left/right-button state captured in the WndProc (main.cpp), plus the live Shift
+// state (read on the main thread). 'seq' increments on every mouse-move so the JS can detect
+// motion even when the coordinates repeat. This is what lets the graph editor implement
+// After-Effects-style continuous dragging (Panorama itself has no mouse-move event). 'rmb' drives
+// the right-click ease menu; 'shift' drives axis-lock dragging. Coordinates are window-client
+// pixels (divide by the panel uiscale to map into Panorama layout space).
+void CameraBridge_GetUiCursor(int& x, int& y, bool& lmb, bool& rmb, bool& shift, unsigned& seq);
 
 // Style the in-world keyframe gizmos for the camera-marker system: paint them in
 // the global Freeze (blue) / Live (gold) colour with a glow, and draw the aimed-at

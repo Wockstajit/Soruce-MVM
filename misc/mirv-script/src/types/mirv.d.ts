@@ -315,6 +315,14 @@ declare namespace mirv {
 	function getDemoTick(): number | undefined;
 
 	/**
+	 * Returns the file path of the currently-playing demo, or null if none is playing.
+	 *
+	 * @remarks
+	 * Since HLAE 2.191.0
+	 */
+	function getDemoFilePath(): string | null;
+
+	/**
 	 * Since HLAE 2.171.1
 	 */
 	function isPlayingDemo(): boolean;

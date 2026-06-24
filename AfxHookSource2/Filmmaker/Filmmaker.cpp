@@ -1,11 +1,13 @@
 #include "Filmmaker.h"
 
 #include "Demo/DemoLibrary.h"
+#include "Demo/PlayingDemoPath.h"
 #include "Panorama/FilmmakerMenu.h"
 #include "Panorama/MovieHud.h"
 #include "Panorama/MarkerHud.h"
 #include "Panorama/CameraTimelineHud.h"
 #include "Panorama/CameraEditorHud.h"
+#include "Panorama/GraphEditorExperimentHud.h"
 #include "Panorama/DemoBarButtons.h"
 #include "Movie/MovieMode.h"
 #include "Movie/CameraPath.h"
@@ -147,6 +149,26 @@ std::wstring CurrentDemoPath() {
 	return g_currentDemoPath;
 }
 
+std::wstring PlayingDemoPath() {
+	// Authoritative source: the demo the engine is actually playing (works for our tab,
+	// native Your Matches, and console playdemo alike).
+	std::wstring eng = ResolvePlayingDemoPath();
+	if (!eng.empty())
+		return eng;
+	// Fallback: a demo is playing but the engine path couldn't be recovered. Use the path our
+	// own Watch() recorded (canonicalized so it matches the engine form when it does resolve),
+	// so a demo opened from our Downloaded tab is never worse off than before. Cached on the
+	// input string to avoid a CreateFile() every frame in this degraded path.
+	std::wstring our = CurrentDemoPath();
+	if (our.empty())
+		return L"";
+	static std::mutex s_m;
+	std::lock_guard<std::mutex> lk(s_m);
+	static std::wstring s_lastIn, s_lastOut;
+	if (our != s_lastIn) { s_lastIn = our; s_lastOut = CanonicalDemoPath(our); }
+	return s_lastOut;
+}
+
 void RunFrame() {
 	EnsureInitialized();
 
@@ -200,6 +222,11 @@ void RunMainThreadFrame() {
 	// Camera Editor Mode workspace shell. Runs LAST so its host orchestration (timeline
 	// hosting + gameplay-HUD hide) is applied on top of every other panel this frame.
 	CameraEditorHudRef().RunFrame();
+
+	// Experimental After-Effects-style graph editor (opt-in overlay; default OFF). Runs after
+	// everything else so, while enabled, its full-screen overlay sits on top; when disabled it
+	// is a cheap no-op and the regular editor is untouched.
+	GraphEditorExperimentHudRef().RunFrame();
 }
 
 void Shutdown() {
@@ -209,7 +236,7 @@ void Shutdown() {
 // --- Movie director input taps (forward to the MovieMode singleton) ---
 bool MovieInput_OnKey(int vkey, bool down) { return MovieModeRef().OnKey(vkey, down); }
 bool MovieInput_OnMouseButton(int button, bool down) { return MovieModeRef().OnMouseButton(button, down); }
-bool MovieInput_OnMouseWheel(int delta, bool shiftDown) { return MovieModeRef().OnMouseWheel(delta, shiftDown); }
+bool MovieInput_OnMouseWheel(int delta, bool shiftDown, bool ctrlDown) { return MovieModeRef().OnMouseWheel(delta, shiftDown, ctrlDown); }
 
 // --- HUD panel show/hide ---
 void MovieHud_Set(bool visible) { MovieHudRef().SetVisible(visible); }
@@ -248,8 +275,17 @@ bool CameraEditor_Active() { return CameraEditorHudRef().Enabled(); }
 void CameraEditor_SetScale(bool enabled) { CameraEditorHudRef().SetScale(enabled); }
 void CameraEditor_ToggleScale() { CameraEditorHudRef().ToggleScale(); }
 bool CameraEditor_ScaleActive() { return CameraEditorHudRef().ScaleEnabled(); }
+void CameraEditor_SetUseTimeline(bool useTimeline) { CameraEditorHudRef().SetUseTimeline(useTimeline); }
+void CameraEditor_ToggleUseTimeline() { CameraEditorHudRef().ToggleUseTimeline(); }
 
 // --- Camera-path preview: HUD masked (Tab) -> MovieHud hides itself this frame ---
 bool CameraPath_PreviewHudHidden() { return CameraPathRef().PreviewHudHidden(); }
+
+// --- Experimental graph editor (isolated opt-in overlay) ---
+void GraphEditorExperiment_Set(bool enabled) { GraphEditorExperimentHudRef().SetEnabled(enabled); }
+void GraphEditorExperiment_Toggle() { GraphEditorExperimentHudRef().Toggle(); }
+bool GraphEditorExperiment_Enabled() { return GraphEditorExperimentHudRef().Enabled(); }
+bool GraphEditorExperiment_OwnsView() { return GraphEditorExperimentHudRef().OwnsView(); }
+bool GraphEditorExperiment_WantsCursor() { return GraphEditorExperimentHudRef().WantsCursor(); }
 
 } // namespace Filmmaker

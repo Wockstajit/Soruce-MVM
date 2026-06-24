@@ -1,26 +1,21 @@
 #pragma once
 
-// Panorama JS for the camera TIMELINE + CURVE EDITOR. Built ONCE into the in-game
-// HUD (CSGOHud) context by CameraTimelineHud.cpp. One panel, two in-place views.
+// Panorama JS for the camera TIMELINE scrub bar. Built ONCE into the in-game
+// HUD (CSGOHud) context by CameraTimelineHud.cpp.
 //
 // While the panel is OPEN it REPLACES the native CS2 demo bar: the native
 // CSGOHudDemoController contents (slider + transport + the G-mouse / next-player /
 // next-camera hotkey labels) are hidden and ours occupies that bottom space; the
 // native bar is restored when we close.
 //
-// UI-mouse mode (state.cursor): while the camera timeline / curve editor is open it
+// UI-mouse mode (state.cursor): while the camera timeline is open it
 // is forced on so the panel is always clickable. In regular native-demo-bar mode it
 // can be toggled from third-person/freecam by G or the injected MOUSE button.
 //
 //   * TIMELINE: a native-styled scrubber (HorizontalSlider) + keyframe diamonds +
 //     transport + speed buttons.
-//   * CURVE EDITOR: IWXMVM's multi-lane value-vs-time graph (X/Y/Z/Pitch/Yaw/Tilt/
-//     FOV), drawn with the rotated-panel line trick + diamond keyframes, a draggable
-//     playhead, and a draggable VALUE slider that edits the selected key/channel.
 //
-//   C++ -> JS : attributes "state" (light, every frame) + "curve" (heavy, on change;
-//               carries a "rev" the JS gates lane relayout on), then
-//               $.CamTimeline.render().
+//   C++ -> JS : attribute "state" (light, every frame), then $.CamTimeline.render().
 //   JS  -> C++: buttons / sliders issue "mirv_filmmaker camtl ..." console commands.
 
 namespace Filmmaker {
@@ -39,13 +34,9 @@ inline const char* kCameraTimelineJs = R"TLJS(
       label: '#9aa4b0ff', value: '#eef2f6ff', btnBg: '#ffffff14', btnOn: '#f0b32333',
       font: 'Stratum2, "Arial Unicode MS"'
     };
-    var W = 1250, W_DEFAULT = 1250, LANE_H = 54, LANE_GAP = 9, LABELW = 132;
+    var W = 1250, W_DEFAULT = 1250, LABELW = 132;
     var EDITOR_INSPECTOR_W = 372; // keep in sync with CameraEditorJs INSPECTOR_W
     var EDITOR_BOTTOM_H = 176;    // keep in sync with CameraEditorJs BOTTOM_H
-    var LANES_H = (LANE_H + LANE_GAP) * 7;
-    var CH = ['x','y','z','pitch','yaw','roll','fov'];
-    var CHLBL = ['X','Y','Z','PITCH','YAW','TILT','FOV'];
-    var CHHELP = ['','','','up / down','left / right','',''];
     var EASE = ['none','in','out','inout'];
     var EASE_LBL = ['None','Ease In','Ease Out','Ease In/Out'];
 
@@ -79,17 +70,6 @@ inline const char* kCameraTimelineJs = R"TLJS(
       var l = lbl(b, text, color || S.value, 13); l.style.fontWeight = 'bold';
       b.SetPanelEvent('onactivate', function () { if (b !== clearBtn) disarmClear(); onClick(); });
       b.__lbl = l; return b;
-    }
-    // A thin rotated panel from (x0,y0) to (x1,y1): the Panorama "line" trick.
-    function lineSeg(parent, x0, y0, x1, y1, color, thick) {
-      var dx = x1 - x0, dy = y1 - y0; var len = Math.sqrt(dx * dx + dy * dy); if (len < 0.5) len = 0.5;
-      var ang = Math.atan2(dy, dx) * 180 / Math.PI;
-      var p = mk('Panel', parent); p.hittest = false;
-      p.style.position = x0.toFixed(1) + 'px ' + (y0 - thick / 2).toFixed(1) + 'px 0px';
-      p.style.width = len.toFixed(1) + 'px'; p.style.height = thick + 'px';
-      p.style.transformOrigin = '0% 50%';
-      p.style.transform = 'rotateZ(' + ang.toFixed(2) + 'deg)';
-      p.style.backgroundColor = color; return p;
     }
     function diamond(parent, cx, cy, size, color, onClick) {
       var p = mk('Panel', parent);
@@ -215,10 +195,10 @@ inline const char* kCameraTimelineJs = R"TLJS(
       clearConfirm = false; clearBtn.__lbl.text = 'Clear'; clearBtn.__lbl.style.color = S.value;
       cmd('mirv_filmmaker camtl clear');
     }, S.value);
-    var viewBtn = btn(header, 'Curve Editor', function () {
-      cmd('mirv_filmmaker camtl view ' + (curView === 'timeline' ? 'curve' : 'timeline'));
-    }, S.accent);
+    // ("Curve Editor" view toggle removed: the graph editor is the curve editor now.)
     var closeBtn = btn(header, '✕', function () { cmd('mirv_filmmaker camtl close'); }, S.value);
+    // In the Camera Editor, switch the bottom panel back to the (default) graph editor.
+    var graphBtn = btn(header, '≡ Graph', function () { cmd('mirv_filmmaker editor curveeditor graph'); }, S.accent);
 )TLJS"
 R"TLJS(
     // ===================== SHARED TRANSPORT =============================
@@ -261,8 +241,7 @@ R"TLJS(
     // ===================== TIMELINE VIEW ================================
     var tl = mk('Panel', panel); tl.style.flowChildren = 'down'; tl.style.width = (LABELW + W) + 'px';
 
-    // Timeline scrubber spans the FULL content width (no label gutter -- that column is
-    // only for the curve editor's per-channel lane labels).
+    // Timeline scrubber spans the full content width.
     var TLW = LABELW + W;
     var srow = mk('Panel', tl); srow.style.width = TLW + 'px'; srow.style.height = '40px';
     var diamWrap = mk('Panel', srow); diamWrap.hittest = false;
@@ -275,56 +254,6 @@ R"TLJS(
     // instead of left/right -- pass it in the CreatePanel construction props.
     var scrub = $.CreatePanel('Slider', srow, 'CamScrub', { direction: 'horizontal' }); scrub.AddClass('HorizontalSlider');
     scrub.style.width = TLW + 'px'; scrub.style.height = '24px'; scrub.style.position = '0px 16px 0px';
-
-    // ===================== CURVE VIEW ===================================
-    var cv = mk('Panel', panel); cv.style.flowChildren = 'down'; cv.style.width = (LABELW + W) + 'px'; cv.visible = false;
-    var ctb = mk('Panel', cv); ctb.style.flowChildren = 'right'; ctb.style.width = '100%'; ctb.style.marginBottom = '6px';
-    btn(ctb, 'Zoom +', function () { cmd('mirv_filmmaker camtl zoom in'); }, S.label);
-    btn(ctb, 'Zoom −', function () { cmd('mirv_filmmaker camtl zoom out'); }, S.label);
-    btn(ctb, 'Reset', function () { cmd('mirv_filmmaker camtl zoom reset'); }, S.label);
-    btn(ctb, '◀ Pan', function () { cmd('mirv_filmmaker camtl pan -1'); }, S.label);
-    btn(ctb, 'Pan ▶', function () { cmd('mirv_filmmaker camtl pan 1'); }, S.label);
-    var cInfo = lbl(ctb, '', S.label, 12); cInfo.style.verticalAlign = 'center'; cInfo.style.marginLeft = '12px';
-
-    var phrow = mk('Panel', cv); phrow.style.width = (LABELW + W) + 'px'; phrow.style.height = '16px';
-    var phSlider = $.CreatePanel('Slider', phrow, 'CamPlayhead', { direction: 'horizontal' }); phSlider.AddClass('HorizontalSlider');
-    phSlider.style.width = W + 'px'; phSlider.style.height = '14px'; phSlider.style.position = LABELW + 'px 0px 0px';
-
-    // graphArea: NO flow so lanesInner + the playhead line OVERLAY (not stack).
-    var graphArea = mk('Panel', cv); graphArea.style.width = (LABELW + W) + 'px'; graphArea.style.height = LANES_H + 'px';
-    var lanesInner = mk('Panel', graphArea); lanesInner.style.flowChildren = 'down';
-    lanesInner.style.width = '100%'; lanesInner.style.position = '0px 0px 0px';
-    var laneGraphs = [], laneLabels = [], laneNames = [], laneRange = [];
-    for (var c = 0; c < CH.length; c++) {
-      var row = mk('Panel', lanesInner); row.style.flowChildren = 'right'; row.style.width = '100%'; row.style.height = (LANE_H + LANE_GAP) + 'px';
-      var lc = mk('Panel', row); lc.style.width = LABELW + 'px'; lc.style.height = LANE_H + 'px';
-      lc.style.flowChildren = 'down'; lc.style.verticalAlign = 'center'; lc.hittest = true;
-      var nm = lbl(lc, CHLBL[c], S.accent, 12); nm.style.fontWeight = 'bold';
-      if (CHHELP[c]) {
-        var hp = lbl(lc, CHHELP[c], S.label, 9);
-        hp.style.marginTop = '-1px';
-      }
-      laneRange.push(lbl(lc, '', S.label, 10));
-      (function (ci, lp) { lp.SetPanelEvent('onactivate', function () { selectChannel(ci); }); })(c, lc);
-      var g = mk('Panel', row); g.style.width = W + 'px'; g.style.height = LANE_H + 'px';
-      g.style.backgroundColor = S.grid; g.style.borderRadius = '2px'; g.style.border = '1px solid transparent'; g.hittest = true;
-      // Lane clicks select the property only. Keyframe diamonds own camera selection;
-      // keeping these responsibilities separate prevents the parent lane click from
-      // immediately overriding a clicked camera with the old playhead-nearest camera.
-      (function (ci, gp) { gp.SetPanelEvent('onactivate', function () { selectChannel(ci); }); })(c, g);
-      laneLabels.push(lc); laneNames.push(nm);
-      laneGraphs.push(g);
-    }
-    var phLine = mk('Panel', graphArea); phLine.hittest = false;
-    phLine.style.position = LABELW + 'px 0px 0px'; phLine.style.width = '2px';
-    phLine.style.height = LANES_H + 'px'; phLine.style.backgroundColor = S.playhead;
-
-    // value editor row: a draggable slider that edits the SELECTED key + channel.
-    var cedit = mk('Panel', cv); cedit.style.flowChildren = 'right'; cedit.style.width = '100%'; cedit.style.marginTop = '8px'; cedit.visible = false;
-    var ceLabel = lbl(cedit, '', S.value, 13); ceLabel.style.verticalAlign = 'center'; ceLabel.style.width = '210px';
-    var cevSlider = $.CreatePanel('Slider', cedit, 'CamVal', { direction: 'horizontal' }); cevSlider.AddClass('HorizontalSlider');
-    cevSlider.style.width = '860px'; cevSlider.style.height = '16px'; cevSlider.style.verticalAlign = 'center';
-    var cevVal = lbl(cedit, '', S.accent, 13); cevVal.style.verticalAlign = 'center'; cevVal.style.marginLeft = '12px'; cevVal.style.fontWeight = 'bold';
 )TLJS"
 R"TLJS(
     // ===================== SHARED KEYFRAME FOOTER =======================
@@ -347,14 +276,14 @@ R"TLJS(
     K.tm = btn(keyFooter, 'Live', function () { cmd('mirv_filmmaker marker timing toggle'); }, S.value);
 
     // =====================================================================
-    var st = null, curve = null, curView = 'timeline', selChannel = -1;
-    var lastRev = -1, lastView = '', lastTlSig = '', lastContentW = -1;
-    var lastCurveSelected = -2, lastCurveChannel = -1;
+    var st = null;
+    var graphExpActive = false; // experimental graph editor owns the curve zone -> scrub drives IT
+    var lastTlSig = '', lastContentW = -1;
     // Dynamically-created Panorama sliders work in their default 0..1 range (setting
     // min/max/out-of-range value is unreliable and leaves the thumb stuck mid-track), so
     // we keep value normalized and map 0..1 <-> tick / channel-value ourselves.
-    var scrubT0 = 0, scrubT1 = 1, phT0 = 0, phT1 = 1, valLo = 0, valHi = 1;
-    var scrubSyncing = false, phSyncing = false;
+    var scrubT0 = 0, scrubT1 = 1;
+    var scrubSyncing = false;
     var transportOverride = null, transportOverrideUntil = 0;
     function nowMs() { return (new Date()).getTime(); }
     function transportShownPlaying() {
@@ -377,12 +306,6 @@ R"TLJS(
     function activeTick() {
       return st && st.scrubbing ? st.scrubTick : (st ? st.tick : 0);
     }
-    function selectChannel(ci) {
-      disarmClear();
-      selChannel = ci;
-      if (curve) rebuildCurveLanes();
-      if (api && api.render) api.render();
-    }
     function gotoKey(dir) {
       if (!st || !st.markers || st.markers.length === 0) return;
       var cur = st.tick, bestI = -1, bestT = null;
@@ -400,14 +323,6 @@ R"TLJS(
       idx += (d > 0 ? 1 : -1); if (idx < 0) idx = 0; if (idx >= steps.length) idx = steps.length - 1;
       cmd('mirv_filmmaker camtl speed ' + st.selected + ' ' + steps[idx].toFixed(2));
     }
-    // Select the marker nearest the visible playhead (used when a lane background is clicked).
-    function selectNearestInLane() {
-      if (!st || !st.markers || st.markers.length === 0) return;
-      var best = -1, bd = 1e15, tick = activeTick();
-      for (var i = 0; i < st.markers.length; i++) { var d = Math.abs(st.markers[i].tick - tick); if (d < bd) { bd = d; best = i; } }
-      if (best >= 0) cmd('mirv_filmmaker marker select ' + best);
-    }
-
     // CS2 sliders fire SliderValueChanged (while dragging) + SliderReleased (on let-go),
     // delivered via $.RegisterEventHandler with the value as the 2nd arg -- NOT the
     // 'onvaluechanged' panel event. While dragging we PREVIEW the camera (smooth, no
@@ -416,42 +331,17 @@ R"TLJS(
       if (scrubSyncing || (st && st.playing)) return;
       var t = sliderTick(v, scrubT0, scrubT1);
       tReadout.text = 'tick ' + t + '   (release to seek)';
-      cmd('mirv_filmmaker camtl scrubpreview ' + t);
+      // While the experiment owns the curve zone, the scrubber previews ITS curves (not the stable
+      // path's) so the two never fight for the camera -- same commands the experiment's own ruler uses.
+      if (graphExpActive) cmd('mirv_filmmaker grapheditor playhead ' + t);
+      else cmd('mirv_filmmaker camtl scrubpreview ' + t);
     });
     $.RegisterEventHandler('SliderReleased', scrub, function (panel, v) {
       if (st && st.playing) return;
-      cmd('mirv_filmmaker camtl scrub ' + sliderTick(v, scrubT0, scrubT1));
+      var t = sliderTick(v, scrubT0, scrubT1);
+      if (graphExpActive) { cmd('demo_gototick ' + t); cmd('mirv_filmmaker grapheditor playhead release'); }
+      else cmd('mirv_filmmaker camtl scrub ' + t);
     });
-    $.RegisterEventHandler('SliderValueChanged', phSlider, function (panel, v) {
-      if (phSyncing || (st && st.playing)) return;
-      cmd('mirv_filmmaker camtl scrubpreview ' + sliderTick(v, phT0, phT1));
-    });
-    $.RegisterEventHandler('SliderReleased', phSlider, function (panel, v) {
-      if (st && st.playing) return;
-      cmd('mirv_filmmaker camtl scrub ' + sliderTick(v, phT0, phT1));
-    });
-    // Value editor: update the selected camera/property continuously while dragging.
-    // The backend records one undo snapshot for the whole gesture.
-    var valueDragActive = false, valueSyncing = false;
-    $.RegisterEventHandler('SliderValueChanged', cevSlider, function (panel, v) {
-      if (valueSyncing) return;
-      var value = valLo + v * (valHi - valLo);
-      cevVal.text = value.toFixed(2);
-      if (st && st.selected >= 0 && selChannel >= 0) {
-        if (!valueDragActive) {
-          valueDragActive = true;
-          cmd('mirv_filmmaker camtl editbegin');
-        }
-        cmd('mirv_filmmaker camtl setvalpreview ' + st.selected + ' ' + selChannel + ' ' + value.toFixed(3));
-      }
-    });
-    $.RegisterEventHandler('SliderReleased', cevSlider, function (panel, v) {
-      if (valueDragActive) {
-        valueDragActive = false;
-        cmd('mirv_filmmaker camtl editend');
-      }
-    });
-
     function rebuildTimelineDiamonds() {
       diamWrap.RemoveAndDeleteChildren();
       if (!st || !st.markers) return;
@@ -464,43 +354,6 @@ R"TLJS(
         });
       })(i);
     }
-    function rebuildCurveLanes() {
-      if (!curve || !curve.lanes) return;
-      var n = curve.n, t0 = curve.t0, t1 = curve.t1; if (t1 <= t0) t1 = t0 + 1;
-      for (var c = 0; c < curve.lanes.length && c < laneGraphs.length; c++) {
-        var lane = curve.lanes[c], g = laneGraphs[c];
-        g.RemoveAndDeleteChildren();
-        g.style.backgroundColor = S.grid;
-        g.style.border = '1px solid #ffffff0d';
-        laneLabels[c].style.backgroundColor = 'transparent';
-        laneNames[c].style.color = S.accent;
-        laneRange[c].text = lane.min.toFixed(1) + ' .. ' + lane.max.toFixed(1);
-        for (var gi = 1; gi < 10; gi++)
-          lineSeg(g, W * gi / 10, 0, W * gi / 10, LANE_H, gi === 5 ? S.gridMid : S.grid, 1);
-        lineSeg(g, 0, LANE_H / 2, W, LANE_H / 2, S.gridMid, 1);
-        var px = -1, py = -1;
-        for (var i = 0; i < n; i++) {
-          var v = lane.pts[i];
-          if (v === null) { px = -1; continue; }
-          var x = (i / (n - 1)) * W, y = (1 - v) * LANE_H;
-          if (px >= 0) lineSeg(g, px, py, x, y, S.line, 2);
-          px = x; py = y;
-        }
-        if (st && st.markers) {
-          var span = lane.max - lane.min; if (Math.abs(span) < 1e-6) span = 1;
-          for (var m = 0; m < st.markers.length; m++) (function (c, m) {
-            var mk2 = st.markers[m], mt = mk2.tick;
-            if (mt < t0 - 1 || mt > t1 + 1) return;
-            var dx = frac(mt, t0, t1) * W, norm = (mk2[CH[c]] - lane.min) / span;
-            if (norm < 0) norm = 0; if (norm > 1) norm = 1;
-            var sel = (m === st.selected && c === selChannel);
-            diamond(g, dx, (1 - norm) * LANE_H, sel ? 14 : 9, sel ? S.lineSel : S.accent,
-              function () { selectChannel(c); cmd('mirv_filmmaker camtl select ' + m); });
-          })(c, m);
-        }
-      }
-    }
-
     function updateKeys(freeze) {
       var has = (st && st.selected >= 0);
       K.kLabel.text = has ? ('Key #' + (st.selected + 1)) : 'Keyframe (none)';
@@ -516,10 +369,10 @@ R"TLJS(
 )TLJS"
 R"TLJS(
     // Responsive width: in hosted (editor) mode the bottom bar fills the space left of the
-    // inspector, which varies with resolution / uiscale -- so the graph width can't be the
+    // inspector, which varies with resolution / uiscale -- so the timeline width can't be the
     // fixed build-time W. Recompute the inner content width each render and restyle every
-    // width-dependent panel, then invalidate the diamond/curve caches so they relayout at the
-    // new W. Wrapped in try/catch: render() has no outer guard and a throw here would abort
+    // width-dependent panel, then invalidate the diamond cache so it relayouts at the new W.
+    // Wrapped in try/catch: render() has no outer guard and a throw here would abort
     // the whole render (which also drops the injected native-bar MOUSE / CAM EDITOR buttons).
     function applyLayout(contentW) {
       try {
@@ -532,14 +385,7 @@ R"TLJS(
         srow.style.width = contentW + 'px';
         diamWrap.style.width = contentW + 'px';
         scrub.style.width = contentW + 'px';
-        cv.style.width = contentW + 'px';
-        phrow.style.width = contentW + 'px';
-        phSlider.style.width = W + 'px';
-        graphArea.style.width = contentW + 'px';
-        for (var i = 0; i < laneGraphs.length; i++) laneGraphs[i].style.width = W + 'px';
-        var ceW = contentW - 210 - 80; if (ceW < 120) ceW = 120;
-        cevSlider.style.width = ceW + 'px';
-        lastTlSig = ''; lastRev = -1; lastView = ''; // force diamond + curve relayout at new W
+        lastTlSig = ''; // force diamond relayout at new W
       } catch (e) { $.Msg('[camtl] applyLayout error: ' + e + '\n'); }
     }
 
@@ -555,19 +401,25 @@ R"TLJS(
       var hosted = !!st.hosted;
       setGameHudHidden(hosted);
       closeBtn.visible = !hosted; // editor mode exits via its own "✕ Exit" button
+      graphBtn.visible = hosted;  // ...and switches back to the graph editor via this button
       // When hosted, this panel IS the editor's bottom bar under the preview. It fills the
       // entire width left of the inspector instead of floating as a card inside that bar.
       // Standalone timeline mode keeps the compact native-style card.
       if (hosted) {
-        var rsx = root.actualuiscale_x || 1;
-        var rw = (root.actuallayoutwidth || 0) / rsx;
-        var barW = (rw > EDITOR_INSPECTOR_W) ? Math.floor(rw - EDITOR_INSPECTOR_W) : (LABELW + W_DEFAULT + 28);
+        // Measure from the ALREADY-laid-out HUD context panel when our fresh root still reports 0
+        // (the first layout passes after a build / resolution switch) -- otherwise the hosted bar
+        // collapses to the compact fallback width and squishes for ~half a second until root
+        // settles. Only restyle once we actually have a sane full-screen width.
+        var rsx = root.actualuiscale_x || ctx.actualuiscale_x || 1;
+        var rawW = root.actuallayoutwidth || 0; if (rawW < 16) rawW = ctx.actuallayoutwidth || 0;
+        var rw = rawW / rsx;
+        var barW = (rw > EDITOR_INSPECTOR_W) ? Math.floor(rw - EDITOR_INSPECTOR_W) : 0;
+        if (barW <= 0) return; // no valid width yet: hold last-good layout, retry next frame
         panel.style.horizontalAlign = 'left';
         panel.style.marginLeft = '0px';
         panel.style.width = barW + 'px';
-        // fit-children (NOT a fixed height): compact in timeline view, grows to fit all 7
-        // lanes in curve view. CameraEditorJs reads this panel's actual height (#CamTimelineBar)
-        // to shrink the preview + letterbox the rest, so the two stay in sync automatically.
+        // fit-children (NOT a fixed height): CameraEditorJs reads this panel's actual height
+        // (#CamTimelineBar) to shrink the preview + letterbox the rest.
         panel.style.height = 'fit-children';
         panel.style.borderRadius = '0px';
         panel.style.border = '0px solid transparent';
@@ -584,7 +436,8 @@ R"TLJS(
         applyLayout(LABELW + W_DEFAULT); // restore the standalone default width
       }
 
-      curView = st.view || 'timeline';
+      var graphExp = !!st.graphExp;
+      graphExpActive = graphExp;
       var previewHidden = !!st.previewHudHidden;
       root.visible = !!st.open && !previewHidden;
       // Hide the native demo bar when our panel is open (it replaces it) or when
@@ -613,75 +466,28 @@ R"TLJS(
       } catch (speedErr) {}
 
       var freeze = (st.timing === 'Freeze');
-      tl.visible = (curView === 'timeline');
-      cv.visible = (curView === 'curve');
-      ctb.visible = (curView === 'curve');
-      viewBtn.__lbl.text = (curView === 'timeline') ? 'Curve Editor' : 'Timeline';
-      hTitle.text = (curView === 'timeline') ? 'CAMERA TIMELINE' : 'CAMERA CURVE EDITOR';
+      tl.visible = true;
+      hTitle.text = 'CAMERA TIMELINE';
       hInfo.text = 'tick ' + activeTick() + '   ·   ' + st.count + ' keys   ·   sel #'
         + (st.selected >= 0 ? (st.selected + 1) : '-') + '   ·   seg ' + (st.segment + 1)
         + '   ·   ' + st.interp + (st.scrubbing ? '   ·   SCRUBBING' : '');
       if (!clearConfirm) { clearBtn.__lbl.text = 'Clear'; clearBtn.__lbl.style.color = S.value; }
 
-      if (curView === 'timeline') {
-        var t0 = st.tickMin, t1 = st.tickMax; if (t1 <= t0) t1 = t0 + 1;
-        scrubT0 = t0; scrubT1 = t1;
-        var shownTick = activeTick();
-        if (!scrub.mousedown) {
-          scrubSyncing = true;
-          scrub.value = clamp01((shownTick - t0) / (t1 - t0)); // normalized; don't fight a drag
-          scrubSyncing = false;
-        }
-        if (st.count < 2) tReadout.text = 'Place 2+ camera markers (K or + Add), then drag to scrub';
-        else if (!scrub.mousedown) tReadout.text = 'tick ' + shownTick + '   time ' + (st.time != null ? st.time.toFixed(2) : '?') + 's';
-        syncTransportButton();
-        var sig = st.tickMin + ':' + st.tickMax + ':' + st.selected + ':' + (st.markers ? st.markers.map(function (m) { return m.tick; }).join(',') : '');
-        if (sig !== lastTlSig) { lastTlSig = sig; rebuildTimelineDiamonds(); }
+      var t0 = st.tickMin, t1 = st.tickMax; if (t1 <= t0) t1 = t0 + 1;
+      scrubT0 = t0; scrubT1 = t1;
+      var shownTick = activeTick();
+      if (!scrub.mousedown) {
+        scrubSyncing = true;
+        scrub.value = clamp01((shownTick - t0) / (t1 - t0)); // normalized; don't fight a drag
+        scrubSyncing = false;
       }
-
-      if (curView === 'curve') {
-        var rawc = root.GetAttributeString('curve', '');
-        if (rawc) { try { curve = JSON.parse(rawc); } catch (e2) { curve = null; } }
-        if (curve) {
-          var ct0 = curve.t0, ct1 = curve.t1; if (ct1 <= ct0) ct1 = ct0 + 1;
-          cInfo.text = 'view ' + ct0 + ' .. ' + ct1 + ' ticks   ·   Ctrl+Z undo';
-          if (curve.rev !== lastRev || lastView !== 'curve' || st.selected !== lastCurveSelected || selChannel !== lastCurveChannel) {
-            lastRev = curve.rev;
-            lastCurveSelected = st.selected;
-            lastCurveChannel = selChannel;
-            rebuildCurveLanes();
-          }
-          phT0 = ct0; phT1 = ct1;
-          var curveTick = activeTick();
-          if (!phSlider.mousedown) {
-            phSyncing = true;
-            phSlider.value = clamp01((curveTick - ct0) / (ct1 - ct0));
-            phSyncing = false;
-          }
-          phLine.style.position = (LABELW + frac(curveTick, ct0, ct1) * W).toFixed(1) + 'px 0px 0px';
-
-          // value editor for the selected key + channel
-          if (selChannel >= 0 && st.selected >= 0 && curve.lanes && curve.lanes[selChannel] && st.markers && st.markers[st.selected]) {
-            var lane = curve.lanes[selChannel];
-            var lo = lane.min, hi = lane.max; if (hi <= lo) hi = lo + 1;
-            var kv = st.markers[st.selected][CH[selChannel]];
-            ceLabel.text = 'Edit Key #' + (st.selected + 1) + ' · ' + CHLBL[selChannel];
-            if (!valueDragActive) {
-              valLo = lo; valHi = hi;
-              if (!cevSlider.mousedown) {
-                valueSyncing = true;
-                cevSlider.value = clamp01((kv - lo) / (hi - lo));
-                valueSyncing = false;
-              }
-            }
-            cevVal.text = kv.toFixed(2);
-            cedit.visible = true;
-          } else { cedit.visible = false; }
-        }
-      }
+      if (st.count < 2) tReadout.text = 'Place 2+ camera markers (K or + Add), then drag to scrub';
+      else if (!scrub.mousedown) tReadout.text = 'tick ' + shownTick + '   time ' + (st.time != null ? st.time.toFixed(2) : '?') + 's';
+      syncTransportButton();
+      var sig = st.tickMin + ':' + st.tickMax + ':' + st.selected + ':' + (st.markers ? st.markers.map(function (m) { return m.tick; }).join(',') : '');
+      if (sig !== lastTlSig) { lastTlSig = sig; rebuildTimelineDiamonds(); }
 
       updateKeys(freeze);
-      lastView = curView;
     };
 
     $.CamTimeline = api;
