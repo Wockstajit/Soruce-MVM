@@ -29,6 +29,15 @@ int main() {
 	Check(Near(north.yaw, 90.0), "look north");
 	const FollowAngles up = FollowLookAt({0, 0, 0}, {0, 0, 100});
 	Check(Near(up.pitch, -90.0), "look up");
+	const FollowAngles mounted = FollowAddAngles({10, 170, -175}, {5, 25, -20});
+	Check(Near(mounted.pitch, 15.0) && Near(mounted.yaw, -165.0) && Near(mounted.roll, 165.0),
+		"rigid attach angle trim wraps");
+	const FollowVec3 nearVerticalCamera{100, 20, 68};
+	const FollowVec3 nearVerticalTarget{100.001, 20, 60};
+	const FollowAngles singularLook = FollowLookAt(nearVerticalCamera, nearVerticalTarget);
+	const FollowAngles rigidNearVertical = FollowAddAngles({12, 45, 3}, {0, 10, 0});
+	Check(std::fabs(singularLook.pitch) > 85.0 && Near(rigidNearVertical.yaw, 55.0),
+		"rigid attach does not derive yaw from near-vertical look-at");
 
 	Check(Near(FollowHalfTimeAlpha(1.0, 1.0), 0.5), "half-time alpha");
 	const FollowAngles halfway = FollowSmoothAngles({0, 0, 0}, {0, 90, 0}, 1.0, 1.0, 0.0, 0.0);
@@ -51,6 +60,19 @@ int main() {
 	Check(Near(front.x, 72.0) && Near(front.y, 0.0) && Near(front.z, 8.0), "local front offset");
 	const FollowVec3 yawedFront = FollowRotateVector({72, 0, 0}, {0, 90, 0});
 	Check(Near(yawedFront.x, 0.0, 1e-5) && Near(yawedFront.y, 72.0, 1e-5), "local offset follows yaw");
+	const FollowVec3 localMount{32, -12, 7};
+	const FollowAngles mountAngles{15, 70, -20};
+	const FollowVec3 worldMount = FollowRotateVector(localMount, mountAngles);
+	const FollowVec3 recoveredMount = FollowInverseRotateVector(worldMount, mountAngles);
+	Check(Near(recoveredMount.x, localMount.x, 1e-5)
+		&& Near(recoveredMount.y, localMount.y, 1e-5)
+		&& Near(recoveredMount.z, localMount.z, 1e-5),
+		"local attach offset round-trips through inverse rotate");
+	const FollowVec3 steppedOffset = FollowRotateVector({40, 0, 0}, {0, 0, 0});
+	const FollowVec3 localRebase = FollowInverseRotateVector(steppedOffset, {0, 0, 0});
+	const FollowVec3 freshOffset = FollowRotateVector(localRebase, {0, 90, 0});
+	Check(Near(freshOffset.x, 0.0, 1e-5) && Near(freshOffset.y, 40.0, 1e-5),
+		"render-time attach rebase rotates local offset with fresh mount orientation");
 	const FollowVec3 target{100, 20, 60};
 	const FollowVec3 camera{172, 20, 68};
 	const FollowAngles backAtTarget = FollowLookAt(camera, target);

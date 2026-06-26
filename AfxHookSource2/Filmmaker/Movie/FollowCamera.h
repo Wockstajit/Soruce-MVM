@@ -144,6 +144,7 @@ public:
 	void BeginReposition();
 	void PlaceReposition();
 	void CancelReposition();
+	bool CaptureAttachPoseFromCurrentView();
 	void ClearCamera();
 	void Preview();
 	void StopPreview(const char* reason = nullptr);
@@ -174,6 +175,16 @@ public:
 	void SetSwitchToDroppedBomb(bool value) { m_state.switchToDroppedBombOnDeath = value; }
 	void SetHoldLastKnown(bool value) { m_state.holdLastKnownPosition = value; }
 	void SetDebug(bool value) { m_debug = value; }
+	void SetRenderTimeSample(bool value) { m_renderTimeSample = value; }
+	bool RenderTimeSample() const { return m_renderTimeSample; }
+
+	// Called from the view-setup trampoline (runs DURING rendering, after the client interpolates
+	// entities). When an attach preview is active it RE-SAMPLES the target at render time -- the
+	// interpolated pose the model is actually drawn at, not the tick-stepped pose RunFrame read at
+	// FrameStageNotify -- and rebases the camera onto it, which removes the ride-along jitter.
+	// Returns true (and writes the view) only when m_renderTimeSample is on and a target is live.
+	bool ViewSetupAttachOverride(float curTime,
+		double& x, double& y, double& z, double& pitch, double& yaw, double& roll, double& fov);
 
 	// Attach mode rides the target and needs no placed camera; lock-on requires Place.
 	bool OwnsView() const { return m_state.enabled && (m_state.hasCamera || m_state.mode == FollowMode::Attach); }
@@ -218,6 +229,19 @@ private:
 	int m_lastFrameTick = -1;    // last demo tick seen in RunFrame; used to detect a paused demo
 	FollowVec3 m_smoothedTarget;
 	FollowVec3 m_smoothedCamPos; // attach mode: smoothed camera position
+
+	// --- attach render-time rebase (jitter fix) ---
+	bool m_renderTimeSample = true;        // re-sample attach target at view setup (toggle: follow rtsample)
+	bool m_attachRebaseValid = false;      // RunFrame produced a usable attach pose this frame
+	FollowVec3 m_attachOffsetFromTarget;   // smoothedCam - steppedTarget; local-space when oriented
+	bool m_attachOffsetIsLocal = false;    // true when the offset should rotate with render-time base
+	FollowAngles m_attachBaseAngles;       // trim-free base used by RunFrame
+	FollowAngles m_attachAngleOffsetFromBase; // smoothed output - base, preserved across rebase
+	bool m_attachBaseOriented = false;     // angle rebase is valid only when RunFrame had orientation
+	FollowVec3 m_attachSteppedTarget;      // tick-stepped target RunFrame used (diagnostics)
+	FollowVec3 m_prevAttachFresh;          // previous render-time sample (frame-to-frame smoothness check)
+	bool m_havePrevAttachFresh = false;
+	unsigned m_debugViewFrame = 0;
 	FollowVec3 m_lastRawTarget;
 	FollowVec3 m_lastKnownTarget;
 	FollowVec3 m_targetVelocity;
@@ -233,6 +257,12 @@ private:
 	long long m_lastQpc = 0;
 	bool m_debug = false;
 	bool m_repositioning = false;
+	bool m_resumePreviewAfterReposition = false;
+	double m_lockOnLookSmoothing = 0.10;
+	double m_lockOnPositionSmoothing = 0.04;
+	double m_lockOnPrediction = 0.0;
+	double m_lockOnDeadzone = 0.0;
+	double m_lockOnMaxTurnSpeed = 720.0;
 	uint64_t m_selectedGrenadeHandle = 0;
 	bool m_grenadeTrackPending = false;
 	bool m_grenadeSeekObserved = false;

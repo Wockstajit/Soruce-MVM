@@ -17,6 +17,7 @@ struct FollowAngles {
 double FollowWrapDegrees(double value);
 double FollowHalfTimeAlpha(double halfTimeSeconds, double deltaSeconds);
 FollowAngles FollowLookAt(const FollowVec3& camera, const FollowVec3& target);
+FollowAngles FollowAddAngles(const FollowAngles& base, const FollowAngles& offset);
 
 // Convert an attachment/bone quaternion (x, y, z, w) to engine view angles
 // (pitch, yaw, roll in degrees). Used by rigid attach mode so the camera adopts
@@ -27,6 +28,7 @@ FollowAngles FollowQuatToAngles(double x, double y, double z, double w);
 // angles into world space. Lets an attach offset stay "behind the muzzle" /
 // "above the head" as the target turns, instead of being a fixed world vector.
 FollowVec3 FollowRotateVector(const FollowVec3& localOffset, const FollowAngles& angles);
+FollowVec3 FollowInverseRotateVector(const FollowVec3& worldOffset, const FollowAngles& angles);
 FollowAngles FollowSmoothAngles(
 	const FollowAngles& current,
 	const FollowAngles& desired,

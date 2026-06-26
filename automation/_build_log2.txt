@@ -1,0 +1,686 @@
+=== Closing any running CS2 / HLAE so the staged DLL is not locked ===
+Found cs2.exe - closing it.
+=== Locating Visual Studio 2022 ===
+Found: C:\Program Files\Microsoft Visual Studio\2022\Community
+=== Setting up build environment (x64) ===
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.34
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+=== Building HLAE (staging release) ===
+-- Staging config: Release
+-- Staging prefix: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release
+-- Staging configure mode: AUTO
+-- Staging x64 mode: 
+-- Using existing configure: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release
+-- Using existing configure: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/x64-release
+-- Running: C:/Program Files/CMake/bin/cmake.exe;--build;--preset;win32-release
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  Checking File Globs
+  Iex.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\Iex-3_3.dll
+  IlmThread.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\IlmThread-3_3.dll
+  Imath.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\Imath-3_1.dll
+  OpenEXRCore.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\OpenEXRCore-3_3.dll
+  OpenEXR.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\OpenEXR-3_3.dll
+  AfxHookGoldSrc.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\AfxHookGoldSrc\Release\AfxHookGoldSrc.dll
+  absl_log_severity.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_log_severity.lib
+  absl_raw_logging_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_raw_logging_internal.lib
+  absl_bad_optional_access.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\types\Release\absl_bad_optional_access.lib
+  absl_bad_variant_access.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\types\Release\absl_bad_variant_access.lib
+  absl_spinlock_wait.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_spinlock_wait.lib
+  absl_base.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_base.lib
+  absl_city.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\hash\Release\absl_city.lib
+  absl_civil_time.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\time\Release\absl_civil_time.lib
+  absl_crc_cpu_detect.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\crc\Release\absl_crc_cpu_detect.lib
+  absl_crc_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\crc\Release\absl_crc_internal.lib
+  absl_int128.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\numeric\Release\absl_int128.lib
+  absl_throw_delegate.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_throw_delegate.lib
+  absl_string_view.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_string_view.lib
+  absl_strings_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_strings_internal.lib
+  absl_strings.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_strings.lib
+  absl_str_format_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_str_format_internal.lib
+  absl_crc32c.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\crc\Release\absl_crc32c.lib
+  absl_crc_cord_state.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\crc\Release\absl_crc_cord_state.lib
+  absl_debugging_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_debugging_internal.lib
+  absl_cord_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cord_internal.lib
+  absl_exponential_biased.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\profiling\Release\absl_exponential_biased.lib
+  absl_cordz_functions.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cordz_functions.lib
+  absl_utf8_for_code_point.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_utf8_for_code_point.lib
+  absl_decode_rust_punycode.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_decode_rust_punycode.lib
+  absl_demangle_rust.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_demangle_rust.lib
+  absl_demangle_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_demangle_internal.lib
+  absl_malloc_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_malloc_internal.lib
+  absl_graphcycles_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\synchronization\Release\absl_graphcycles_internal.lib
+  absl_time_zone.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\time\Release\absl_time_zone.lib
+  absl_time.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\time\Release\absl_time.lib
+  absl_kernel_timeout_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\synchronization\Release\absl_kernel_timeout_internal.lib
+  absl_stacktrace.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_stacktrace.lib
+  absl_symbolize.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_symbolize.lib
+  absl_tracing_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_tracing_internal.lib
+  absl_synchronization.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\synchronization\Release\absl_synchronization.lib
+  absl_cordz_handle.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cordz_handle.lib
+  absl_cordz_info.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cordz_info.lib
+  absl_cord.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cord.lib
+  absl_examine_stack.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_examine_stack.lib
+  absl_low_level_hash.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\hash\Release\absl_low_level_hash.lib
+  absl_hash.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\hash\Release\absl_hash.lib
+  absl_log_entry.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_entry.lib
+  absl_log_internal_fnmatch.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_fnmatch.lib
+  absl_vlog_config_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_vlog_config_internal.lib
+  absl_log_globals.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_globals.lib
+  absl_log_internal_conditions.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_conditions.lib
+  absl_log_internal_globals.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_globals.lib
+  absl_log_internal_format.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_format.lib
+  absl_log_sink.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_sink.lib
+  absl_log_internal_log_sink_set.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_log_sink_set.lib
+  absl_log_internal_nullguard.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_nullguard.lib
+  absl_log_internal_proto.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_proto.lib
+  absl_log_internal_structured_proto.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_structured_proto.lib
+  absl_strerror.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_strerror.lib
+  absl_log_internal_message.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_message.lib
+  absl_die_if_null.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_die_if_null.lib
+  absl_flags_commandlineflag_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_commandlineflag_internal.lib
+  absl_flags_commandlineflag.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_commandlineflag.lib
+  absl_flags_program_name.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_program_name.lib
+  absl_flags_config.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_config.lib
+  absl_flags_marshalling.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_marshalling.lib
+  absl_flags_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_internal.lib
+  absl_flags_private_handle_accessor.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_private_handle_accessor.lib
+  absl_hashtablez_sampler.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\container\Release\absl_hashtablez_sampler.lib
+  absl_raw_hash_set.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\container\Release\absl_raw_hash_set.lib
+  absl_flags_reflection.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_reflection.lib
+  absl_leak_check.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_leak_check.lib
+  absl_log_initialize.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_initialize.lib
+  absl_log_internal_check_op.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_internal_check_op.lib
+  absl_random_distributions.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_distributions.lib
+  absl_random_internal_platform.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_platform.lib
+  absl_random_internal_randen_hwaes_impl.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_randen_hwaes_impl.lib
+  absl_random_internal_randen_hwaes.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_randen_hwaes.lib
+  absl_random_internal_randen_slow.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_randen_slow.lib
+  absl_random_internal_randen.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_randen.lib
+  absl_random_internal_seed_material.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_seed_material.lib
+  absl_random_seed_gen_exception.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_seed_gen_exception.lib
+  absl_random_internal_pool_urbg.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_pool_urbg.lib
+  absl_random_seed_sequences.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_seed_sequences.lib
+  absl_status.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\status\Release\absl_status.lib
+  absl_statusor.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\status\Release\absl_statusor.lib
+  utf8_validity.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\third_party\utf8_range\Release\libutf8_validity.lib
+  libprotobuf.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\libprotobuf.lib
+  utf8_range.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\third_party\utf8_range\Release\libutf8_range.lib
+  libupb.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\libupb.lib
+  libprotoc.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\libprotoc.lib
+  protoc.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\protoc.exe
+  AfxHookSourceProtobufs.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\AfxHookSource\AfxHookSourceProtobufs.dir\Release\AfxHookSourceProtobufs.lib
+  Generating ShaderBuilder.exe
+  MSBuild version 17.14.40+3e7442088 for .NET Framework
+  Build started 6/25/2026 7:26:17 PM.
+  
+  Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" on node 1 (Restore target(s)).
+  _GetAllRestoreProjectPathItems:
+    Determining projects to restore...
+  Restore:
+    X.509 certificate chain validation will use the default trust store selected by .NET for code signing.
+    X.509 certificate chain validation will use the default trust store selected by .NET for timestamping.
+    Assets file has not changed. Skipping assets file writing. Path: C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\project.assets.json
+    Restored C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj (in 43 ms).
+    
+    NuGet Config files used:
+        C:\Users\ayden\AppData\Roaming\NuGet\NuGet.Config
+        C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config
+    
+    Feeds used:
+        https://www.nuget.org/api/v2
+        C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+    All projects are up-to-date for restore.
+  Done Building Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" (Restore target(s)).
+  Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" on node 1 (default targets).
+  GenerateBindingRedirectsUpdateAppConfig:
+    Copying file from "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\App.config" to "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\x64\Release\ShaderBuilder.exe.config".
+    Touching "obj\x64\Release\ShaderBuilder.exe.config".
+  GenerateTargetFrameworkMonikerAttribute:
+  Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+  CoreCompile:
+  Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+  _CopyAppConfigFile:
+    Copying file from "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\x64\Release\ShaderBuilder.exe.config" to "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\ShaderBuilder\ShaderBuilder.exe.config".
+  CopyFilesToOutputDirectory:
+    shaderbuilder -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\ShaderBuilder\ShaderBuilder.exe
+  Done Building Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" (default targets).
+  
+  Build succeeded.
+      0 Warning(s)
+      0 Error(s)
+  
+  Time Elapsed 00:00:00.46
+  AfxHookSource.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\AfxHookSource\Release\AfxHookSource.dll
+  OpenEXRUtil.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\bin\Release\OpenEXRUtil-3_3.dll
+  absl_bad_any_cast_impl.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\types\Release\absl_bad_any_cast_impl.lib
+  absl_cordz_sample_token.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\strings\Release\absl_cordz_sample_token.lib
+  absl_failure_signal_handler.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\debugging\Release\absl_failure_signal_handler.lib
+  absl_flags_usage_internal.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_usage_internal.lib
+  absl_flags_usage.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_usage.lib
+  absl_flags_parse.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\flags\Release\absl_flags_parse.lib
+  absl_log_flags.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\log\Release\absl_log_flags.lib
+  absl_periodic_sampler.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\profiling\Release\absl_periodic_sampler.lib
+  absl_poison.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_poison.lib
+  absl_random_internal_distribution_test_util.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\random\Release\absl_random_internal_distribution_test_util.lib
+  absl_scoped_set_env.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\absl-build\absl\base\Release\absl_scoped_set_env.lib
+  libprotobuf-lite.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\libprotobuf-lite.lib
+  protoc-gen-upb.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\protoc-gen-upb.exe
+  protoc-gen-upbdefs.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\win32-release\_deps\protobuf-build\Release\protoc-gen-upbdefs.exe
+-- Running: C:/Program Files/CMake/bin/cmake.exe;--build;--preset;x64-release
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  Checking File Globs
+  Generating ShaderBuilder.exe
+  MSBuild version 17.14.40+3e7442088 for .NET Framework
+  Build started 6/25/2026 7:26:20 PM.
+  
+  Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" on node 1 (Restore target(s)).
+  _GetAllRestoreProjectPathItems:
+    Determining projects to restore...
+  Restore:
+    X.509 certificate chain validation will use the default trust store selected by .NET for code signing.
+    X.509 certificate chain validation will use the default trust store selected by .NET for timestamping.
+    Assets file has not changed. Skipping assets file writing. Path: C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\project.assets.json
+    Restored C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj (in 42 ms).
+    
+    NuGet Config files used:
+        C:\Users\ayden\AppData\Roaming\NuGet\NuGet.Config
+        C:\Program Files (x86)\NuGet\Config\Microsoft.VisualStudio.Offline.config
+    
+    Feeds used:
+        https://www.nuget.org/api/v2
+        C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+    All projects are up-to-date for restore.
+  Done Building Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" (Restore target(s)).
+  Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" on node 1 (default targets).
+  GenerateBindingRedirectsUpdateAppConfig:
+    Copying file from "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\App.config" to "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\x64\Release\ShaderBuilder.exe.config".
+    Touching "obj\x64\Release\ShaderBuilder.exe.config".
+  GenerateTargetFrameworkMonikerAttribute:
+  Skipping target "GenerateTargetFrameworkMonikerAttribute" because all output files are up-to-date with respect to the input files.
+  CoreCompile:
+  Skipping target "CoreCompile" because all output files are up-to-date with respect to the input files.
+  _CopyAppConfigFile:
+    Copying file from "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\obj\x64\Release\ShaderBuilder.exe.config" to "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\ShaderBuilder\ShaderBuilder.exe.config".
+  CopyFilesToOutputDirectory:
+    shaderbuilder -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\ShaderBuilder\ShaderBuilder.exe
+  Done Building Project "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\ShaderBuilder\shaderbuilder.csproj" (default targets).
+  
+  Build succeeded.
+      0 Warning(s)
+      0 Error(s)
+  
+  Time Elapsed 00:00:00.48
+  Iex.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\Iex-3_3.dll
+  IlmThread.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\IlmThread-3_3.dll
+  Imath.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\Imath-3_1.dll
+  OpenEXRCore.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\OpenEXRCore-3_3.dll
+  OpenEXR.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\OpenEXR-3_3.dll
+  AfxHookSource.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\AfxHookSource\Release\AfxHookSource.dll
+      Finished `release-hook` profile [optimized] target(s) in 0.27s
+  Copying byproducts `afx_hook_source2.lib` to C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/x64-release
+  AfxHookSource2.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\AfxHookSource2\Release\AfxHookSource2.dll
+  FollowCameraMathTests.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\AfxHookSource2\Release\FollowCameraMathTests.exe
+  OpenEXRUtil.vcxproj -> C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\x64-release\bin\Release\OpenEXRUtil-3_3.dll
+-- Running: C:/Program Files/CMake/bin/cmake.exe;--install;build/win32-release;--config;Release;--prefix;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release
+-- Installing: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/lib/pkgconfig/Imath.pc
+-- Installing: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/lib/pkgconfig/OpenEXR.pc
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/msvcp140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/msvcp140_1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/msvcp140_2.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/msvcp140_atomic_wait.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/msvcp140_codecvt_ids.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/vcruntime140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/concrt140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/API-MS-Win-core-xstate-l2-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-console-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-console-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-datetime-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-debug-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-errorhandling-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-fibers-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-fibers-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-file-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-file-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-file-l2-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-handle-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-heap-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-interlocked-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-kernel32-legacy-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-libraryloader-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-localization-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-memory-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-namedpipe-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-processenvironment-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-processthreads-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-processthreads-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-profile-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-rtlsupport-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-string-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-synch-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-synch-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-sysinfo-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-sysinfo-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-timezone-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-core-util-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-conio-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-convert-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-environment-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-filesystem-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-heap-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-locale-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-math-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-multibyte-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-private-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-process-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-runtime-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-stdio-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-string-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-time-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/api-ms-win-crt-utility-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/ucrtbase.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/vccorlib140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/AfxCppCli.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/AfxHookGoldSrc.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/AfxHookSource.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/HLAE.exe
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/NGettext.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/injector.exe
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/Iex-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/IlmThread-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/Imath-3_1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/OpenEXR-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/OpenEXRCore-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/AfxHook.dat
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/AfxCppCli.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/AfxHookGoldSrc.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/AfxHookSource.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/HLAE.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/injector.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/injector.exe
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/AfxHook.dat
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/x64/injector.pdb
+-- Running: C:/Program Files/CMake/bin/cmake.exe;--install;build/x64-release;--config;Release;--prefix;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release
+-- Installing: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/lib/pkgconfig/Imath.pc
+-- Installing: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/lib/pkgconfig/OpenEXR.pc
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/msvcp140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/msvcp140_1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/msvcp140_2.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/msvcp140_atomic_wait.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/msvcp140_codecvt_ids.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/vcruntime140_1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/vcruntime140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/concrt140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-console-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-console-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-datetime-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-debug-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-errorhandling-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-fibers-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-fibers-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-file-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-file-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-file-l2-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-handle-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-heap-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-interlocked-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-kernel32-legacy-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-libraryloader-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-localization-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-memory-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-namedpipe-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-processenvironment-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-processthreads-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-processthreads-l1-1-1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-profile-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-rtlsupport-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-string-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-synch-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-synch-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-sysinfo-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-sysinfo-l1-2-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-timezone-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-core-util-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-conio-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-convert-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-environment-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-filesystem-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-heap-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-locale-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-math-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-multibyte-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-private-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-process-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-runtime-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-stdio-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-string-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-time-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/api-ms-win-crt-utility-l1-1-0.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/ucrtbase.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/vccorlib140.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/Iex-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/IlmThread-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/Imath-3_1.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/OpenEXR-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/OpenEXRCore-3_3.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/AfxHookSource.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/x64/AfxHookSource2.dll
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/x64/AfxHookSource.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/pdb/x64/AfxHookSource2.pdb
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_aim.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_fov.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_point.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_spec_lock.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_view.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/mirv_script_voice.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/quit-when-demo-is-paused.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/tests
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/tests/attachment-test.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/tests/cvars-test.js
+-- Up-to-date: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/resources/AfxHookSource2/snippets/tests/observer-test.js
+-- Running: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/copy_resources_release.bat;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "resources\*" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin" /D /E /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "deps\release\Detours\LICENSE.md" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\LICENSES\Detours\" /D /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "deps\release\rapidxml\license.txt" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\LICENSES\rapidxml\" /D /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "deps\release\easywsclient\COPYING" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\LICENSES\easywsclient\" /D /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "misc\THIRDPARTY.yml" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\LICENSES\advancedfx\" /D /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\LICENSES\advancedfx\" /D /Y 
+Invalid drive specification
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>xcopy "shaders\build\*.acs" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\resources\shaders\" /D /Y 
+0 File(s) copied
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\make_readme.py" "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin" 
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/corrosion
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/x64-release/_deps/corrosion-src/LICENSE;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/corrosion
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/deflate
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release/_deps/deflate-src/COPYING;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/deflate
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/imath
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release/_deps/imath-src/LICENSE.md;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/imath
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/openexr
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release/_deps/openexr-src/LICENSE.md;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/openexr
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/absl
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release/_deps/absl-src/LICENSE;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/absl
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;make_directory;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/protobuf
+-- Running: C:/Program Files/CMake/bin/cmake.exe;-E;copy;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/win32-release/_deps/protobuf-src/LICENSE;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin/LICENSES/protobuf
+-- Running: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/l10n_update_to_source.bat;C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin
+Requires GNU gettext for Windows to be installed.
+"Project: hlae"
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>mkdir "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\locales" 
+A subdirectory or file C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\locales already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>cd "C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release/bin\locales" 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>for %l in (de fi fr-FR hu it ja nl pl pt-BR pt-PT ru zh-CN) do (
+mkdir "%l\hlae"  
+ cd "%l\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\%l\hlae\messages.po"  
+ cd ..\.. 
+) 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "de\hlae"  
+ cd "de\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\de\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file de\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "fi\hlae"  
+ cd "fi\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\fi\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file fi\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "fr-FR\hlae"  
+ cd "fr-FR\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\fr-FR\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file fr-FR\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "hu\hlae"  
+ cd "hu\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\hu\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file hu\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "it\hlae"  
+ cd "it\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\it\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file it\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "ja\hlae"  
+ cd "ja\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\ja\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file ja\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "nl\hlae"  
+ cd "nl\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\nl\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file nl\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "pl\hlae"  
+ cd "pl\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\pl\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file pl\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "pt-BR\hlae"  
+ cd "pt-BR\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\pt-BR\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file pt-BR\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "pt-PT\hlae"  
+ cd "pt-PT\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\pt-PT\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file pt-PT\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "ru\hlae"  
+ cd "ru\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\ru\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file ru\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>(
+mkdir "zh-CN\hlae"  
+ cd "zh-CN\hlae"  
+ msgfmt --output-file=messages.mo "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\deps\release\l10n\locales\zh-CN\hlae\messages.po"  
+ cd ..\.. 
+) 
+A subdirectory or file zh-CN\hlae already exists.
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\locales>cd "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\" 
+"Installing Python 3 polib ..."
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>py -3 -m pip install polib 
+Requirement already satisfied: polib in C:\Users\ayden\AppData\Local\Programs\Python\Python311\Lib\site-packages (1.2.0)
+
+[notice] A new release of pip is available: 26.1 -> 26.1.2
+[notice] To update, run: python.exe -m pip install --upgrade pip
+"Project : installer\shared\Dependency"
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>cd installer\shared\Dependency 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\de\installer\shared\Dependency\messages.po" lang/de-DE.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fi\installer\shared\Dependency\messages.po" lang/fi-FI.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fr-FR\installer\shared\Dependency\messages.po" lang/fr-FR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\hu\installer\shared\Dependency\messages.po" lang/hu-HU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\it\installer\shared\Dependency\messages.po" lang/it-IT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ja\installer\shared\Dependency\messages.po" lang/ja-JP.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\nl\installer\shared\Dependency\messages.po" lang/nl-NL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pl\installer\shared\Dependency\messages.po" lang/pl-PL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-BR\installer\shared\Dependency\messages.po" lang/pt-BR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-PT\installer\shared\Dependency\messages.po" lang/pt-PT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ru\installer\shared\Dependency\messages.po" lang/ru-RU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\tr\installer\shared\Dependency\messages.po" lang/tr-TR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\zh-CN\installer\shared\Dependency\messages.po" lang/zh-CN.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\shared\Dependency>cd ..\..\.. 
+"Project : installer\HlaeFfmpeg"
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>cd installer\HlaeFfmpeg 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\de\installer\HlaeFfmpeg\messages.po" lang/de-DE.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fi\installer\HlaeFfmpeg\messages.po" lang/fi-FI.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fr-FR\installer\HlaeFfmpeg\messages.po" lang/fr-FR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\hu\installer\HlaeFfmpeg\messages.po" lang/hu-HU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\it\installer\HlaeFfmpeg\messages.po" lang/it-IT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ja\installer\HlaeFfmpeg\messages.po" lang/ja-JP.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\nl\installer\HlaeFfmpeg\messages.po" lang/nl-NL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pl\installer\HlaeFfmpeg\messages.po" lang/pl-PL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-BR\installer\HlaeFfmpeg\messages.po" lang/pt-BR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-PT\installer\HlaeFfmpeg\messages.po" lang/pt-PT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ru\installer\HlaeFfmpeg\messages.po" lang/ru-RU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\tr\installer\HlaeFfmpeg\messages.po" lang/tr-TR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\zh-CN\installer\HlaeFfmpeg\messages.po" lang/zh-CN.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeFfmpeg>cd ..\.. 
+"Project : installer\HlaeCore"
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>cd installer\HlaeCore 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\de\installer\HlaeCore\messages.po" lang/de-DE.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fi\installer\HlaeCore\messages.po" lang/fi-FI.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fr-FR\installer\HlaeCore\messages.po" lang/fr-FR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\hu\installer\HlaeCore\messages.po" lang/hu-HU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\it\installer\HlaeCore\messages.po" lang/it-IT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ja\installer\HlaeCore\messages.po" lang/ja-JP.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\nl\installer\HlaeCore\messages.po" lang/nl-NL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pl\installer\HlaeCore\messages.po" lang/pl-PL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-BR\installer\HlaeCore\messages.po" lang/pt-BR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-PT\installer\HlaeCore\messages.po" lang/pt-PT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ru\installer\HlaeCore\messages.po" lang/ru-RU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\tr\installer\HlaeCore\messages.po" lang/tr-TR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\zh-CN\installer\HlaeCore\messages.po" lang/zh-CN.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\HlaeCore>cd ..\.. 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>echo "Project : installer\setup" 
+"Project : installer\setup"
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker>cd installer\setup 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\de\installer\setup\messages.po" lang/HyperlinkTheme_de-DE.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fi\installer\setup\messages.po" lang/HyperlinkTheme_fi-FI.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\fr-FR\installer\setup\messages.po" lang/HyperlinkTheme_fr-FR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\hu\installer\setup\messages.po" lang/HyperlinkTheme_hu-HU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\it\installer\setup\messages.po" lang/HyperlinkTheme_it-IT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ja\installer\setup\messages.po" lang/HyperlinkTheme_ja-JP.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\nl\installer\setup\messages.po" lang/HyperlinkTheme_nl-NL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pl\installer\setup\messages.po" lang/HyperlinkTheme_pl-PL.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-BR\installer\setup\messages.po" lang/HyperlinkTheme_pt-BR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\pt-PT\installer\setup\messages.po" lang/HyperlinkTheme_pt-PT.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\ru\installer\setup\messages.po" lang/HyperlinkTheme_ru-RU.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\tr\installer\setup\messages.po" lang/HyperlinkTheme_tr-TR.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>py -3 "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\dev\wxl-po-tools\po2wxl.py" -f -p -1 -l LangId "C:\Users\ayden\Documents\Github Projects\cs2 filmaker\\deps\release\l10n\locales\zh-CN\installer\setup\messages.po" lang/HyperlinkTheme_zh-CN.wxl 
+
+C:\Users\ayden\Documents\Github Projects\cs2 filmaker\installer\setup>cd ..\.. 
+-- Staging ready: C:/Users/ayden/Documents/Github Projects/cs2 filmaker/build/staging-release
+
+=== Building FilmmakerDemoInfo helper (.dem -> scoreboard JSON, Go/demoinfocs) ===
+
+=== BUILD OK ===
+Output: C:\Users\ayden\Documents\Github Projects\cs2 filmaker\build\staging-release\bin\HLAE.exe
+Starting live dashboard / CS2 in 1 second...
+ERROR: Input redirection is not supported, exiting the process immediately.
+Checking for existing live dashboard on port 8765 ...
+WARNING: could not request shutdown for an existing dashboard on port 8765.
+Launching CS2 with netcon at 1600x1200 on port 29010 ...
+Launching CS2 (hook + netconport 29010, 1600x1200 windowed)...
+Waiting for CS2 window and netcon readiness...
+CS2 is responsive; allowing 10 seconds for the main menu/game loop to settle...
+CS2 automation-ready at 1600x1200 windowed on netcon 29010. Artifacts: C:\Users\ayden\Documents\Github Projects\cs2 filmaker\automation\runs\launch-cs2\20260625-192639-001
+=== CS2 live dashboard ===
+  netcon : 127.0.0.1:29010
+  browser: http://localhost:8765/   (opening...)
+  Stop with Ctrl+C in this window.

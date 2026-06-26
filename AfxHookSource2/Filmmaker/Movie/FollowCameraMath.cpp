@@ -30,6 +30,14 @@ FollowAngles FollowLookAt(const FollowVec3& camera, const FollowVec3& target) {
 	return out;
 }
 
+FollowAngles FollowAddAngles(const FollowAngles& base, const FollowAngles& offset) {
+	return FollowAngles{
+		FollowWrapDegrees(base.pitch + offset.pitch),
+		FollowWrapDegrees(base.yaw + offset.yaw),
+		FollowWrapDegrees(base.roll + offset.roll)
+	};
+}
+
 namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kRad2Deg = 180.0 / kPi;
@@ -63,6 +71,22 @@ FollowVec3 FollowRotateVector(const FollowVec3& localOffset, const FollowAngles&
 		forward.x * localOffset.x + right.x * localOffset.y + up.x * localOffset.z,
 		forward.y * localOffset.x + right.y * localOffset.y + up.y * localOffset.z,
 		forward.z * localOffset.x + right.z * localOffset.y + up.z * localOffset.z
+	};
+}
+
+FollowVec3 FollowInverseRotateVector(const FollowVec3& worldOffset, const FollowAngles& angles) {
+	// Inverse of FollowRotateVector. The forward/right/up basis is orthonormal, so the inverse
+	// transform is the dot product of the world offset against each local axis.
+	const double sp = std::sin(angles.pitch * kDeg2Rad), cp = std::cos(angles.pitch * kDeg2Rad);
+	const double sy = std::sin(angles.yaw * kDeg2Rad), cy = std::cos(angles.yaw * kDeg2Rad);
+	const double sr = std::sin(angles.roll * kDeg2Rad), cr = std::cos(angles.roll * kDeg2Rad);
+	const FollowVec3 forward{ cp * cy, cp * sy, -sp };
+	const FollowVec3 right{ -sr * sp * cy + cr * sy, -sr * sp * sy - cr * cy, -sr * cp };
+	const FollowVec3 up{ cr * sp * cy + sr * sy, cr * sp * sy - sr * cy, cr * cp };
+	return FollowVec3{
+		worldOffset.x * forward.x + worldOffset.y * forward.y + worldOffset.z * forward.z,
+		worldOffset.x * right.x + worldOffset.y * right.y + worldOffset.z * right.z,
+		worldOffset.x * up.x + worldOffset.y * up.y + worldOffset.z * up.z
 	};
 }
 

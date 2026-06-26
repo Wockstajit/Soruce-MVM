@@ -1,6 +1,7 @@
 #include "CameraPath.h"
 
 #include "CameraBridge.h"
+#include "FollowCamera.h"
 #include "../Filmmaker.h"            // PlayingDemoPath(), CurrentDemoPath()
 #include "../Demo/PlayingDemoPath.h" // CanonicalDemoPath()
 #include "../Panorama/GraphEditorExperimentHud.h"
@@ -142,10 +143,10 @@ void CameraPath::RebuildCamPath() {
 }
 
 void CameraPath::EnsureDrawState() {
-	// Show the in-world path visuals (markers/lines/cones/glow) while EDITING, but hide
-	// every one of them while the camera path is actively PLAYING so the test/preview is a
-	// clean shot. Master m_Draw flag gates the whole drawer, so this hides all of it.
-	bool want = !m_data.Empty() && GetMode() != Mode::PreviewPlaying;
+	// Show in-world path visuals while editing, but hide them while any live camera owns the
+	// shot. Master m_Draw gates the shared drawer, so this removes path gizmos for path playback
+	// and for Follow/Attach live previews.
+	bool want = !m_data.Empty() && GetMode() != Mode::PreviewPlaying && !FollowCameraRef().OwnsView();
 	if (want != m_drawOn) {
 		CameraBridge_SetPathDrawEnabled(want);
 		m_drawOn = want;

@@ -451,7 +451,7 @@ void DoFollow(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	Filmmaker::FollowCamera& follow = Filmmaker::FollowCameraRef();
 	if (argc < 3) {
 		advancedfx::Message(
-			"%s follow place|reposition|clear|preview|stop|status.\n"
+			"%s follow place|reposition|attachcapture|clear|preview|stop|status.\n"
 			"%s follow type player|grenade|weapon  (weapon covers held/dropped weapons + C4).\n"
 			"%s follow mode lockon|attach | weaponsource auto|held|dropped.\n"
 			"%s follow nearest | select <entityIndex> | selecthandle <handle> | trackgrenade.\n"
@@ -472,6 +472,7 @@ void DoFollow(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	else if (0 == _stricmp(action, "reposition")) follow.BeginReposition();
 	else if (0 == _stricmp(action, "repositionplace")) follow.PlaceReposition();
 	else if (0 == _stricmp(action, "repositioncancel")) follow.CancelReposition();
+	else if (0 == _stricmp(action, "attachcapture")) follow.CaptureAttachPoseFromCurrentView();
 	else if (0 == _stricmp(action, "clear")) follow.ClearCamera();
 	else if (0 == _stricmp(action, "preview") || 0 == _stricmp(action, "play")) follow.Preview();
 	else if (0 == _stricmp(action, "stop")) follow.StopPreview("user");
@@ -535,6 +536,7 @@ void DoFollow(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	else if (0 == _stricmp(action, "hold")) follow.SetHoldLastKnown(atoi(a3) != 0);
 	else if (0 == _stricmp(action, "attachment")) follow.SetAttachmentName(a3);
 	else if (0 == _stricmp(action, "debug")) follow.SetDebug(atoi(a3) != 0);
+	else if (0 == _stricmp(action, "rtsample")) follow.SetRenderTimeSample(argc >= 4 ? atoi(a3) != 0 : true);
 	else advancedfx::Warning("%s follow: unknown action '%s'\n", cmd, action);
 }
 

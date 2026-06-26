@@ -169,6 +169,9 @@ std::string CameraEditorHud::BuildStateJson() {
 	const int n = (int)mk.size();
 	const int sel = cp.Selected();
 	const bool selValid = (sel >= 0 && sel < n);
+	const CameraPath::Mode pathMode = cp.GetMode();
+	const bool pathPlaying = cp.IsPlaying() || cp.PlaybackPending();
+	const bool pathLive = pathPlaying || pathMode == CameraPath::Mode::PreviewPlaying;
 
 	int curTick = 0; g_MirvTime.GetCurrentDemoTick(curTick);
 	double curTime = 0.0; g_MirvTime.GetCurrentDemoTime(curTime);
@@ -214,6 +217,9 @@ std::string CameraEditorHud::BuildStateJson() {
 	o << ",\"interp\":\"" << cp.InterpName() << "\"";
 	o << ",\"timing\":\"" << cp.TimingName() << "\"";
 	o << ",\"speedMode\":\"" << cp.SpeedModeName() << "\"";
+	o << ",\"pathMode\":\"" << cp.ModeName() << "\"";
+	o << ",\"pathPlaying\":" << (pathPlaying ? "true" : "false");
+	o << ",\"pathLive\":" << (pathLive ? "true" : "false");
 	o << ",\"timelineView\":\"" << (tl.View() == 1 ? "curve" : "timeline") << "\"";
 	o << ",\"constSpeed\":" << r2(cp.ConstSpeed());
 	o << ",\"freeCam\":" << (CameraBridge_GetFreeCamEnabled() ? "true" : "false");

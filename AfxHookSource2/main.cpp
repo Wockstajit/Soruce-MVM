@@ -16,6 +16,7 @@
 #include "DeathMsg.h"
 #include "Filmmaker/Filmmaker.h"
 #include "Filmmaker/Movie/CameraBridge.h"
+#include "Filmmaker/Movie/FollowCamera.h"
 #include "ReplaceName.h"
 #include "SchemaSystem.h"
 #include "SceneSystem.h"
@@ -889,6 +890,18 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 
 	const bool inputOverride = g_MirvInputEx.m_MirvInput->Override(camDeltaT, Tx,Ty,Tz,Rx,Ry,Rz,Fov);
 	if(inputOverride) originOrAnglesOverriden = true;
+
+	// Attach-camera anti-jitter: re-sample the ridden target HERE (entities are interpolated at view
+	// setup) and rebase the camera, instead of using the tick-stepped pose computed at
+	// FrameStageNotify. No-op unless an attach preview is active and render-time sampling is on.
+	{
+		double ax = Tx, ay = Ty, az = Tz, ap = Rx, aya = Ry, ar = Rz, af = Fov;
+		if (Filmmaker::FollowCameraRef().ViewSetupAttachOverride(curTime, ax, ay, az, ap, aya, ar, af)) {
+			Tx = (float)ax; Ty = (float)ay; Tz = (float)az;
+			Rx = (float)ap; Ry = (float)aya; Rz = (float)ar; Fov = (float)af;
+			originOrAnglesOverriden = true;
+		}
+	}
 
 	if(g_b_on_c_view_render_setup_view) {
 		AfxHookSourceRsView currentView = {Tx,Ty,Tz,Rx,Ry,Rz,Fov};

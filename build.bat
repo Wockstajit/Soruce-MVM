@@ -14,6 +14,21 @@ set "NoDefaultCurrentDirectoryInExePath="
 REM Ensure Rust/Cargo, gettext and Go are reachable for the build.
 set "PATH=%USERPROFILE%\.cargo\bin;%LOCALAPPDATA%\Programs\gettext-iconv\bin;%ProgramFiles%\Go\bin;%PATH%"
 
+REM ------------------------------------------------------------
+REM  Close any running CS2 / HLAE FIRST. The staged AfxHookSource2.dll is loaded
+REM  into cs2.exe while the game runs, so the build's install/copy step fails with
+REM  "cannot copy file ... being used by another process" unless we free it here.
+REM ------------------------------------------------------------
+echo === Closing any running CS2 / HLAE so the staged DLL is not locked ===
+tasklist /fi "imagename eq cs2.exe" 2>nul | find /i "cs2.exe" >nul
+if not errorlevel 1 (
+    echo Found cs2.exe - closing it.
+    taskkill /f /im cs2.exe >nul 2>nul
+)
+taskkill /f /im hlae.exe >nul 2>nul
+REM Give Windows a moment to release the AfxHookSource2.dll file handle before copying over it.
+ping -n 3 127.0.0.1 >nul
+
 echo === Locating Visual Studio 2022 ===
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (

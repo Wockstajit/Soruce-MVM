@@ -603,6 +603,10 @@ void FollowCamera::ResetMotion() {
 	m_deathRetargetElapsed = 0.0;
 	m_lastQpc = 0;
 	m_attachDebug = AttachDebugSnapshot();
+	m_attachRebaseValid = false;
+	m_attachBaseOriented = false;
+	m_attachOffsetIsLocal = false;
+	m_havePrevAttachFresh = false;
 	m_havePrevDebug = false;
 }
 
@@ -627,17 +631,47 @@ void FollowCamera::PlaceCamera() {
 }
 
 void FollowCamera::BeginReposition() {
+	if (m_state.mode == FollowMode::Attach) {
+		const bool haveTarget = m_state.targetEntityIndex >= 0
+			|| (m_state.targetType == FollowTargetType::Weapon && m_state.weaponPlayerIndex >= 0)
+			|| (m_state.targetType == FollowTargetType::Grenade && m_state.targetHandle);
+		if (!haveTarget) {
+			advancedfx::Warning("[followcam] attach reposition refused: select a target first.\n");
+			m_lastMessage = "Select a target before repositioning attach.";
+			return;
+		}
+	}
+	m_resumePreviewAfterReposition = m_state.enabled && m_state.mode == FollowMode::Attach;
 	StopPreview("reposition started");
 	m_repositioning = true;
 	CameraBridge_SetFreeCamEnabled(true);
 	if (CameraEditor_Active())
 		CameraEditor_SetCursorMode(false);
-	advancedfx::Message("[followcam] repositioning single camera: move + left-click to place (X/Esc cancel).\n");
+	if (m_state.mode == FollowMode::Attach) {
+		m_lastMessage = "Move freecam, then left-click to save attach offset/rotation/FOV.";
+		advancedfx::Message("[followcam] repositioning attach mount: move + left-click to save relative pose (X/Esc cancel).\n");
+	} else {
+		advancedfx::Message("[followcam] repositioning single camera: move + left-click to place (X/Esc cancel).\n");
+	}
 }
 
 void FollowCamera::PlaceReposition() {
 	if (!m_repositioning) return;
+	if (m_state.mode == FollowMode::Attach) {
+		const bool resumePreview = m_resumePreviewAfterReposition;
+		if (!CaptureAttachPoseFromCurrentView())
+			return;
+		m_repositioning = false;
+		m_resumePreviewAfterReposition = false;
+		if (CameraEditor_Active())
+			CameraEditor_SetCursorMode(true);
+		if (resumePreview)
+			Preview();
+		advancedfx::Message("[followcam] attach reposition complete; editor mouse restored.\n");
+		return;
+	}
 	PlaceCamera();
+	m_resumePreviewAfterReposition = false;
 	if (CameraEditor_Active())
 		CameraEditor_SetCursorMode(true);
 	advancedfx::Message("[followcam] reposition complete; editor mouse restored.\n");
@@ -646,9 +680,66 @@ void FollowCamera::PlaceReposition() {
 void FollowCamera::CancelReposition() {
 	if (!m_repositioning) return;
 	m_repositioning = false;
+	m_resumePreviewAfterReposition = false;
 	if (CameraEditor_Active())
 		CameraEditor_SetCursorMode(true);
 	advancedfx::Message("[followcam] reposition cancelled; editor mouse restored.\n");
+}
+
+bool FollowCamera::CaptureAttachPoseFromCurrentView() {
+	if (m_state.mode != FollowMode::Attach) {
+		advancedfx::Warning("[followcam] attach capture refused: switch to Attach mode first.\n");
+		m_lastMessage = "Switch to Attach mode before saving a relative mount.";
+		return false;
+	}
+
+	auto provider = MakeProvider();
+	if (!provider || !provider->IsValid()) {
+		advancedfx::Warning("[followcam] attach capture refused: selected target is not valid.\n");
+		m_lastMessage = "Selected attach target is not valid.";
+		return false;
+	}
+
+	FollowVec3 target;
+	FollowAngles baseAngles;
+	const bool oriented = provider->GetWorldTransform(target, baseAngles);
+	if (!IsFiniteOrigin(target)) {
+		advancedfx::Warning("[followcam] attach capture refused: target transform is invalid.\n");
+		m_lastMessage = "Selected attach target transform is invalid.";
+		return false;
+	}
+
+	double pos[3] = {}, ang[3] = {}, fov = 90.0;
+	CameraBridge_GetCurrentCamera(pos, ang, fov);
+	const FollowVec3 camPos{ pos[0], pos[1], pos[2] };
+	const FollowAngles camAngles{ ang[0], ang[1], ang[2] };
+	if (!oriented)
+		baseAngles = camAngles;
+
+	const FollowVec3 worldOffset{
+		camPos.x - target.x,
+		camPos.y - target.y,
+		camPos.z - target.z
+	};
+	m_state.offset = FollowInverseRotateVector(worldOffset, baseAngles);
+	m_state.rotationOffset = FollowAngles{
+		FollowWrapDegrees(camAngles.pitch - baseAngles.pitch),
+		FollowWrapDegrees(camAngles.yaw - baseAngles.yaw),
+		FollowWrapDegrees(camAngles.roll - baseAngles.roll)
+	};
+	m_state.fov = std::clamp(fov, 1.0, 170.0);
+	m_state.cameraPosition = camPos;
+	m_state.cameraAngles = baseAngles;
+	m_baseAngles = baseAngles;
+	ResetMotion();
+	m_lastMessage = "Attach mount saved relative to '" + m_state.attachmentName + "'.";
+	advancedfx::Message(
+		"[followcam] attach mount saved: attach=%s offset=(%.2f %.2f %.2f) rotation=(%.2f %.2f %.2f) fov=%.1f.\n",
+		m_state.attachmentName.c_str(),
+		m_state.offset.x, m_state.offset.y, m_state.offset.z,
+		m_state.rotationOffset.pitch, m_state.rotationOffset.yaw, m_state.rotationOffset.roll,
+		m_state.fov);
+	return true;
 }
 
 void FollowCamera::ClearCamera() {
@@ -682,6 +773,7 @@ void FollowCamera::Preview() {
 	CameraPathRef().StopScrub();
 	GraphEditorExperimentHudRef().SetDrive(false);
 	CameraBridge_SetFreeCamEnabled(true);
+	CameraBridge_SetPathDrawEnabled(false);
 	m_state.enabled = true;
 	ResetMotion();
 	advancedfx::Message("[followcam] preview started: type=%s entity=%d.\n",
@@ -692,6 +784,8 @@ void FollowCamera::StopPreview(const char* reason) {
 	if (m_state.enabled && reason && *reason)
 		advancedfx::Message("[followcam] preview stopped: %s.\n", reason);
 	m_state.enabled = false;
+	m_attachRebaseValid = false;     // don't let a stale attach pose drive the view after stop
+	m_havePrevAttachFresh = false;
 	m_grenadeTrackPending = false;
 	m_grenadeSeekObserved = false;
 	m_grenadeResumeIssued = false;
@@ -700,6 +794,51 @@ void FollowCamera::StopPreview(const char* reason) {
 	if (CameraEditor_Active() && CameraTimelineHudRef().Cursor())
 		GraphEditorExperimentHudRef().SetDrive(true);
 	ResetMotion();
+}
+
+bool FollowCamera::ViewSetupAttachOverride(float curTime,
+	double& x, double& y, double& z, double& pitch, double& yaw, double& roll, double& fov) {
+	(void)curTime;
+	if (!m_attachRebaseValid || !m_state.enabled || m_state.mode != FollowMode::Attach)
+		return false;
+	// Sample the target HERE (view setup = mid-render), where entities are interpolated, instead of
+	// the tick-stepped value RunFrame read at FrameStageNotify.
+	auto provider = MakeProvider();
+	if (!provider || !provider->IsValid()) return false;
+	FollowVec3 freshTarget; FollowAngles freshAng;
+	const bool freshOriented = provider->GetWorldTransform(freshTarget, freshAng);
+	if (!IsFiniteOrigin(freshTarget))
+		return false;
+	// Diagnostic: freshDelta is the frame-to-frame movement of the render-time sample. If the
+	// render-time sample is interpolated this is a small, smoothly-varying value EVERY frame; if it
+	// were still stepped it would read 0.000 then jump (the FrameStageNotify signature).
+	const double freshDelta = m_havePrevAttachFresh ? FollowDistance(m_prevAttachFresh, freshTarget) : 0.0;
+	const double steppedVsFresh = FollowDistance(m_attachSteppedTarget, freshTarget);
+	m_prevAttachFresh = freshTarget; m_havePrevAttachFresh = true;
+	if (m_debug && ((m_debugViewFrame++ % 15) == 0)) {
+		advancedfx::Message("[followcam][rtsample] fresh=(%.2f %.2f %.2f) freshDelta=%.3f steppedVsFresh=%.3f apply=%d.\n",
+			freshTarget.x, freshTarget.y, freshTarget.z, freshDelta, steppedVsFresh,
+			m_renderTimeSample ? 1 : 0);
+	}
+	if (!m_renderTimeSample) return false;
+	// Rebase the smoothed camera onto the interpolated target. For oriented attach points the
+	// offset is stored in target-local axes, so it rotates with the same render-time bone pose the
+	// visible model uses. A world-space offset from the stepped pose makes hand/weapon mounts look
+	// stable in screenshots but swim/jitter in motion as the bone orientation interpolates.
+	const FollowVec3 freshOffset = freshOriented && m_attachOffsetIsLocal
+		? FollowRotateVector(m_attachOffsetFromTarget, freshAng)
+		: m_attachOffsetFromTarget;
+	x = freshTarget.x + freshOffset.x;
+	y = freshTarget.y + freshOffset.y;
+	z = freshTarget.z + freshOffset.z;
+	const FollowAngles freshOutput = freshOriented && m_attachBaseOriented
+		? FollowAddAngles(freshAng, m_attachAngleOffsetFromBase)
+		: m_outputAngles;
+	pitch = freshOutput.pitch;
+	yaw = freshOutput.yaw;
+	roll = freshOutput.roll;
+	fov = m_state.fov;
+	return true;
 }
 
 void FollowCamera::SetTargetType(FollowTargetType type) {
@@ -720,7 +859,27 @@ void FollowCamera::SetTargetType(FollowTargetType type) {
 
 void FollowCamera::SetMode(FollowMode mode) {
 	if (m_state.mode == mode) return;
+	if (m_state.mode != FollowMode::Attach) {
+		m_lockOnLookSmoothing = m_state.lookSmoothing;
+		m_lockOnPositionSmoothing = m_state.positionSmoothing;
+		m_lockOnPrediction = m_state.prediction;
+		m_lockOnDeadzone = m_state.deadzone;
+		m_lockOnMaxTurnSpeed = m_state.maxTurnSpeed;
+	}
 	m_state.mode = mode;
+	if (mode == FollowMode::Attach) {
+		m_state.lookSmoothing = 0.0;
+		m_state.positionSmoothing = 0.0;
+		m_state.prediction = 0.0;
+		m_state.deadzone = 0.0;
+		m_state.maxTurnSpeed = 0.0;
+	} else {
+		m_state.lookSmoothing = m_lockOnLookSmoothing;
+		m_state.positionSmoothing = m_lockOnPositionSmoothing;
+		m_state.prediction = m_lockOnPrediction;
+		m_state.deadzone = m_lockOnDeadzone;
+		m_state.maxTurnSpeed = m_lockOnMaxTurnSpeed;
+	}
 	if (mode == FollowMode::Attach
 		&& std::fabs(m_state.offset.x) < 0.001
 		&& std::fabs(m_state.offset.y) < 0.001
@@ -789,6 +948,18 @@ std::vector<FollowTargetCandidate> FollowCamera::Candidates() const {
 	if (!g_pEntityList || !*g_pEntityList || !g_GetEntityFromIndex)
 		return out;
 
+	// Distance is measured from the LIVE view (where the operator is flying / looking), not the
+	// placed lock-on camera -- so "Select Nearest" picks the target nearest the current shot and
+	// the list readout reflects how close the operator is. Falls back to the placed camera only
+	// if the live camera read returns garbage.
+	FollowVec3 reference = m_state.cameraPosition;
+	{
+		double vpos[3] = {}, vang[3] = {}, vfov = 90.0;
+		CameraBridge_GetCurrentCamera(vpos, vang, vfov);
+		if (std::isfinite(vpos[0]) && std::isfinite(vpos[1]) && std::isfinite(vpos[2]))
+			reference = FollowVec3{ vpos[0], vpos[1], vpos[2] };
+	}
+
 	if (m_state.targetType == FollowTargetType::Grenade) {
 		UpdateGrenadeCache();
 		int currentTick = 0;
@@ -818,7 +989,7 @@ std::vector<FollowTargetCandidate> FollowCamera::Candidates() const {
 				candidate.attachments = AttachPointIds(candidate.attachPoints);
 				FollowVec3 position;
 				if (ReadOrigin(grenade, position))
-					candidate.distance = m_state.hasCamera ? FollowDistance(m_state.cameraPosition, position) : 0.0;
+					candidate.distance = FollowDistance(reference, position);
 			} else {
 				candidate.attachPoints.push_back(MakeAttachPoint("entity", "Entity", "entity", true, 0, "recorded-grenade"));
 				candidate.attachments = AttachPointIds(candidate.attachPoints);
@@ -885,13 +1056,17 @@ std::vector<FollowTargetCandidate> FollowCamera::Candidates() const {
 		} else if (!ReadOrigin(target, position)) {
 			continue;
 		}
-		candidate.distance = m_state.hasCamera ? FollowDistance(m_state.cameraPosition, position) : 0.0;
+		candidate.distance = FollowDistance(reference, position);
 		const auto handle = target->GetHandle();
 		candidate.handle = handle.IsValid() ? (uint64_t)(uint32_t)handle.ToInt() : 0;
 		out.push_back(candidate);
 	}
 
 	std::sort(out.begin(), out.end(), [](const auto& a, const auto& b) {
+		// Weapons HELD by a player rank above dropped ones (you almost always want the
+		// in-use weapon); within each group, nearest first. Players (held==false for both)
+		// fall straight through to the distance compare.
+		if (a.held != b.held) return a.held;
 		return a.distance < b.distance;
 	});
 	return out;
@@ -1026,6 +1201,7 @@ bool FollowCamera::TrackSelectedGrenade() {
 	CameraPathRef().StopPreview();
 	CameraPathRef().StopScrub();
 	GraphEditorExperimentHudRef().SetDrive(false);
+	CameraBridge_SetPathDrawEnabled(false);
 	CameraBridge_SetFreeCamEnabled(true);
 
 	if (g_pEngineToClient) {
@@ -1119,11 +1295,10 @@ void FollowCamera::RunFrame(bool cameraEditorActive) {
 		if (m_state.enabled) StopPreview("camera editor closed");
 		return;
 	}
-	if (m_state.hasCamera && m_state.mode == FollowMode::LockOn) {
-		const FollowAngles markerAngles = m_state.enabled ? m_outputAngles : m_state.cameraAngles;
+	if (m_state.hasCamera && m_state.mode == FollowMode::LockOn && !m_state.enabled) {
 		CameraBridge_SetFollowCameraMarker(true,
 			m_state.cameraPosition.x, m_state.cameraPosition.y, m_state.cameraPosition.z,
-			markerAngles.pitch, markerAngles.yaw, m_state.cameraAngles.roll, m_state.fov);
+			m_state.cameraAngles.pitch, m_state.cameraAngles.yaw, m_state.cameraAngles.roll, m_state.fov);
 	} else {
 		CameraBridge_SetFollowCameraMarker(false, 0, 0, 0, 0, 0, 0, 90);
 	}
@@ -1337,14 +1512,7 @@ void FollowCamera::RunFrame(bool cameraEditorActive) {
 			rawTarget.y + worldOffset.y + m_targetVelocity.y * m_state.prediction,
 			rawTarget.z + worldOffset.z + m_targetVelocity.z * m_state.prediction
 		};
-		FollowAngles faceTarget = FollowDistance(desiredPos, rawTarget) > 1.0
-			? FollowLookAt(desiredPos, rawTarget)
-			: baseAng;
-		const FollowAngles desiredAng{
-			FollowWrapDegrees(faceTarget.pitch + m_state.rotationOffset.pitch),
-			FollowWrapDegrees(faceTarget.yaw + m_state.rotationOffset.yaw),
-			FollowWrapDegrees(baseAng.roll + m_state.rotationOffset.roll)
-		};
+		const FollowAngles desiredAng = FollowAddAngles(baseAng, m_state.rotationOffset);
 		if (!m_motionInitialized) {
 			m_smoothedCamPos = desiredPos;
 			m_outputAngles = desiredAng;
@@ -1359,11 +1527,29 @@ void FollowCamera::RunFrame(bool cameraEditorActive) {
 		m_lastCamPos = m_smoothedCamPos;
 		m_lastCamAng = m_outputAngles;
 		m_lastTargetPos = rawTarget;
-		const FollowAngles idealAim = FollowDistance(m_smoothedCamPos, rawTarget) > 1.0
-			? FollowLookAt(m_smoothedCamPos, rawTarget)
-			: m_outputAngles;
-		const double pitchErr = FollowWrapDegrees(idealAim.pitch - m_outputAngles.pitch);
-		const double yawErr = FollowWrapDegrees(idealAim.yaw - m_outputAngles.yaw);
+		// Stash the rebase basis for ViewSetupAttachOverride: the smoothed camera's offset from the
+		// (tick-stepped) target. When the mount has orientation, store it in local axes so render-time
+		// rebase rotates it with the fresh bone/player orientation instead of carrying a stale
+		// world-space offset across the interpolation boundary.
+		const FollowVec3 attachWorldOffset{
+			m_smoothedCamPos.x - rawTarget.x,
+			m_smoothedCamPos.y - rawTarget.y,
+			m_smoothedCamPos.z - rawTarget.z };
+		m_attachOffsetFromTarget = rawOriented
+			? FollowInverseRotateVector(attachWorldOffset, baseAng)
+			: attachWorldOffset;
+		m_attachOffsetIsLocal = rawOriented;
+		m_attachBaseAngles = baseAng;
+		m_attachAngleOffsetFromBase = FollowAngles{
+			FollowWrapDegrees(m_outputAngles.pitch - baseAng.pitch),
+			FollowWrapDegrees(m_outputAngles.yaw - baseAng.yaw),
+			FollowWrapDegrees(m_outputAngles.roll - baseAng.roll)
+		};
+		m_attachBaseOriented = rawOriented;
+		m_attachSteppedTarget = rawTarget;
+		m_attachRebaseValid = true;
+		const double pitchErr = FollowWrapDegrees(desiredAng.pitch - m_outputAngles.pitch);
+		const double yawErr = FollowWrapDegrees(desiredAng.yaw - m_outputAngles.yaw);
 		AttachTransformResult resolved = ResolveAttachTransform(
 			EntityAt(provider->EntityIndex()), provider->EntityIndex(), m_state.targetType, m_state.attachmentName);
 		m_attachDebug.active = true;
@@ -1409,7 +1595,7 @@ void FollowCamera::RunFrame(bool cameraEditorActive) {
 			advancedfx::Message(
 				"[followcam][attachdebug] type=%s entity=%d handle=%llu attach=%s kind=%s valid=%d source=%s "
 				"target=(%.1f %.1f %.1f) cam=(%.1f %.1f %.1f) ang=(%.1f %.1f %.1f) "
-				"dist=%.1f camDelta=%.2f targetDelta=%.2f angleDelta=%.2f aimError=%.2f jitter=%.2f tick=%d fov=%.1f.\n",
+				"dist=%.1f camDelta=%.2f targetDelta=%.2f angleDelta=%.2f mountError=%.2f jitter=%.2f tick=%d fov=%.1f.\n",
 				FollowTargetTypeName(m_state.targetType), m_attachDebug.entityIndex,
 				(unsigned long long)m_attachDebug.entityHandle, m_attachDebug.attachId.c_str(),
 				m_attachDebug.attachKind.c_str(), m_attachDebug.valid ? 1 : 0, m_attachDebug.source.c_str(),
@@ -1524,11 +1710,46 @@ void FollowCamera::SetPreset(const std::string& name) {
 	else SetOffset(0, 0, 0);
 }
 
-void FollowCamera::SetLookSmoothing(double value) { m_state.lookSmoothing = std::clamp(value, 0.0, 5.0); }
-void FollowCamera::SetPositionSmoothing(double value) { m_state.positionSmoothing = std::clamp(value, 0.0, 5.0); }
-void FollowCamera::SetPrediction(double value) { m_state.prediction = std::clamp(value, 0.0, 2.0); }
-void FollowCamera::SetDeadzone(double value) { m_state.deadzone = std::clamp(value, 0.0, 45.0); }
-void FollowCamera::SetMaxTurnSpeed(double value) { m_state.maxTurnSpeed = std::clamp(value, 0.0, 4000.0); }
+void FollowCamera::SetLookSmoothing(double value) {
+	if (m_state.mode == FollowMode::Attach) {
+		m_state.lookSmoothing = 0.0;
+		return;
+	}
+	m_state.lookSmoothing = std::clamp(value, 0.0, 5.0);
+	m_lockOnLookSmoothing = m_state.lookSmoothing;
+}
+void FollowCamera::SetPositionSmoothing(double value) {
+	if (m_state.mode == FollowMode::Attach) {
+		m_state.positionSmoothing = 0.0;
+		return;
+	}
+	m_state.positionSmoothing = std::clamp(value, 0.0, 5.0);
+	m_lockOnPositionSmoothing = m_state.positionSmoothing;
+}
+void FollowCamera::SetPrediction(double value) {
+	if (m_state.mode == FollowMode::Attach) {
+		m_state.prediction = 0.0;
+		return;
+	}
+	m_state.prediction = std::clamp(value, 0.0, 2.0);
+	m_lockOnPrediction = m_state.prediction;
+}
+void FollowCamera::SetDeadzone(double value) {
+	if (m_state.mode == FollowMode::Attach) {
+		m_state.deadzone = 0.0;
+		return;
+	}
+	m_state.deadzone = std::clamp(value, 0.0, 45.0);
+	m_lockOnDeadzone = m_state.deadzone;
+}
+void FollowCamera::SetMaxTurnSpeed(double value) {
+	if (m_state.mode == FollowMode::Attach) {
+		m_state.maxTurnSpeed = 0.0;
+		return;
+	}
+	m_state.maxTurnSpeed = std::clamp(value, 0.0, 4000.0);
+	m_lockOnMaxTurnSpeed = m_state.maxTurnSpeed;
+}
 void FollowCamera::SetAttachmentName(const std::string& value) {
 	if (!value.empty()) {
 		m_state.attachmentName = value.substr(0, 64);
@@ -1599,6 +1820,7 @@ std::string FollowCamera::BuildStateJson() const {
 	o << ",\"grenadeThrowTick\":" << m_grenadeThrowTick;
 	o << ",\"grenadeSeekTick\":" << m_grenadeSeekTick;
 	o << ",\"debug\":" << (m_debug ? "true" : "false");
+	o << ",\"renderTimeSample\":" << (m_renderTimeSample ? "true" : "false");
 	o << ",\"attachDebug\":{";
 	o << "\"active\":" << (m_attachDebug.active ? "true" : "false");
 	o << ",\"valid\":" << (m_attachDebug.valid ? "true" : "false");
@@ -1623,6 +1845,7 @@ std::string FollowCamera::BuildStateJson() const {
 	o << ",\"targetDelta\":" << m_attachDebug.targetDelta;
 	o << ",\"angleDelta\":" << m_attachDebug.angleDelta;
 	o << ",\"aimError\":" << m_attachDebug.aimError;
+	o << ",\"mountAngleError\":" << m_attachDebug.aimError;
 	o << ",\"jitter\":" << m_attachDebug.jitter;
 	o << ",\"smoothing\":" << m_attachDebug.smoothing;
 	o << ",\"previewTick\":" << m_attachDebug.previewTick;
@@ -1724,7 +1947,7 @@ void FollowCamera::PrintStatus() const {
 	advancedfx::Message(
 		"[followcam] enabled=%d hasCamera=%d type=%s entity=%d fov=%.1f "
 		"offset=(%.1f %.1f %.1f) look=%.3f pos=%.3f prediction=%.3f "
-		"deadzone=%.2f maxTurn=%.1f autoDead=%d switchWeapon=%d switchBomb=%d hold=%d debug=%d.\n",
+		"deadzone=%.2f maxTurn=%.1f autoDead=%d switchWeapon=%d switchBomb=%d hold=%d debug=%d rtsample=%d.\n",
 		m_state.enabled ? 1 : 0, m_state.hasCamera ? 1 : 0,
 		FollowTargetTypeName(m_state.targetType), m_state.targetEntityIndex, m_state.fov,
 		m_state.offset.x, m_state.offset.y, m_state.offset.z,
@@ -1732,7 +1955,7 @@ void FollowCamera::PrintStatus() const {
 		m_state.deadzone, m_state.maxTurnSpeed,
 		m_state.autoDisableOnDeath ? 1 : 0, m_state.switchToDroppedWeaponOnDeath ? 1 : 0,
 		m_state.switchToDroppedBombOnDeath ? 1 : 0, m_state.holdLastKnownPosition ? 1 : 0,
-		m_debug ? 1 : 0);
+		m_debug ? 1 : 0, m_renderTimeSample ? 1 : 0);
 }
 
 void FollowCamera::PrintCamPose() const {

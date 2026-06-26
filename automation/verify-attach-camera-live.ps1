@@ -133,8 +133,10 @@ try {
 }
 
 if (-not $NoLaunch) {
+    Write-Host "Launching CS2 automation target..." -ForegroundColor Cyan
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'launch-cs2-netcon.ps1') `
         -Port $Port -Cs2Dir $cs2Root -Width $Width -Height $Height -OutDir (Join-Path $OutDir 'launch') | Out-Host
+    Write-Host "Launch phase completed." -ForegroundColor Cyan
 }
 
 Write-Host "Connecting to CS2 netcon on 127.0.0.1:$Port..."
@@ -249,6 +251,7 @@ function Select-AttachPoint([object]$State, [string[]]$Preferred) {
 }
 
 function Run-AttachCase([string]$Name, [string]$SetupCommand, [string[]]$AttachPreference, [double]$MaxDistance, [double]$MaxAimError) {
+    Write-Host "Running attach case: $Name" -ForegroundColor Cyan
     Send 'mirv_filmmaker follow stop' | Out-Null
     foreach ($cmd in $SetupCommand -split ';') {
         $trim = $cmd.Trim()
@@ -261,8 +264,11 @@ function Run-AttachCase([string]$Name, [string]$SetupCommand, [string[]]$AttachP
     }
     $attach = Select-AttachPoint -State $state -Preferred $AttachPreference
     if ($attach) { Send "mirv_filmmaker follow bone $attach" | Out-Null }
-    Send 'mirv_filmmaker follow preview' | Out-Null
+    Send 'mirv_filmmaker follow position 0' | Out-Null
+    Send 'mirv_filmmaker follow look 0' | Out-Null
+    $previewText = Send 'mirv_filmmaker follow preview'
     Start-Sleep -Milliseconds 700
+    $rtText = $previewText + (Drain 1.0)
     $samples = @()
     for ($i = 0; $i -lt 8; $i++) {
         $samples += ,(Read-FollowState)
@@ -275,7 +281,15 @@ function Run-AttachCase([string]$Name, [string]$SetupCommand, [string[]]$AttachP
     if ($final) {
         $ad = $final.attachDebug
         $distOk = [double]$ad.distance -le $MaxDistance
-        $aimOk = [double]$ad.aimError -le $MaxAimError
+        $mountValues = @($samples | Where-Object { $_ -and $_.attachDebug } | ForEach-Object {
+            if ($_.attachDebug.PSObject.Properties.Name -contains 'mountAngleError') { [double]$_.attachDebug.mountAngleError }
+            else { [double]$_.attachDebug.aimError }
+        })
+        $mountMax = if ($mountValues.Count) { [double]($mountValues | Measure-Object -Maximum).Maximum } else { [double]$ad.aimError }
+        $aimOk = $mountMax -le $MaxAimError
+        $angleValues = @($samples | Where-Object { $_ -and $_.attachDebug } | ForEach-Object { [double]$_.attachDebug.angleDelta })
+        $angleMax = if ($angleValues.Count) { [double]($angleValues | Measure-Object -Maximum).Maximum } else { 0.0 }
+        $angleOk = $angleMax -le 35.0
         $jitterValues = @($samples | Where-Object { $_ -and $_.attachDebug } | Select-Object -Last 4 | ForEach-Object { [double]$_.attachDebug.jitter })
         $jitterOk = $true
         if ($jitterValues.Count -ge 4) {
@@ -284,9 +298,15 @@ function Run-AttachCase([string]$Name, [string]$SetupCommand, [string[]]$AttachP
             $max = [double]($jitterValues | Measure-Object -Maximum).Maximum
             $jitterOk = ($median -le 0.01) -or ($max -le [Math]::Max(12.0, $median * 3.0))
         }
-        $pass = $distOk -and $aimOk -and $jitterOk
+        $renderSampleOk = $final.PSObject.Properties.Name -contains 'renderTimeSample' -and [bool]$final.renderTimeSample
+        $badRtSamples = 0
+        foreach ($m in [regex]::Matches($rtText, '\[followcam\]\[rtsample\][^\r\n]*steppedVsFresh=([0-9.]+)[^\r\n]*apply=(\d)')) {
+            if ([double]$m.Groups[1].Value -ge 1.0 -and [int]$m.Groups[2].Value -eq 0) { $badRtSamples++ }
+        }
+        $rtOk = $renderSampleOk -and ($badRtSamples -lt 2)
+        $pass = $distOk -and $aimOk -and $angleOk -and $jitterOk -and $rtOk
         $tailMax = if ($jitterValues.Count) { [double]($jitterValues | Measure-Object -Maximum).Maximum } else { 0.0 }
-        $reason = "attach=$($final.attachment) dist=$([Math]::Round([double]$ad.distance,1)) aim=$([Math]::Round([double]$ad.aimError,1)) jitter=$([Math]::Round([double]$ad.jitter,2)) tailMax=$([Math]::Round($tailMax,2))"
+        $reason = "attach=$($final.attachment) dist=$([Math]::Round([double]$ad.distance,1)) mountMax=$([Math]::Round($mountMax,1)) angleMax=$([Math]::Round($angleMax,1)) jitter=$([Math]::Round([double]$ad.jitter,2)) tailMax=$([Math]::Round($tailMax,2)) rtsample=$renderSampleOk badRt=$badRtSamples"
     }
     Add-Result $Name $pass $final $shot $reason
 }
@@ -299,6 +319,7 @@ Send "mirv_filmmaker editor eval `"`$.CamEditor && `$.CamEditor.setInspectorMode
 Send 'mirv_filmmaker follow debug 1' | Out-Null
 Send 'mirv_filmmaker follow mode attach' | Out-Null
 
+Write-Host "Running core attach cases..." -ForegroundColor Cyan
 Run-AttachCase 'player-head-eyes' 'mirv_filmmaker follow type player; mirv_filmmaker follow nearest' @('eyes','head') 180 8
 Run-AttachCase 'player-hand' 'mirv_filmmaker follow type player; mirv_filmmaker follow nearest' @('weapon_hand_R','weapon_hand_L','hand_r','hand_l','head') 180 8
 Run-AttachCase 'weapon-muzzle' 'mirv_filmmaker follow type weapon; mirv_filmmaker follow weaponsource held; mirv_filmmaker follow nearest' @('muzzle','muzzle_flash','entity') 180 8
