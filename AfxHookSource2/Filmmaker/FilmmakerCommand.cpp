@@ -14,7 +14,9 @@
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
 #include "Movie/MovieMode.h"
+#include "Movie/MirvCosmetics.h"
 
+#include "../ClientEntitySystem.h"
 #include "../WrpConsole.h"
 #include "../../shared/AfxConsole.h"
 
@@ -23,6 +25,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace {
 
@@ -56,6 +59,41 @@ void PrintEncodedState(const char* marker, const std::string& json) {
 		const std::string chunk = encoded.substr(i * chunkSize, chunkSize);
 		advancedfx::Message("%s %zu/%zu %s\n", marker, i + 1, chunks, chunk.c_str());
 	}
+}
+
+CEntityInstance* CommandEntityFromIndex(int index) {
+	if (index < 0 || !g_pEntityList || !*g_pEntityList || !g_GetEntityFromIndex)
+		return nullptr;
+	return (CEntityInstance*)g_GetEntityFromIndex(*g_pEntityList, index);
+}
+
+int ResolveCosmeticsTargetArg(const char* arg) {
+	if (!arg || !*arg) return -1;
+	if (0 == strncmp(arg, "pawn:", 5))
+		return atoi(arg + 5);
+	if (0 == strncmp(arg, "pawn_", 5))
+		return atoi(arg + 5);
+	if (0 == strncmp(arg, "steam:", 6) || 0 == strncmp(arg, "steam_", 6)) {
+		uint64_t wanted = _strtoui64(arg + 6, nullptr, 10);
+		if (!wanted) return -1;
+		const int highest = GetHighestEntityIndex();
+		for (int i = 0; i <= highest; ++i) {
+			CEntityInstance* entity = CommandEntityFromIndex(i);
+			if (!entity || !entity->IsPlayerController() || entity->GetSteamId() != wanted)
+				continue;
+			SOURCESDK::CS2::CBaseHandle pawnHandle = entity->GetPlayerPawnHandle();
+			if (!pawnHandle.IsValid())
+				continue;
+			CEntityInstance* pawn = CommandEntityFromIndex(pawnHandle.GetEntryIndex());
+			if (pawn && pawn->IsPlayerPawn())
+				return pawnHandle.GetEntryIndex();
+		}
+		return -1;
+	}
+	for (const char* p = arg; *p; ++p)
+		if (*p < '0' || *p > '9')
+			return -1;
+	return atoi(arg);
 }
 
 std::string FormatDuration(int seconds) {
@@ -446,6 +484,128 @@ void DoCamTimeline(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	else advancedfx::Warning("%s camtl: unknown action '%s'\n", cmd, a);
 }
 
+// Offline demo skin-changer/customizer: apply/clear cosmetic overrides on a spectated player.
+//   cosmetics skin <pawnIndex> <paintKit> <wear> <seed> [statTrak]  (legacy active weapon)
+//   cosmetics weapon <pawnIndex> <weaponDefIndex> <paintKit> <wear> <seed> [statTrak]
+//   cosmetics knife <pawnIndex> <knifeDefIndex> <paintKit> <wear> <seed>
+//   cosmetics gloves <pawnIndex> <gloveDefIndex> <paintKit> <wear> <seed>
+//   cosmetics agent <pawnIndex> <agentDefIndex>
+//   cosmetics clear <pawnIndex>
+//   cosmetics clearall
+void DoCosmetics(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	const char* action = (argc >= 3) ? args->ArgV(2) : "";
+	if (0 == _stricmp(action, "skin")) {
+		if (argc < 6) {
+			advancedfx::Warning("usage: %s cosmetics skin <pawnIndex> <paintKit> <wear> <seed> [statTrak]\n", cmd);
+			return;
+		}
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics skin: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int paintKit = atoi(args->ArgV(4));
+		float wear = (float)atof(args->ArgV(5));
+		int seed = (argc >= 7) ? atoi(args->ArgV(6)) : 0;
+		int statTrak = (argc >= 8) ? atoi(args->ArgV(7)) : -1;
+		if (paintKit <= 0) {
+			Filmmaker::Cosmetics_ClearPlayer(idx);
+			advancedfx::Message("mirv_filmmaker: cleared skin for pawn %d.\n", idx);
+		} else {
+			Filmmaker::Cosmetics_SetSkin(idx, paintKit, wear, seed, statTrak);
+			advancedfx::Message("mirv_filmmaker: skin pawn=%d paintkit=%d wear=%.3f seed=%d stattrak=%d.\n",
+				idx, paintKit, wear, seed, statTrak);
+			if (!Filmmaker::Cosmetics_Available())
+				advancedfx::Warning("mirv_filmmaker: econ schema offsets unavailable; this skin will NOT apply.\n");
+		}
+	} else if (0 == _stricmp(action, "weapon")) {
+		if (argc < 8) {
+			advancedfx::Warning("usage: %s cosmetics weapon <pawnIndex> <weaponDefIndex> <paintKit> <wear> <seed> [statTrak]\n", cmd);
+			return;
+		}
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics weapon: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int def = atoi(args->ArgV(4));
+		int paintKit = atoi(args->ArgV(5));
+		float wear = (float)atof(args->ArgV(6));
+		int seed = atoi(args->ArgV(7));
+		int statTrak = (argc >= 9) ? atoi(args->ArgV(8)) : -1;
+		Filmmaker::Cosmetics_SetWeapon(idx, def, paintKit, wear, seed, statTrak);
+		advancedfx::Message("mirv_filmmaker: weapon pawn=%d def=%d paintkit=%d wear=%.4f seed=%d stattrak=%d.\n",
+			idx, def, paintKit, wear, seed, statTrak);
+		if (!Filmmaker::Cosmetics_Available())
+			advancedfx::Warning("mirv_filmmaker: econ schema offsets unavailable; this weapon skin will NOT apply.\n");
+	} else if (0 == _stricmp(action, "knife")) {
+		if (argc < 8) {
+			advancedfx::Warning("usage: %s cosmetics knife <pawnIndex> <knifeDefIndex> <paintKit> <wear> <seed>\n", cmd);
+			return;
+		}
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics knife: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int def = atoi(args->ArgV(4));
+		int paintKit = atoi(args->ArgV(5));
+		float wear = (float)atof(args->ArgV(6));
+		int seed = atoi(args->ArgV(7));
+		Filmmaker::Cosmetics_SetKnife(idx, def, paintKit, wear, seed);
+		advancedfx::Message("mirv_filmmaker: knife pawn=%d def=%d paintkit=%d wear=%.4f seed=%d.\n", idx, def, paintKit, wear, seed);
+		advancedfx::Warning("mirv_filmmaker: knife model refresh is not implemented yet; modal preview updates, demo render may not.\n");
+	} else if (0 == _stricmp(action, "gloves")) {
+		if (argc < 8) {
+			advancedfx::Warning("usage: %s cosmetics gloves <pawnIndex> <gloveDefIndex> <paintKit> <wear> <seed>\n", cmd);
+			return;
+		}
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics gloves: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int def = atoi(args->ArgV(4));
+		int paintKit = atoi(args->ArgV(5));
+		float wear = (float)atof(args->ArgV(6));
+		int seed = atoi(args->ArgV(7));
+		Filmmaker::Cosmetics_SetGloves(idx, def, paintKit, wear, seed);
+		advancedfx::Message("mirv_filmmaker: gloves pawn=%d def=%d paintkit=%d wear=%.4f seed=%d.\n", idx, def, paintKit, wear, seed);
+		advancedfx::Warning("mirv_filmmaker: glove wearable refresh is not implemented yet; modal preview updates, demo render may not.\n");
+	} else if (0 == _stricmp(action, "agent")) {
+		if (argc < 5) { advancedfx::Warning("usage: %s cosmetics agent <pawnIndex> <agentDefIndex>\n", cmd); return; }
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics agent: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int def = atoi(args->ArgV(4));
+		Filmmaker::Cosmetics_SetAgent(idx, def);
+		advancedfx::Message("mirv_filmmaker: agent pawn=%d def=%d.\n", idx, def);
+		advancedfx::Warning("mirv_filmmaker: agent player-model swap is not implemented yet; modal preview updates, demo render may not.\n");
+	} else if (0 == _stricmp(action, "clear")) {
+		if (argc < 4) { advancedfx::Warning("usage: %s cosmetics clear <pawnIndex>\n", cmd); return; }
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics clear: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		Filmmaker::Cosmetics_ClearPlayer(idx);
+	} else if (0 == _stricmp(action, "clearall")) {
+		Filmmaker::Cosmetics_ClearAll();
+		advancedfx::Message("mirv_filmmaker: cleared all cosmetic overrides.\n");
+	} else if (0 == _stricmp(action, "recompose")) {
+		// Kill-switch for the forced material re-composite (in case the vtable indices are wrong).
+		if (argc >= 4) Filmmaker::Cosmetics_SetRecompose(0 != atoi(args->ArgV(3)));
+		advancedfx::Message("mirv_filmmaker: cosmetics recompose = %d.\n", Filmmaker::Cosmetics_GetRecompose() ? 1 : 0);
+	} else if (0 == _stricmp(action, "diag")) {
+		// Resolve the spectated pawn's active weapon and dump its econ state (targeting + writes).
+		if (argc < 4) { advancedfx::Warning("usage: %s cosmetics diag <pawnIndex>\n", cmd); return; }
+		int idx = ResolveCosmeticsTargetArg(args->ArgV(3));
+		if (idx < 0) { advancedfx::Warning("%s cosmetics diag: target '%s' did not resolve to a current pawn.\n", cmd, args->ArgV(3)); return; }
+		int wi = -1, hi = 0, pk = 0, di = 0, vc = 0, vs = 0;
+		float wear = 0.0f;
+		Filmmaker::Cosmetics_GetVtIdx(&vc, &vs);
+		if (Filmmaker::Cosmetics_DebugWeapon(idx, &wi, &hi, &pk, &di, &wear))
+			advancedfx::Message("mirv_filmmaker: cosmetics diag pawn=%d weapon=%d defIndex=%d itemIdHigh=%d paintKit=%d wear=%.4f available=%d recompose=%d faulted=%d vtComp=%d vtSec=%d.\n",
+				idx, wi, di, hi, pk, wear, Filmmaker::Cosmetics_Available() ? 1 : 0, Filmmaker::Cosmetics_GetRecompose() ? 1 : 0,
+				Filmmaker::Cosmetics_GetFaulted() ? 1 : 0, vc, vs);
+		else
+			advancedfx::Warning("mirv_filmmaker: cosmetics diag pawn=%d -> no active weapon resolved (offsetsOk=%d).\n",
+				idx, Filmmaker::Cosmetics_Available() ? 1 : 0);
+	} else if (0 == _stricmp(action, "vtidx")) {
+		// Live override of the recompose vtable indices (UpdateComposite, UpdateCompositeSec); -1 skips.
+		if (argc < 5) { advancedfx::Warning("usage: %s cosmetics vtidx <compositeIdx> <secIdx>  (-1 = skip)\n", cmd); return; }
+		Filmmaker::Cosmetics_SetVtIdx(atoi(args->ArgV(3)), atoi(args->ArgV(4)));
+		int vc = 0, vs = 0; Filmmaker::Cosmetics_GetVtIdx(&vc, &vs);
+		advancedfx::Message("mirv_filmmaker: cosmetics vtidx comp=%d sec=%d (recompose re-armed).\n", vc, vs);
+	} else {
+		advancedfx::Warning("usage: %s cosmetics <skin|weapon|knife|gloves|agent|clear|clearall|recompose|diag|vtidx> ...\n", cmd);
+	}
+}
+
 void DoFollow(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	using Filmmaker::FollowTargetType;
 	Filmmaker::FollowCamera& follow = Filmmaker::FollowCameraRef();
@@ -759,6 +919,8 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		DoCamTimeline(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "follow")) {
 		DoFollow(argc, args, cmd);
+	} else if (0 == _stricmp(sub, "cosmetics")) {
+		DoCosmetics(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "grapheditor")) {
 		DoGraphEditor(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "editor")) {

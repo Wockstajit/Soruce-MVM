@@ -2371,7 +2371,7 @@ void Hook_SceneSystem(void * hModule) {
 		Afx::BinUtils::ImageSectionsReader sections((HMODULE)hModule);
 		Afx::BinUtils::MemRange textRange = sections.GetMemRange();
 
-        // See FUN_1800f1b30 doc/notes_cs2/sc_dump_lists.txt.
+        // See FUN_1800f1b30 docs/notes_cs2/sc_dump_lists.txt.
         /*{
             Afx::BinUtils::MemRange result = FindPatternString(textRange, "48 8b c4 4c 89 40 18 48 89 50 10 48 89 48 08 55 53 57 48 8d a8 08 fe ff ff 48 81 ec e0 02 00 00");
             if (!result.IsEmpty()) {
@@ -2386,7 +2386,7 @@ void Hook_SceneSystem(void * hModule) {
                 ErrorBox(MkErrStr(__FILE__, __LINE__));
         }*/
 
-        // See FUN_1800f8780 doc/notes_cs2/sc_dump_lists.txt.
+        // See FUN_1800f8780 docs/notes_cs2/sc_dump_lists.txt.
         /* {
             Afx::BinUtils::MemRange result = FindPatternString(textRange, "48 89 5c 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8d 6c 24 d9 48 81 ec a0 00 00 00 4c 8b fa 48 8b d9 e8 ?? ?? ?? ??");
             if (!result.IsEmpty()) {
@@ -2416,7 +2416,7 @@ void Hook_SceneSystem(void * hModule) {
                 ErrorBox(MkErrStr(__FILE__, __LINE__));
         }
 
-        // See FUN_18004aff0 doc/notes_cs2/sc_dump_lists.txt.
+        // See FUN_18004aff0 docs/notes_cs2/sc_dump_lists.txt.
         // Second reference to "WARNING: Trying to create a CRenderContextPtr without a valid context.\n"
         {
             Afx::BinUtils::MemRange result = FindPatternString(textRange, "40 55 53 57 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 80 65 ?? ?? 33 C0");
@@ -2433,7 +2433,7 @@ void Hook_SceneSystem(void * hModule) {
         }
         
 
-        // See "WE WANT TO DETOUR ABOUT HERE" in FUN_1800f8780 in doc/notes_cs2/sc_dump_lists.txt.
+        // See "WE WANT TO DETOUR ABOUT HERE" in FUN_1800f8780 in docs/notes_cs2/sc_dump_lists.txt.
         /*
                              LAB_1800f8a80                                   XREF[1]:     1800f8af7(j)  
        1800f8a80 8b c7           MOV        EAX,EDI

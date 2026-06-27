@@ -93,23 +93,23 @@ AFXADDR_DEF(hw_HUD_GetStudioModelInterface_pStudio)
 //
 // Documentation (in HLAE source code)
 //
-// [1] doc/notes_goldsrc/debug_cstrike_crosshair.txt
-// [2] doc/notes_goldsrc/debug_cstrike_deathmessage.txt
-// [3] doc/notes_goldsrc/debug_cstrike_smoke.txt
-// [4] doc/notes_goldsrc/debug_tfc_UpdateSpectatorPanel.txt
-// [5] doc/notes_goldsrc/debug_engine_ifaces.txt
-// [6] doc/notes_goldsrc/debug_sound.txt
-// [7] doc/notes_goldsrc/debug_SCR_UpdateScreen.txt
-// [8] doc/notes_goldsrc/debug_Host_Frame.txt
-// [9] doc/notes_goldsrc/debug_ClientFunctionTable
-// [10] doc/notes_goldsrc/debug_CL_ParseServerMessage.txt
-// [11] doc/notes_goldsrc/debug_R_DrawWorld_and_sky.txt
-// [12] doc/notes_goldsrc/debug_R_DecalShoot.txt
-// [14] doc/notes_goldsrc/debug_tfc_deathmessage.txt
-// [15] doc/notes_goldsrc/debug_sv_variables.txt
-// [16] doc/notes_goldsrc/debug_CL_Disconnect.txt
-// [17] doc/notes_goldsrc/debug_fov.txt
-// [18] doc/notes_goldsrc/debug_Host_Init.txt
+// [1] docs/notes_goldsrc/debug_cstrike_crosshair.txt
+// [2] docs/notes_goldsrc/debug_cstrike_deathmessage.txt
+// [3] docs/notes_goldsrc/debug_cstrike_smoke.txt
+// [4] docs/notes_goldsrc/debug_tfc_UpdateSpectatorPanel.txt
+// [5] docs/notes_goldsrc/debug_engine_ifaces.txt
+// [6] docs/notes_goldsrc/debug_sound.txt
+// [7] docs/notes_goldsrc/debug_SCR_UpdateScreen.txt
+// [8] docs/notes_goldsrc/debug_Host_Frame.txt
+// [9] docs/notes_goldsrc/debug_ClientFunctionTable
+// [10] docs/notes_goldsrc/debug_CL_ParseServerMessage.txt
+// [11] docs/notes_goldsrc/debug_R_DrawWorld_and_sky.txt
+// [12] docs/notes_goldsrc/debug_R_DecalShoot.txt
+// [14] docs/notes_goldsrc/debug_tfc_deathmessage.txt
+// [15] docs/notes_goldsrc/debug_sv_variables.txt
+// [16] docs/notes_goldsrc/debug_CL_Disconnect.txt
+// [17] docs/notes_goldsrc/debug_fov.txt
+// [18] docs/notes_goldsrc/debug_Host_Init.txt
 
 void Addresses_InitHlExe(AfxAddr hlExe)
 {

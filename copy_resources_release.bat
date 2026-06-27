@@ -5,4 +5,4 @@ xcopy "deps\release\easywsclient\COPYING" "%~1\LICENSES\easywsclient\" /D /Y
 xcopy "misc\THIRDPARTY.yml" "%~1\LICENSES\advancedfx\" /D /Y
 xcopy "" "%~1\LICENSES\advancedfx\" /D /Y
 xcopy "shaders\build\*.acs" "%~1\resources\shaders\" /D /Y
-py -3 "%~dp0\make_readme.py" "%~1"
+py -3 "%~dp0\tools\make_readme.py" "%~1"

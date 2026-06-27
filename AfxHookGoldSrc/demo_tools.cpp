@@ -23,7 +23,7 @@ extern cl_enginefuncs_s *pEngfuncs;
 
 //
 // For more information see:
-// doc/notes_goldsrc/debug_CL_ParseServerMessage.txt
+// docs/notes_goldsrc/debug_CL_ParseServerMessage.txt
 
 //
 // Types and structs

@@ -1,6 +1,6 @@
 #include "stdafx.h"
 
-// See also: /doc/notes_goldsrc/debug_cstrike_crosshair.txt
+// See also: /docs/notes_goldsrc/debug_cstrike_crosshair.txt
 
 #include "CrossHairFix.h"
 

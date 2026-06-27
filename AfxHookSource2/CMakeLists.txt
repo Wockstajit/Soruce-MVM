@@ -344,6 +344,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/FollowCameraMath.h
     Filmmaker/Movie/MovieMode.cpp
     Filmmaker/Movie/MovieMode.h
+    Filmmaker/Movie/MirvCosmetics.cpp
+    Filmmaker/Movie/MirvCosmetics.h
 
     Filmmaker/Platform/FolderPicker.cpp
     Filmmaker/Platform/FolderPicker.h
@@ -360,7 +362,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 source_group("AfxHookSource2/Filmmaker" REGULAR_EXPRESSION "/AfxHookSource2/Filmmaker/")
 
 add_executable(FollowCameraMathTests
-    ../automation/follow-camera-math-tests.cpp
+    ../automation/tests/follow-camera-math-tests.cpp
     Filmmaker/Movie/FollowCameraMath.cpp
     Filmmaker/Movie/FollowCameraMath.h
 )

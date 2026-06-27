@@ -730,6 +730,35 @@ extern "C" int afx_hook_source2_get_entity_ref_observer_target_handle(void * pRe
     return SOURCESDK_CS2_INVALID_EHANDLE_INDEX;
 }
 
+// Local viewer's observer state, used by the cam editor to gate the "Customize" button and to
+// know which player is being spectated. Returns the OBS_MODE_* value (1=fixed, 2=in-eye/first
+// person, 3=chase/third person, 4=roaming/freecam; 0=none/unavailable). The observer services
+// live on the player PAWN, so resolve the local controller's pawn first. outTargetIndex receives
+// the spectated entity index, or -1 when there is no valid target.
+uint8_t AfxGetLocalObserverState(int * outTargetIndex) {
+    if (outTargetIndex) *outTargetIndex = -1;
+    if (!g_ClientDll_GetSplitScreenPlayer) return 0;
+    CEntityInstance * controller = g_ClientDll_GetSplitScreenPlayer(0);
+    if (!controller) return 0;
+    CEntityInstance * pawn = controller;
+    if (!controller->IsPlayerPawn()) {
+        auto ph = controller->GetPlayerPawnHandle();
+        pawn = nullptr;
+        if (ph.IsValid()) {
+            int idx = ph.GetEntryIndex();
+            if (idx >= 0 && idx <= GetHighestEntityIndex() && g_pEntityList && *g_pEntityList && g_GetEntityFromIndex)
+                pawn = (CEntityInstance *)g_GetEntityFromIndex(*g_pEntityList, idx);
+        }
+    }
+    if (!pawn) return 0;
+    uint8_t mode = pawn->GetObserverMode();
+    if (outTargetIndex) {
+        auto th = pawn->GetObserverTarget();
+        if (th.IsValid()) *outTargetIndex = th.GetEntryIndex();
+    }
+    return mode;
+}
+
 extern "C" FFIBool afx_hook_source2_get_entity_ref_attachment(void * pRef, const char* attachmentName, double outPosition[3], double outAngles[4]) {
     if(auto pInstance = ((CAfxEntityInstanceRef *)pRef)->GetInstance()) {
 		auto idx = pInstance->LookupAttachment(attachmentName);

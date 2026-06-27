@@ -12,6 +12,7 @@
 #include "Movie/MovieMode.h"
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
+#include "Movie/MirvCosmetics.h"
 #include "Platform/FolderPicker.h"
 #include "Platform/TextEncoding.h"
 
@@ -230,6 +231,11 @@ void RunMainThreadFrame() {
 	CameraPathRef().RunFrame();
 	FollowCameraRef().RunFrame(CameraEditorHudRef().Enabled());
 	MarkerHudRef().RunFrame();
+
+	// Offline demo skin-changer: re-assert any per-player weapon-skin overrides on this frame's
+	// entities. Cheap no-op when nothing is overridden. Entity-touching, so it rides the main
+	// thread alongside the camera/follow passes above.
+	Cosmetics_RunFrame();
 
 	// Camera timeline / curve editor (native-styled scrubber + IWXMVM-style lanes).
 	CameraTimelineHudRef().RunFrame();

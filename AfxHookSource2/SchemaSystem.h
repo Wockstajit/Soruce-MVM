@@ -85,9 +85,57 @@ struct ClientDllOffsets_t {
 		ptrdiff_t m_vTintColor = 0; // Color
 		ptrdiff_t m_flBrightnessScale = 0; // float32
 	} C_EnvSky;
+
+	// Econ/cosmetics fields for the offline demo skin-changer (Phase 3). Resolved separately
+	// and NON-FATALLY (see g_cosmeticsOffsetsOk) so a renamed field disables skins instead of
+	// aborting startup. Weapons (C_CSWeaponBase) derive from C_EconEntity; setting m_iItemIDHigh
+	// to -1 makes the client composite the material from the m_nFallback* fields below.
+	struct C_EconEntity {
+		ptrdiff_t m_OriginalOwnerXuidLow = 0;  // uint32
+		ptrdiff_t m_OriginalOwnerXuidHigh = 0; // uint32
+		ptrdiff_t m_nFallbackPaintKit = 0;     // int32 (paint kit / skin id)
+		ptrdiff_t m_nFallbackSeed = 0;         // int32 (pattern seed)
+		ptrdiff_t m_flFallbackWear = 0;        // float32 (0..1 wear)
+		ptrdiff_t m_nFallbackStatTrak = 0;     // int32 (-1 = none)
+		ptrdiff_t m_AttributeManager = 0;      // C_AttributeContainer (value member)
+	} C_EconEntity;
+
+	struct C_AttributeContainer {
+		ptrdiff_t m_Item = 0; // C_EconItemView (value member)
+	} C_AttributeContainer;
+
+	struct C_EconItemView {
+		ptrdiff_t m_iItemDefinitionIndex = 0; // uint16
+		ptrdiff_t m_iItemIDHigh = 0;          // uint32 (-1 forces fallback fields)
+		ptrdiff_t m_iItemIDLow = 0;           // uint32
+		ptrdiff_t m_iAccountID = 0;           // uint32
+		ptrdiff_t m_AttributeList = 0;        // C_AttributeList (value member)
+		ptrdiff_t m_bInitialized = 0;         // bool, optional refresh hint
+		ptrdiff_t m_bInitializedTags = 0;     // bool, optional refresh hint
+	} C_EconItemView;
+
+	struct C_AttributeList {
+		ptrdiff_t m_Attributes = 0; // C_UtlVectorEmbeddedNetworkVar<CEconItemAttribute>
+	} C_AttributeList;
+
+	struct CEconItemAttribute {
+		ptrdiff_t m_iAttributeDefinitionIndex = 0; // uint16
+		ptrdiff_t m_flValue = 0;                   // float32
+		uint32_t m_size = 0;                       // schema class size / vector stride
+	} CEconItemAttribute;
+
+	// Equipped gloves item view lives directly on the player pawn (value member). Used read-only to
+	// tell whether the spectated player wears custom gloves so the Customize modal can show them or
+	// fall back to the team default. Optional/non-fatal: a 0 offset just means "treat as default".
+	struct C_CSPlayerPawn {
+		ptrdiff_t m_EconGloves = 0; // C_EconItemView (value member)
+	} C_CSPlayerPawn;
 };
 
 extern struct ClientDllOffsets_t g_clientDllOffsets;
+
+// True only if ALL econ/cosmetics offsets above resolved; skin overrides are gated on this.
+extern bool g_cosmeticsOffsetsOk;
 
 // https://github.com/sneakyevil/CS2-SchemaDumper/blob/main/CSchemaSystem.hpp
 

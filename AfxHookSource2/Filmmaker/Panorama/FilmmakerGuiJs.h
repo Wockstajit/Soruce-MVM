@@ -963,7 +963,7 @@ R"FMJS(
       $.Schedule(0.05, tick);
     };
 
-    // ---- automation hooks (used by automation\verify-watch-ui.ps1) ----
+    // ---- automation hooks (used by automation\verify\verify-watch-ui.ps1) ----
     // The netcon console truncates a single command at 256 bytes, so the
     // verifier cannot ship a long ui_eval payload. These helpers keep the heavy
     // logic in the injected script (RunScript has no length limit); automation

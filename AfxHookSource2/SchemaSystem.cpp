@@ -6,6 +6,7 @@ ClientDllOffsets_t g_clientDllOffsets;
 
 // module name -> class name -> field name -> offset
 std::unordered_map<std::string, std::unordered_map<std::string, std::unordered_map<std::string, std::ptrdiff_t>>> g_SchemaSystemOffsets;
+std::unordered_map<std::string, std::unordered_map<std::string, uint32_t>> g_SchemaSystemClassSizes;
 
 void getOffsetsFromSchemaSystem(SDK::CSchemaSystem* pSchemaSystem)
 {
@@ -33,6 +34,7 @@ void getOffsetsFromSchemaSystem(SDK::CSchemaSystem* pSchemaSystem)
 			if (!pClass) continue;
 
 			const char* className = pClass->m_szName;
+			g_SchemaSystemClassSizes[pSchemaScope->m_szName][className] = pClass->m_nSize;
 
 			uintptr_t pClassFields = (uintptr_t)(pClass->m_pFields);
 			if (pClassFields)
@@ -81,6 +83,17 @@ bool getOffset(ptrdiff_t* offset, std::string moduleName, std::string className,
 	return true;
 }
 
+bool getClassSize(uint32_t* size, std::string moduleName, std::string className)
+{
+	if(g_SchemaSystemClassSizes.find(moduleName) == g_SchemaSystemClassSizes.end()) return false;
+	auto& module = g_SchemaSystemClassSizes.at(moduleName);
+
+	if(module.find(className) == module.end()) return false;
+	*size = module.at(className);
+
+	return true;
+}
+
 void initSchemaSystemOffsets()
 {
 	bool bOk = true;
@@ -117,7 +130,40 @@ void initSchemaSystemOffsets()
 	bOk = bOk && getOffset(&g_clientDllOffsets.C_EnvSky.m_vTintColor, "client.dll", "C_EnvSky", "m_vTintColor");
 	bOk = bOk && getOffset(&g_clientDllOffsets.C_EnvSky.m_flBrightnessScale, "client.dll", "C_EnvSky", "m_flBrightnessScale");
 
-	if (!bOk) ErrorBox(MkErrStr(__FILE__, __LINE__));	
+	if (!bOk) ErrorBox(MkErrStr(__FILE__, __LINE__));
+}
+
+bool g_cosmeticsOffsetsOk = false;
+
+// Econ/cosmetics offsets for the offline skin-changer. Resolved on a SEPARATE non-fatal path:
+// a renamed schema field just disables skin overrides (g_cosmeticsOffsetsOk=false) instead of
+// tripping the mandatory ErrorBox above and breaking the whole tool.
+void initCosmeticsOffsets()
+{
+	bool ok = true;
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_OriginalOwnerXuidLow, "client.dll", "C_EconEntity", "m_OriginalOwnerXuidLow");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_OriginalOwnerXuidHigh, "client.dll", "C_EconEntity", "m_OriginalOwnerXuidHigh");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_nFallbackPaintKit, "client.dll", "C_EconEntity", "m_nFallbackPaintKit");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_nFallbackSeed, "client.dll", "C_EconEntity", "m_nFallbackSeed");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_flFallbackWear, "client.dll", "C_EconEntity", "m_flFallbackWear");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_nFallbackStatTrak, "client.dll", "C_EconEntity", "m_nFallbackStatTrak");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconEntity.m_AttributeManager, "client.dll", "C_EconEntity", "m_AttributeManager");
+	ok = ok && getOffset(&g_clientDllOffsets.C_AttributeContainer.m_Item, "client.dll", "C_AttributeContainer", "m_Item");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iItemDefinitionIndex, "client.dll", "C_EconItemView", "m_iItemDefinitionIndex");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iItemIDHigh, "client.dll", "C_EconItemView", "m_iItemIDHigh");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iItemIDLow, "client.dll", "C_EconItemView", "m_iItemIDLow");
+	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iAccountID, "client.dll", "C_EconItemView", "m_iAccountID");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_AttributeList, "client.dll", "C_EconItemView", "m_AttributeList");
+	getOffset(&g_clientDllOffsets.C_AttributeList.m_Attributes, "client.dll", "C_AttributeList", "m_Attributes");
+	getOffset(&g_clientDllOffsets.CEconItemAttribute.m_iAttributeDefinitionIndex, "client.dll", "CEconItemAttribute", "m_iAttributeDefinitionIndex");
+	getOffset(&g_clientDllOffsets.CEconItemAttribute.m_flValue, "client.dll", "CEconItemAttribute", "m_flValue");
+	getClassSize(&g_clientDllOffsets.CEconItemAttribute.m_size, "client.dll", "CEconItemAttribute");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInitialized, "client.dll", "C_EconItemView", "m_bInitialized");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInitializedTags, "client.dll", "C_EconItemView", "m_bInitializedTags");
+	// Equipped gloves on the pawn -- optional (kept OFF the `ok` chain so a missing field disables
+	// only the "current gloves" read, not the whole skin-changer). Guarded by != 0 at the read site.
+	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_EconGloves, "client.dll", "C_CSPlayerPawn", "m_EconGloves");
+	g_cosmeticsOffsetsOk = ok;
 }
 
 void HookSchemaSystem(HMODULE schemaSystemDll)
@@ -149,6 +195,8 @@ void HookSchemaSystem(HMODULE schemaSystemDll)
 	getOffsetsFromSchemaSystem(schemaSystem);
 
 	initSchemaSystemOffsets();
+	initCosmeticsOffsets(); // non-fatal; must run before g_SchemaSystemOffsets is cleared
 
 	g_SchemaSystemOffsets.clear();
+	g_SchemaSystemClassSizes.clear();
 }

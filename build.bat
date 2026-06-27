@@ -101,5 +101,5 @@ echo === BUILD OK ===
 echo Output: %~dp0build\staging-release\bin\HLAE.exe
 echo Starting live dashboard / CS2 in 1 second...
 timeout /t 1 /nobreak >nul
-call "%~dp0automation\live.bat"
+call "%~dp0automation\launch\live.bat"
 exit /b %ERRORLEVEL%

@@ -69,6 +69,10 @@ public:
 	bool GetAttachment(uint8_t idx, SOURCESDK::Vector &origin, SOURCESDK::Quaternion &angles);
 };
 
+// Local viewer's observer mode (OBS_MODE_*: 1=fixed, 2=in-eye/first person, 3=chase/third
+// person, 4=roaming/freecam; 0=none). outTargetIndex receives the spectated entity index or -1.
+uint8_t AfxGetLocalObserverState(int * outTargetIndex);
+
 typedef int (__fastcall * GetHighestEntityIndex_t)(void * pEntityList, bool bUnknown);
 typedef void * (__fastcall * GetEntityFromIndex_t)(void * pEntityList, int index);
 
