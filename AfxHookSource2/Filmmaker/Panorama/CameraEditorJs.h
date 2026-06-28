@@ -821,8 +821,10 @@ R"EDJS(
       safeCall(panel, 'StartWeaponLookat');
       safeCall(panel, 'SetReadyForDisplay', true);
     }
-    function equipPlayerPreviewItem(panel, itemId) {
-      if (!panel || itemId == null) return;
+    function equipPlayerPreviewMeta(panel, meta) {
+      if (!panel || !meta) return;
+      var itemId = econItemId(meta);
+      if (!itemId) return;
       if (safeCall(panel, 'EquipPlayerWithItem', itemId) == null) safeCall(panel, 'EquipPlayerWithItem', itemId.toString());
     }
     // Push the chosen agent (or the spectated player's team default) onto whichever preview exists.
@@ -837,9 +839,9 @@ R"EDJS(
         if (sc.startCamera) safeCall(preview3d, 'TransitionToCamera', sc.startCamera, 0);
         safeCall(preview3d, 'SetActiveCharacter', 0); // char 0 = the single previewed agent
         safeCall(preview3d, 'SetPlayerModel', model);
-        equipPlayerPreviewItem(preview3d, fauxFromMeta(skin ? skin[2] : null));
-        equipPlayerPreviewItem(preview3d, fauxFromMeta(knife ? knife[2] : null));
-        equipPlayerPreviewItem(preview3d, fauxFromMeta(gloves ? gloves[2] : null));
+        equipPlayerPreviewMeta(preview3d, skin ? skin[2] : null);
+        equipPlayerPreviewMeta(preview3d, knife ? knife[2] : null);
+        equipPlayerPreviewMeta(preview3d, gloves ? gloves[2] : null);
         safeCall(preview3d, 'SetReadyForDisplay', true);
       } else {
         renderLoadoutCard();

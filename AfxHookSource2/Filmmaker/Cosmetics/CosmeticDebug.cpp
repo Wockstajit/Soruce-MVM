@@ -261,11 +261,13 @@ void Cosmetics_PrintStatus(const char* cmd) {
 	advancedfx::Message("  lastFrame: scanned=%d matched=%d patched=%d reverted=%d frame=%llu\n",
 		stats.entitiesScanned, stats.entitiesMatched, stats.entitiesPatched, stats.entitiesReverted,
 		(unsigned long long)stats.frame);
+	advancedfx::Message("  attrs: listsRead=%d valuesWritten=%d valuesChanged=%d empty=%d\n",
+		stats.attrListsRead, stats.attrValuesWritten, stats.attrValuesChanged, stats.attrListsEmpty);
 
 	int vtComp = 0, vtSec = 0;
 	sys.GetVtIdx(&vtComp, &vtSec);
-	advancedfx::Message("  recompose=%d faulted=%d vtComp=%d vtSec=%d\n",
-		sys.Recompose() ? 1 : 0, sys.RecomposeFaulted() ? 1 : 0, vtComp, vtSec);
+	advancedfx::Message("  recompose=%d faulted=%d vtComp=%d vtSec=%d vtArg=%d fallbackId=%d\n",
+		sys.Recompose() ? 1 : 0, sys.RecomposeFaulted() ? 1 : 0, vtComp, vtSec, sys.VtArg(), sys.FallbackId() ? 1 : 0);
 
 	if (sys.Store().All().empty())
 		advancedfx::Message("  (no profiles)\n");

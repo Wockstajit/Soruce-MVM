@@ -155,8 +155,17 @@ void initCosmeticsOffsets()
 	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iItemIDHigh, "client.dll", "C_EconItemView", "m_iItemIDHigh");
 	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iItemIDLow, "client.dll", "C_EconItemView", "m_iItemIDLow");
 	ok = ok && getOffset(&g_clientDllOffsets.C_EconItemView.m_iAccountID, "client.dll", "C_EconItemView", "m_iAccountID");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_bRestoreCustomMaterialAfterPrecache, "client.dll", "C_EconItemView", "m_bRestoreCustomMaterialAfterPrecache");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInventoryImageRgbaRequested, "client.dll", "C_EconItemView", "m_bInventoryImageRgbaRequested");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInventoryImageTriedCache, "client.dll", "C_EconItemView", "m_bInventoryImageTriedCache");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_szCurrentLoadCachedFileName, "client.dll", "C_EconItemView", "m_szCurrentLoadCachedFileName");
 	getOffset(&g_clientDllOffsets.C_EconItemView.m_AttributeList, "client.dll", "C_EconItemView", "m_AttributeList");
 	getOffset(&g_clientDllOffsets.C_EconItemView.m_NetworkedDynamicAttributes, "client.dll", "C_EconItemView", "m_NetworkedDynamicAttributes");
+	getOffset(&g_clientDllOffsets.CAttributeManager.m_CachedResults, "client.dll", "CAttributeManager", "m_CachedResults");
+	getOffset(&g_clientDllOffsets.CAttributeManager.m_iReapplyProvisionParity, "client.dll", "CAttributeManager", "m_iReapplyProvisionParity");
+	getOffset(&g_clientDllOffsets.C_CSWeaponBase.m_bVisualsDataSet, "client.dll", "C_CSWeaponBase", "m_bVisualsDataSet");
+	getOffset(&g_clientDllOffsets.C_CSWeaponBase.m_bClearWeaponIdentifyingUGC, "client.dll", "C_CSWeaponBase", "m_bClearWeaponIdentifyingUGC");
+	getOffset(&g_clientDllOffsets.C_CSWeaponBase.m_nCustomEconReloadEventId, "client.dll", "C_CSWeaponBase", "m_nCustomEconReloadEventId");
 	// NOTE: the schema class is "CAttributeList" (no underscore) -- the old "C_AttributeList" name
 	// never matched, so m_Attributes stayed 0 and EVERY econ attribute read (paint kit/wear/seed)
 	// silently failed, falling back to the m_nFallback* fields (which are 0 for networked demo items).
@@ -166,6 +175,10 @@ void initCosmeticsOffsets()
 	getClassSize(&g_clientDllOffsets.CEconItemAttribute.m_size, "client.dll", "CEconItemAttribute");
 	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInitialized, "client.dll", "C_EconItemView", "m_bInitialized");
 	getOffset(&g_clientDllOffsets.C_EconItemView.m_bInitializedTags, "client.dll", "C_EconItemView", "m_bInitializedTags");
+	// Experimental composite-refresh lever on C_EconEntity (the weapon), distinct from
+	// C_EconItemView::m_bInitialized. Optional/non-fatal -- guarded by != 0 at the write site, so a
+	// missing field just skips this lever rather than disabling cosmetics. See Phase 2 research doc.
+	getOffset(&g_clientDllOffsets.C_EconEntity.m_bAttributesInitialized, "client.dll", "C_EconEntity", "m_bAttributesInitialized");
 	// Equipped gloves on the pawn -- optional (kept OFF the `ok` chain so a missing field disables
 	// only the "current gloves" read, not the whole skin-changer). Guarded by != 0 at the read site.
 	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_EconGloves, "client.dll", "C_CSPlayerPawn", "m_EconGloves");

@@ -47,8 +47,8 @@ struct ApplyResult {
 // access-violates HERE and is reported via the return value instead of crashing. Signature matches
 // CBasePlayerWeapon::UpdateComposite(bool) -- on x64 __thiscall == __fastcall. (1 ==
 // EXCEPTION_EXECUTE_HANDLER; the literal avoids pulling in <windows.h> and its macro clashes.)
-typedef void* (__fastcall* UpdateComposite_t)(void* thisptr, bool bRegenerate);
-bool SafeVCall(void* obj, int idx, bool arg) {
+typedef void* (__fastcall* UpdateComposite_t)(void* thisptr, int arg);
+bool SafeVCall(void* obj, int idx, int arg) {
 	__try {
 		void** vt = *(void***)obj;
 		void* fn = vt[idx];
@@ -57,6 +57,84 @@ bool SafeVCall(void* obj, int idx, bool arg) {
 		return true;
 	} __except (1) {
 		return false;
+	}
+}
+
+// SEH-guarded read of a weapon entity's econ identity (owner XUID + embedded C_EconItemView pointer
+// + live item-definition index). LooksLikeWeaponEntity is only a class-name heuristic, so a
+// "weapon_" entity that is not actually a C_EconEntity would access-violate if read directly --
+// guarding here means such an entity is skipped, never crashing the game. POD-only body: `out` is
+// constructed by the caller; inside __try we only assign primitives.
+struct WeaponEconRead {
+	uint64_t xuid = 0;
+	unsigned char* itemView = nullptr;
+	int liveDef = 0;
+};
+bool TryReadWeaponEconInfo(unsigned char* w, ptrdiff_t offXuidLow, ptrdiff_t offXuidHigh,
+	ptrdiff_t offAttrMgr, ptrdiff_t offItem, ptrdiff_t offDef, WeaponEconRead* out) {
+	__try {
+		uint32_t xLow = *(uint32_t*)(w + offXuidLow);
+		uint32_t xHigh = *(uint32_t*)(w + offXuidHigh);
+		out->xuid = ((uint64_t)xHigh << 32) | (uint64_t)xLow;
+		out->itemView = w + offAttrMgr + offItem;
+		out->liveDef = (int)*(uint16_t*)(out->itemView + offDef);
+		return true;
+	} __except (1) {
+		return false;
+	}
+}
+
+// POD result of the networked-attribute overwrite. `changed` is true when at least one value was
+// actually different from our target (drives the re-composite), `written` counts matched attributes.
+struct AttrWriteResult {
+	bool ok = false;
+	int written = 0;
+	bool changed = false;
+};
+
+// THE real skin write (Phase 2 breakthrough). A networked demo weapon stores its actual skin in
+// m_NetworkedDynamicAttributes (def 6 = paint kit, 7 = seed, 8 = wear, 81 = StatTrak) -- the
+// m_nFallback* fields are only consulted when the item has NO networked attributes, so on a demo
+// item they are ignored. This OVERWRITES the matching attribute VALUES in place (it cannot add new
+// ones -- a missing def, e.g. StatTrak on a non-ST gun, is skipped). Walks the same vector layout as
+// CosmeticDebug.cpp::ReadAttrList. POD-only body so __try/__except is permitted. vectorField =
+// itemView + networkedOff + attrSubOff (the CAttributeList::m_Attributes vector).
+void WriteNetworkedSkinAttributes(unsigned char* itemView, ptrdiff_t networkedOff, ptrdiff_t attrSubOff,
+	int stride, ptrdiff_t defOff, ptrdiff_t valOff, int paintKit, int seed, float wear, int statTrak,
+	AttrWriteResult* out) {
+	*out = AttrWriteResult{};
+	if (networkedOff == 0 || attrSubOff == 0 || defOff == 0 || valOff == 0 || stride <= 0)
+		return;
+	unsigned char* vectorField = itemView + networkedOff + attrSubOff;
+	__try {
+		// Accept both observed vector layouts (count+ptr at +0/+8, or ptr+count at +0/+16), the same
+		// tolerance as ReadAttrList.
+		int count = *(int*)vectorField;
+		unsigned char* data = *(unsigned char**)(vectorField + 8);
+		if (!(count > 0 && count <= 128 && (uintptr_t)data > 0x10000)) {
+			data = *(unsigned char**)vectorField;
+			count = *(int*)(vectorField + 16);
+		}
+		if (!(count > 0 && count <= 128 && (uintptr_t)data > 0x10000)) {
+			out->ok = true; // valid but empty -- nothing to overwrite
+			return;
+		}
+		for (int i = 0; i < count; ++i) {
+			unsigned char* attr = data + (ptrdiff_t)i * stride;
+			int def = (int)*(uint16_t*)(attr + defOff);
+			float nv;
+			if (def == 6) nv = (float)paintKit;
+			else if (def == 7) nv = (float)seed;
+			else if (def == 8) nv = wear;
+			else if (def == 81 && statTrak >= 0) nv = (float)statTrak;
+			else continue;
+			float* pv = (float*)(attr + valOff);
+			if (*pv != nv) { *pv = nv; out->changed = true; }
+			++out->written;
+		}
+		out->ok = true;
+	} __except (1) {
+		out->ok = false;
 	}
 }
 
@@ -71,11 +149,15 @@ bool SafeVCall(void* obj, int idx, bool arg) {
 // offDef                                          = C_EconItemView::m_iItemDefinitionIndex (from itemView)
 // offItemIdLow/offAccountId                       = optional (0 = skip), from itemView
 // offInit/offInitTags                             = optional (0 = skip), from itemView
+// offRestoreMaterial/offImageReq/offImageTried/offCachedFile = optional item-view cache hints
+// offAttrParity                                  = optional CAttributeManager cache hint
+// offVisualsData/offClearUgc/offReloadEvent      = optional C_CSWeaponBase visuals-cache hints
 // knifeDefOverride > 0 requests a def/model swap (best-effort; see header comment on agent/gloves
 // for what is and is not safe to do here -- this is just numeric def swap, not a model load).
 ApplyResult ApplyCosmeticWrite(
 	unsigned char* w,
 	unsigned char* itemView,
+	unsigned char* attrManager,
 	ptrdiff_t offItemIdHigh,
 	ptrdiff_t offPaint,
 	ptrdiff_t offWear,
@@ -86,12 +168,22 @@ ApplyResult ApplyCosmeticWrite(
 	ptrdiff_t offAccountId,
 	ptrdiff_t offInit,
 	ptrdiff_t offInitTags,
+	ptrdiff_t offAttrInit,
+	ptrdiff_t offRestoreMaterial,
+	ptrdiff_t offImageReq,
+	ptrdiff_t offImageTried,
+	ptrdiff_t offCachedFile,
+	ptrdiff_t offAttrParity,
+	ptrdiff_t offVisualsData,
+	ptrdiff_t offClearUgc,
+	ptrdiff_t offReloadEvent,
 	int32_t paintKit,
 	float wear,
 	int32_t seed,
 	int32_t statTrak,
 	uint32_t accountId,
-	int knifeDefOverride) {
+	int knifeDefOverride,
+	bool writeFallbackId) {
 	__try {
 		int32_t* pItemIdHigh = (int32_t*)(itemView + offItemIdHigh);
 		int32_t* pPaint = (int32_t*)(w + offPaint);
@@ -100,17 +192,28 @@ ApplyResult ApplyCosmeticWrite(
 		int32_t* pStat = (int32_t*)(w + offStat);
 		uint16_t* pDef = (uint16_t*)(itemView + offDef);
 
-		bool reverted = (*pItemIdHigh != -1);
+		bool restoreItemId = !writeFallbackId && (*pItemIdHigh == -1);
+		bool reverted = writeFallbackId && (*pItemIdHigh != -1);
 		bool need = reverted
+			|| restoreItemId
 			|| (*pPaint != paintKit)
 			|| (*pWear != wear)
 			|| (*pSeed != seed)
 			|| (*pStat != statTrak)
 			|| (knifeDefOverride > 0 && *pDef != (uint16_t)knifeDefOverride);
 
-		*pItemIdHigh = -1;
-		if (offAccountId) *(uint32_t*)(itemView + offAccountId) = accountId; // best-effort
-		if (offItemIdLow) *(uint32_t*)(itemView + offItemIdLow) = 0;         // best-effort
+		// itemIDHigh=-1 forces the legacy fallback-field path. Opt-in only: it INVALIDATES the item
+		// id (breaks the UI inventory read -- "no AK") and is unnecessary now that we overwrite the
+		// networked attributes directly. Default OFF (see m_fallbackId / "cosmetics fallback").
+		if (writeFallbackId) {
+			*pItemIdHigh = -1;
+			if (offAccountId) *(uint32_t*)(itemView + offAccountId) = accountId; // best-effort
+			if (offItemIdLow) *(uint32_t*)(itemView + offItemIdLow) = 0;         // best-effort
+		} else if (restoreItemId) {
+			// Older builds / live diagnostics could leave demo weapons in fallback mode, which makes
+			// CS2's loadout HUD lose the real weapon icon. In normal mode keep the demo item id valid.
+			*pItemIdHigh = 0;
+		}
 		*pPaint = paintKit;
 		*pWear = wear;
 		*pSeed = seed;
@@ -120,6 +223,26 @@ ApplyResult ApplyCosmeticWrite(
 		if (need) {
 			if (offInit) *(bool*)(itemView + offInit) = false;
 			if (offInitTags) *(bool*)(itemView + offInitTags) = false;
+			if (offRestoreMaterial) *(bool*)(itemView + offRestoreMaterial) = true;
+			if (offImageReq) *(bool*)(itemView + offImageReq) = false;
+			if (offImageTried) *(bool*)(itemView + offImageTried) = false;
+			if (offCachedFile) *(char*)(itemView + offCachedFile) = 0;
+			if (attrManager) {
+				if (offAttrParity) {
+					int32_t* parity = (int32_t*)(attrManager + offAttrParity);
+					*parity = *parity + 1;
+				}
+			}
+			if (offVisualsData) *(bool*)(w + offVisualsData) = false;
+			if (offClearUgc) *(bool*)(w + offClearUgc) = true;
+			if (offReloadEvent) {
+				int32_t* reloadEvent = (int32_t*)(w + offReloadEvent);
+				*reloadEvent = *reloadEvent + 1;
+			}
+			// Experimental (Phase 2): clear C_EconEntity::m_bAttributesInitialized on the WEAPON
+			// (offset from w, NOT itemView) to try to force an econ attribute / composite re-init.
+			// Optional -- skipped when the offset did not resolve. See cosmetics-recompose-research.md.
+			if (offAttrInit) *(bool*)(w + offAttrInit) = false;
 		}
 
 		ApplyResult r;
@@ -331,6 +454,10 @@ void CosmeticOverrideSystem::RunFrame() {
 	m_lastStats.entitiesMatched = 0;
 	m_lastStats.entitiesPatched = 0;
 	m_lastStats.entitiesReverted = 0;
+	m_lastStats.attrListsRead = 0;
+	m_lastStats.attrValuesWritten = 0;
+	m_lastStats.attrValuesChanged = 0;
+	m_lastStats.attrListsEmpty = 0;
 
 	const int highest = GetHighestEntityIndex();
 	for (int i = 0; i <= highest; ++i) {
@@ -342,11 +469,18 @@ void CosmeticOverrideSystem::RunFrame() {
 
 		unsigned char* w = (unsigned char*)ent;
 
-		// Resolve the ORIGINAL owner's XUID -> SteamID64. Dropped weapons keep this set, so a
-		// dropped gun still carries its owner's override.
-		uint32_t xLow = *(uint32_t*)(w + o.C_EconEntity.m_OriginalOwnerXuidLow);
-		uint32_t xHigh = *(uint32_t*)(w + o.C_EconEntity.m_OriginalOwnerXuidHigh);
-		uint64_t xuid = ((uint64_t)xHigh << 32) | (uint64_t)xLow;
+		// SEH-guarded read of owner XUID + embedded C_EconItemView pointer + live item-definition
+		// index. A "weapon_" entity that is not actually a C_EconEntity is skipped here instead of
+		// crashing. Dropped weapons keep OriginalOwnerXuid, so a dropped gun still carries its
+		// owner's override.
+		WeaponEconRead econ;
+		if (!TryReadWeaponEconInfo(w,
+				o.C_EconEntity.m_OriginalOwnerXuidLow, o.C_EconEntity.m_OriginalOwnerXuidHigh,
+				o.C_EconEntity.m_AttributeManager, o.C_AttributeContainer.m_Item,
+				o.C_EconItemView.m_iItemDefinitionIndex, &econ))
+			continue;
+
+		uint64_t xuid = econ.xuid;
 		if (xuid == 0)
 			continue;
 
@@ -356,8 +490,8 @@ void CosmeticOverrideSystem::RunFrame() {
 
 		++m_lastStats.entitiesScanned;
 
-		unsigned char* itemView = w + o.C_EconEntity.m_AttributeManager + o.C_AttributeContainer.m_Item;
-		int liveDef = (int)*(uint16_t*)(itemView + o.C_EconItemView.m_iItemDefinitionIndex);
+		unsigned char* itemView = econ.itemView;
+		int liveDef = econ.liveDef;
 
 		CosmeticItem* item = nullptr;
 		int knifeDefOverride = 0;
@@ -384,9 +518,30 @@ void CosmeticOverrideSystem::RunFrame() {
 
 		++m_lastStats.entitiesMatched;
 
+		// THE real skin write (Phase 2): overwrite the networked dynamic attributes (def 6/7/8/81),
+		// where a demo weapon's actual skin lives. The fallback-field ApplyCosmeticWrite below is now
+		// a harmless backup (those fields are ignored while networked attributes are present).
+		int attrStride = (int)o.CEconItemAttribute.m_size;
+		int attrMinStride = (int)o.CEconItemAttribute.m_flValue + (int)sizeof(float);
+		if (attrStride < attrMinStride) attrStride = attrMinStride;
+		AttrWriteResult attr;
+		WriteNetworkedSkinAttributes(itemView,
+			o.C_EconItemView.m_NetworkedDynamicAttributes, o.C_AttributeList.m_Attributes, attrStride,
+			o.CEconItemAttribute.m_iAttributeDefinitionIndex, o.CEconItemAttribute.m_flValue,
+			item->paintKit, item->seed, item->wear, item->statTrak, &attr);
+		if (attr.ok) {
+			++m_lastStats.attrListsRead;
+			m_lastStats.attrValuesWritten += attr.written;
+			if (attr.changed)
+				++m_lastStats.attrValuesChanged;
+			if (attr.written == 0)
+				++m_lastStats.attrListsEmpty;
+		}
+
 		ApplyResult result = ApplyCosmeticWrite(
 			w,
 			itemView,
+			w + o.C_EconEntity.m_AttributeManager,
 			o.C_EconItemView.m_iItemIDHigh,
 			o.C_EconEntity.m_nFallbackPaintKit,
 			o.C_EconEntity.m_flFallbackWear,
@@ -397,12 +552,22 @@ void CosmeticOverrideSystem::RunFrame() {
 			o.C_EconItemView.m_iAccountID,
 			o.C_EconItemView.m_bInitialized,
 			o.C_EconItemView.m_bInitializedTags,
+			o.C_EconEntity.m_bAttributesInitialized,
+			o.C_EconItemView.m_bRestoreCustomMaterialAfterPrecache,
+			o.C_EconItemView.m_bInventoryImageRgbaRequested,
+			o.C_EconItemView.m_bInventoryImageTriedCache,
+			o.C_EconItemView.m_szCurrentLoadCachedFileName,
+			o.CAttributeManager.m_iReapplyProvisionParity,
+			o.C_CSWeaponBase.m_bVisualsDataSet,
+			o.C_CSWeaponBase.m_bClearWeaponIdentifyingUGC,
+			o.C_CSWeaponBase.m_nCustomEconReloadEventId,
 			(int32_t)item->paintKit,
 			item->wear,
 			(int32_t)item->seed,
 			(int32_t)item->statTrak,
-			xLow,
-			knifeDefOverride);
+			(uint32_t)xuid,
+			knifeDefOverride,
+			m_fallbackId);
 
 		if (result.patched)
 			++m_lastStats.entitiesPatched;
@@ -413,10 +578,10 @@ void CosmeticOverrideSystem::RunFrame() {
 			// fields + invalidating the init flags is not always enough to make a demo entity visually
 			// rebuild its skin material -- this calls the weapon's UpdateComposite vtable method when a
 			// (re)composite is warranted. SEH-guarded: a wrong index disables recompose, never crashes.
-			if (m_recompose && result.needComposite) {
+			if (m_recompose && (result.needComposite || attr.changed)) {
 				bool ok = true;
-				if (m_vtComposite >= 0) ok = SafeVCall(ent, m_vtComposite, true);
-				if (ok && m_vtCompositeSec >= 0) ok = SafeVCall(ent, m_vtCompositeSec, true);
+				if (m_vtComposite >= 0) ok = SafeVCall(ent, m_vtComposite, m_vtArg);
+				if (ok && m_vtCompositeSec >= 0) ok = SafeVCall(ent, m_vtCompositeSec, m_vtArg);
 				if (!ok) { m_recompose = false; m_recomposeFaulted = true; }
 			}
 	}

@@ -98,6 +98,11 @@ struct ClientDllOffsets_t {
 		ptrdiff_t m_flFallbackWear = 0;        // float32 (0..1 wear)
 		ptrdiff_t m_nFallbackStatTrak = 0;     // int32 (-1 = none)
 		ptrdiff_t m_AttributeManager = 0;      // C_AttributeContainer (value member)
+		// Experimental composite-refresh lever (Phase 2 research): distinct from
+		// C_EconItemView::m_bInitialized (an inventory description-text cache flag that does NOT touch
+		// the render path). Clearing this on the weapon is hypothesized to force a re-init of its econ
+		// attributes / skin composite. Optional / non-fatal -- 0 = field unavailable, lever skipped.
+		ptrdiff_t m_bAttributesInitialized = 0; // bool
 	} C_EconEntity;
 
 	struct C_AttributeContainer {
@@ -105,6 +110,10 @@ struct ClientDllOffsets_t {
 	} C_AttributeContainer;
 
 	struct C_EconItemView {
+		ptrdiff_t m_bRestoreCustomMaterialAfterPrecache = 0; // bool, optional refresh hint
+		ptrdiff_t m_bInventoryImageRgbaRequested = 0; // bool, optional cache invalidation hint
+		ptrdiff_t m_bInventoryImageTriedCache = 0;    // bool, optional cache invalidation hint
+		ptrdiff_t m_szCurrentLoadCachedFileName = 0;  // char[], optional cache invalidation hint
 		ptrdiff_t m_iItemDefinitionIndex = 0; // uint16
 		ptrdiff_t m_iItemIDHigh = 0;          // uint32 (-1 forces fallback fields)
 		ptrdiff_t m_iItemIDLow = 0;           // uint32
@@ -117,6 +126,17 @@ struct ClientDllOffsets_t {
 		ptrdiff_t m_bInitialized = 0;         // bool, optional refresh hint
 		ptrdiff_t m_bInitializedTags = 0;     // bool, optional refresh hint
 	} C_EconItemView;
+
+	struct CAttributeManager {
+		ptrdiff_t m_CachedResults = 0;          // optional attribute-cache invalidation hint
+		ptrdiff_t m_iReapplyProvisionParity = 0; // optional attribute-cache invalidation hint
+	} CAttributeManager;
+
+	struct C_CSWeaponBase {
+		ptrdiff_t m_bVisualsDataSet = 0;             // optional render/econ visuals cache hint
+		ptrdiff_t m_bClearWeaponIdentifyingUGC = 0;  // optional render/econ visuals cache hint
+		ptrdiff_t m_nCustomEconReloadEventId = 0;    // optional render/econ visuals cache hint
+	} C_CSWeaponBase;
 
 	struct C_AttributeList {
 		ptrdiff_t m_Attributes = 0; // C_UtlVectorEmbeddedNetworkVar<CEconItemAttribute>

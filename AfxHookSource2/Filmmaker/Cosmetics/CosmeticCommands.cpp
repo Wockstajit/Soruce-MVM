@@ -243,6 +243,23 @@ void DoVtIdx(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	advancedfx::Message("%s cosmetics: vtidx comp=%d sec=%d (recompose re-armed).\n", cmd, comp, sec);
 }
 
+// Opt-in legacy fallback-id mode: forces C_EconItemView::m_iItemIDHigh = -1. Default OFF -- it breaks
+// the UI inventory read and is unnecessary now that the networked attributes are overwritten directly.
+void DoFallback(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4)
+		CosmeticsRef().SetFallbackId(0 != atoi(args->ArgV(3)));
+	advancedfx::Message("%s cosmetics: fallback (itemIDHigh=-1) = %d.\n", cmd, CosmeticsRef().FallbackId() ? 1 : 0);
+}
+
+// Sets the argument passed to the recompose vtable call. 1 = default; 0 lets us test
+// OnDataChanged(DATA_UPDATE_CREATED), the candidate client-side skin-rebuild trigger.
+void DoVtArg(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4)
+		CosmeticsRef().SetVtArg(atoi(args->ArgV(3)));
+	advancedfx::Message("%s cosmetics: vtarg = %d (vtable call arg; 0 = DATA_UPDATE_CREATED).\n",
+		cmd, CosmeticsRef().VtArg());
+}
+
 } // namespace
 
 void Cosmetics_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
@@ -268,6 +285,10 @@ void Cosmetics_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* 
 		DoRecompose(argc, args, cmd);
 	} else if (TokenIs(sub, "vtidx")) {
 		DoVtIdx(argc, args, cmd);
+	} else if (TokenIs(sub, "fallback")) {
+		DoFallback(argc, args, cmd);
+	} else if (TokenIs(sub, "vtarg")) {
+		DoVtArg(argc, args, cmd);
 	} else {
 		PrintUsage(cmd);
 	}

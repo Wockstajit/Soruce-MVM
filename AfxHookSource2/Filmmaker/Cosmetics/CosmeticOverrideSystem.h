@@ -31,6 +31,10 @@ struct CosmeticFrameStats {
 	int entitiesMatched = 0;   // owned by a profiled SteamID
 	int entitiesPatched = 0;   // had an override written this frame
 	int entitiesReverted = 0;  // the engine had clobbered our write and we re-applied it
+	int attrListsRead = 0;     // networked dynamic attribute vectors successfully read
+	int attrValuesWritten = 0; // def 6/7/8/81 values found and overwritten
+	int attrValuesChanged = 0; // values that differed from the requested override
+	int attrListsEmpty = 0;    // valid vectors with no matching writable skin attrs
 	uint64_t frame = 0;        // monotonically increasing apply-frame counter
 };
 
@@ -92,6 +96,16 @@ public:
 	bool RecomposeFaulted() const { return m_recomposeFaulted; }
 	void GetVtIdx(int* comp, int* sec) const;
 	void SetVtIdx(int comp, int sec);
+	// Argument passed to the SEH-guarded vtable call (default 1). Set to 0 to test
+	// OnDataChanged(DATA_UPDATE_CREATED) -- the candidate skin-rebuild trigger. "cosmetics vtarg".
+	void SetVtArg(int a) { m_vtArg = a; }
+	int VtArg() const { return m_vtArg; }
+
+	// Opt-in legacy fallback-id mode: when ON, the apply loop also forces C_EconItemView::m_iItemIDHigh
+	// = -1 (the m_nFallback* path). Default OFF -- it invalidates the item id (UI shows "no weapon") and
+	// is unnecessary now that the networked dynamic attributes are overwritten directly. "cosmetics fallback".
+	void SetFallbackId(bool e) { m_fallbackId = e; }
+	bool FallbackId() const { return m_fallbackId; }
 
 private:
 	CosmeticProfileStore m_store;
@@ -105,6 +119,8 @@ private:
 	bool m_recomposeFaulted = false;
 	int m_vtComposite = 7;
 	int m_vtCompositeSec = -1;
+	int m_vtArg = 1;           // argument for the recompose vtable call; see SetVtArg
+	bool m_fallbackId = false; // opt-in itemIDHigh=-1 path; see SetFallbackId
 };
 
 // Process-wide singleton (matches the ...Ref() pattern used by MovieMode/CameraPath/etc.).
