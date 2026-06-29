@@ -351,8 +351,12 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Cosmetics/CosmeticCatalog.h
     Filmmaker/Cosmetics/CosmeticOverrideSystem.cpp
     Filmmaker/Cosmetics/CosmeticOverrideSystem.h
+    Filmmaker/Cosmetics/CosmeticModelSwap.cpp
+    Filmmaker/Cosmetics/CosmeticModelSwap.h
     Filmmaker/Cosmetics/CosmeticCommands.cpp
     Filmmaker/Cosmetics/CosmeticDebug.cpp
+    Filmmaker/Cosmetics/CosmeticDebugLog.cpp
+    Filmmaker/Cosmetics/CosmeticDebugLog.h
 
     Filmmaker/Platform/FolderPicker.cpp
     Filmmaker/Platform/FolderPicker.h

@@ -19,6 +19,133 @@ that is when CS2 reads the cvar while building the composite material. The reusa
 `automation/verify/verify-cosmetics-paintkit-bridge.ps1`, with image-diff support in
 `automation/tools/image_diff.py`.
 
+## BREAKTHROUGH (2026-06-29): the per-player demo skin DOES render — via the Andromeda direct composite call
+
+The "airtight" impossibility conclusion below (the `### Follow-up` and `## Mechanism` sections) is
+**superseded**. A per-player weapon skin override now renders on the spectated demo weapon, confirmed
+live with cropped, paused-tick, noise-floor-controlled screenshot diffs and direct visual inspection
+(four distinct paint kits produced four visibly distinct finishes on the same USP-S). What changed:
+
+1. **Root cause of every prior failure was a pattern-syntax bug, not a structural impossibility.**
+   The Andromeda composite functions (`UpdateCompositeMaterial` / `UpdateCompositeMaterialSet` /
+   `UpdateSkin`) were wired into `cosmetics composite once`, but their AOB patterns used a single `?`
+   per wildcard byte. `Afx::BinUtils::FindPatternString` consumes **two hex chars per byte**, so a
+   wildcard byte must be written `??`; a lone `?` is read as half a byte and silently shifts every
+   subsequent literal. Result: the functions never resolved (`resolved=0`) and the entire direct
+   composite path was a **no-op** — so the "write-then-rebuild never works" finding was actually
+   "the rebuild call was never executing." Fixed at
+   `CosmeticOverrideSystem.cpp` `ResolveDirectCompositeFns()` (`?` -> `??` on all four AOBs); the four
+   patterns are present and resolve uniquely in the current `client.dll` (the `updateSkin` prologue
+   has two near-identical hits 0x50 apart — first is taken; flagged as a minor ambiguity to watch).
+
+2. **The working recipe (verified live, demo paused, USP-S def 61):**
+   - override on the **actually held weapon's defIndex** (a held USP-S is def **61**, not slot `0` —
+     the old verifier hardcoded `weapon 0`, which never bound and is why its data path showed
+     `def6=796` unchanged);
+   - **fallback identity ON** (`m_iItemIDHigh = -1`) so the composite build consults our fallback
+     fields (`fallback paint/wear/seed`), plus the networked `def6` write;
+   - then **`mirv_filmmaker cosmetics composite once 0x608`** — this is the **essential lever**.
+     Isolated cleanly: changing the profile paint and waiting on the per-frame apply alone did **not**
+     update the render (weapon kept the prior composite); firing `composite once` immediately
+     re-composited to the new paint. (The old per-frame *vtable* `recompose` path faults/disarms —
+     `recompose=0 faulted=1` — and was never the working path.)
+
+3. **Proof, not a threshold artifact.** paint 504 -> dark/worn, 915 -> dark olive, 568 -> green,
+   638 -> pink/purple camo, all on the same paused tick with only the paint number changing. The
+   override also **persists through short playback** (the per-frame apply keeps the data written and
+   the cached composite survives until the weapon entity is recreated). **Caveat:** a weapon redeploy
+   / round change / **demo seek recreates the entity from the authoritative item (796)**, so
+   `composite once` must be re-fired after seeking — natural for frame-by-frame filmmaking.
+
+4. **The old whole-frame verifier gave a false-positive PASS.** It diffed the full 1600x1200 frame
+   AND advanced the demo ~900ms (`demo_resume`/`demo_pause`) between shots, so ~100k pixels changed
+   from motion regardless of the skin. `automation/verify/verify-cosmetics-composite-direct.ps1` is
+   rewritten to stay paused, use the resolved defIndex + fallback, and compare a **viewmodel crop**
+   against a same-tick TAA noise floor (`image_diff.py --crop`). It now passes on the real signal
+   (weapon-crop mean ~1.5 vs noise ~0.28).
+
+Net: the Andromeda GitHub base **did** help — its composite-function targets are exactly right. The
+`cl_paintkit_override` build-time-hook direction (Path C below) is no longer the only option; the
+direct post-write composite call works per-player, offline, during demo playback.
+
+### UI auto-update wiring + per-slot status (2026-06-29)
+
+The Cam Editor → Customize flow now renders skins without any manual command. Root gap: the UI
+(`Panorama/CameraEditorJs.h` `applyCosmeticCommand`) sends `cosmetics player ... weapon <def>
+paint <pk>` + `enabled 1` but nothing fired the composite, and `RunFrame` called
+`ApplyMatchedWeapons(..., fireDirectComposite=false)`. Fix: added **`m_autoComposite`** (default ON,
+`cosmetics autocomposite 0|1`); `RunFrame` now passes `fireDirectComposite=m_autoComposite`, and the
+direct composite is change-gated (`needComposite || attr.changed`) so it fires once on a skin-data
+change and re-fires after a seek/redeploy recreates the entity. **No fallback identity needed** —
+verified the composite renders with `m_iItemIDHigh` left valid (the composite reads our `def6`
+networked attribute + the `setAttributeValueByName` call inside the refresh).
+
+Verified live (cropped, paused, noise-floor-controlled), replaying *exactly* the UI's commands:
+
+| Slot | Status | Notes |
+|---|---|---|
+| **Primary** (e.g. SSG08 def 40) | **WORKS** | autocomposite OFF→mean 0.24 (no render), ON→mean 6.36 (full weapon repaint). |
+| **Secondary** (e.g. USP-S def 61) | **WORKS** | UI command path mean 2.97 vs noise 0.17. |
+| **Knife — paint, player already has a custom knife** | **Expected to work** (same composite path) — NOT verified live; the test demo's spectated players carry default knives. |
+| **Knife — default knife / change knife TYPE** | **Does NOT work** | Default knife has `networkedAttrs count=0` (no attrs to overwrite) and is not a paintable composite target (engine logs `vCompMat ... did not affect any target materials on knife_default_ct`); writing `m_iItemDefinitionIndex=507` does NOT swap the renderable model (worldModel stays `knife_default_ct`). This is the deferred model-swap path (`docs/cosmetics-model-override-research.md`). |
+| **Gloves** | **Does NOT work yet** | Gloves are not a scanned weapon entity — they live on the pawn (`C_CSPlayerPawn::m_EconGloves`, an embedded `C_EconItemView`). The apply loop never touches them and the glove composite-owner pointer is unknown. Needs its own pass. |
+| **Agents** | **Does NOT work** | Full player-model swap, not a weapon composite. Separate mechanism (`docs/cosmetics-model-override-research.md`). |
+
+Bottom line: **weapon (primary/secondary) skins auto-apply and render through the UI**; knife paint
+should work for players who already own a custom knife; **gloves, agents, and knife TYPE swaps remain
+the model-override problem** and are not delivered by the composite path.
+
+### UPDATE (2026-06-29): the model-override rows are now delivered too
+
+The "gloves / agents / knife TYPE swaps remain the model-override problem" caveat above is **resolved**.
+The model-swap path (`CosmeticModelSwap.cpp`, `C_BaseModelEntity::SetModel` + `SetMeshGroupMask` +
+`UpdateSubclass` + glove body group, all resolved on the live build) now also fires
+`CGameSceneNode::PostDataUpdate` (vtable index 22, from Andromeda) after each write, and
+`CosmeticOverrideSystem::MaybeFireTickNudge` briefly resumes the demo ~10 ticks after a change and
+re-pauses ("let the game play ~10 ticks", automated). Together these make agent / glove / knife-type /
+legacy-mesh swaps render — the missing piece was a renderable refresh + live frames, not the writes.
+Verified live: weapon skin VISIBLE in place; agent `m_ModelName` flips `ctm_st6`->`ctm_fbi`
+(authoritative); all model-swap functions resolve. Details in
+`docs/cosmetics-cs2-methodology-notes.md` §6b. View body swaps in third person
+(`mirv_filmmaker follow preset behind` + `follow place`); a first-person view shows only the viewmodel.
+
+### LOG-DRIVEN CORRECTION (2026-06-29): knife type swaps are opt-in
+
+`mvm_debug_20260629_065323.log` shows the crash path after a UI customizer pick:
+`knife steamId=... def=500`, then `cosmetics.apply ... knifeSwap=1`, then a short tick nudge, then
+CS2 Breakpad reset messages when the player switched weapons. The "cosmetics are disabled" console
+line in that same sequence was only a command-order warning: the UI had sent the profile mutation
+before `cosmetics enabled 1`, and the next log entry enabled cosmetics successfully.
+
+Conclusion: the paint/composite path remains usable, but the knife TYPE model/subclass swap is not
+production-safe in demo playback. It now defaults OFF behind `mirv_filmmaker cosmetics modelswap knife
+1` for focused testing; normal customizer use can still write the profile without firing
+`ApplyKnifeModelSwap`.
+
+### LOG-DRIVEN CORRECTIONS (2026-06-29): reset scope, current knife resources, and viewmodels
+
+`mvm_debug_20260629_062346.log` exposed three separate faults that were previously being conflated:
+
+1. Cosmetic profiles were auto-saved to `%APPDATA%\HLAE\cosmetic_profiles.json`. The session began
+   with four old player profiles already loaded, and a tick reset from about 944 to 1 did not change
+   the demo path. Once any new edit armed the system, all old profiles applied to recreated entities.
+   Profiles are now runtime-only, the compatibility JSON is normalized to
+   `{"enabled":false,"players":{}}`, and state is cleared on demo path changes or a large regression
+   to the first second. A close, reload, or demo restart therefore cannot reapply an earlier edit.
+2. The Karambit fallback requested the removed resource
+   `weapons/models/knife/knife_karam/weapon_knife_karam.vmdl`; the log contains the corresponding
+   `resource ... is not in the system` error. Live `items_game.txt` and VPK contents use
+   `knife_karambit/weapon_knife_karambit.vmdl`. Bowie, Navaja, and Talon had the same legacy-name
+   problem and their fallback paths were corrected too.
+3. The apply loop passed no owner pawn into knife/weapon model refresh, and the first-person mesh
+   branch was an empty placeholder. It now resolves the original owner's pawn, refreshes weapon
+   children under `m_hHudModelArms`, and refreshes them again after the direct composite call.
+   Gloves no longer force the unrelated `first_or_third_person` body-group choice (which removed
+   third-person hands); the engine chooses the pawn body group and the selected glove definition's
+   `agents/models/shared/arms/...` model is applied to the HUD-arms entity.
+
+These corrections are build-verified but require live demo verification for final visual behavior.
+
 ## Tooling added for this investigation (current build)
 
 Two console commands were added to drive the investigation in-game (both in

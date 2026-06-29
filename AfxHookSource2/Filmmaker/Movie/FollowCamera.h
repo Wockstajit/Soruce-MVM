@@ -193,6 +193,7 @@ public:
 	bool Repositioning() const { return m_repositioning; }
 	bool Debug() const { return m_debug; }
 	const FollowCameraState& State() const { return m_state; }
+	const std::string& LastMessage() const { return m_lastMessage; }
 	std::vector<FollowTargetCandidate> Candidates() const;
 	std::string BuildStateJson() const;
 	void PrintStatus() const;

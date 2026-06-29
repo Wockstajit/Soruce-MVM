@@ -1269,7 +1269,10 @@ R"EDJS(
       applyCosmeticCommand(slot);
     }
     function applyCosmeticCommand(slot) {
-      if (custTargetIndex < 0 || !custWear[slot]) return;
+      // The agent slot has no wear entry (agents are not skinned), so it must NOT be gated on
+      // custWear[slot] -- doing so silently dropped every agent pick (no command was ever sent).
+      if (custTargetIndex < 0) return;
+      if (slot !== 'agent' && !custWear[slot]) return;
       // Target the player by SteamID -- the backend store is SteamID-keyed so the override follows
       // them across pawn recreation / round reset / death / observer switch / demo seek. The C++
       // state pushes custTargetKey as "steam:<id>" for real players; fall back to "current" (the
@@ -1282,22 +1285,26 @@ R"EDJS(
       var pk = parseInt(meta.paint || meta.paintKit || 0, 10) || 0;
       var wear = wearValue(slot).toFixed(4);
       var sent = false;
+      var command = '';
       if ((slot === 'primary' || slot === 'secondary') && def > 0) {
-        cmd('mirv_filmmaker cosmetics player ' + target + ' weapon ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0');
+        command = 'mirv_filmmaker cosmetics player ' + target + ' weapon ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0';
         sent = true;
       } else if (slot === 'knife' && def > 0) {
-        cmd('mirv_filmmaker cosmetics player ' + target + ' knife ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0');
+        command = 'mirv_filmmaker cosmetics player ' + target + ' knife ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0';
         sent = true;
       } else if (slot === 'gloves' && def > 0) {
-        cmd('mirv_filmmaker cosmetics player ' + target + ' gloves ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0');
+        command = 'mirv_filmmaker cosmetics player ' + target + ' gloves ' + def + ' paint ' + pk + ' wear ' + wear + ' seed 0';
         sent = true;
       } else if (slot === 'agent') {
-        cmd('mirv_filmmaker cosmetics player ' + target + ' agent ' + (meta.model || 'default'));
+        command = 'mirv_filmmaker cosmetics player ' + target + ' agent ' + (meta.model || 'default');
         sent = true;
       }
-      // The SteamID-keyed backend has a master enable switch (the legacy pawn-indexed one always
-      // applied). Turn it on whenever the user picks something so the override renders in the demo.
-      if (sent) cmd('mirv_filmmaker cosmetics enabled 1');
+      // Enable before sending the profile mutation so normal UI use does not emit the temporary
+      // "cosmetics are disabled" hint from the native command handler.
+      if (sent) {
+        cmd('mirv_filmmaker cosmetics enabled 1');
+        cmd(command);
+      }
     }
     // Apply a selection. Updates UI + preview immediately, persists per current player, and sends
     // the matching offline-demo cosmetic command where the native path exists.

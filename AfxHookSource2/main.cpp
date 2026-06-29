@@ -15,6 +15,7 @@
 #include "Globals.h"
 #include "DeathMsg.h"
 #include "Filmmaker/Filmmaker.h"
+#include "Filmmaker/Cosmetics/CosmeticDebugLog.h"
 #include "Filmmaker/Movie/CameraBridge.h"
 #include "Filmmaker/Movie/FollowCamera.h"
 #include "ReplaceName.h"
@@ -2140,9 +2141,60 @@ advancedfx::Con_Printf_t Tier0_Warning = nullptr;
 advancedfx::Con_DevPrintf_t Tier0_DevMessage = nullptr;
 advancedfx::Con_DevPrintf_t Tier0_DevWarning = nullptr;
 
+namespace {
+
+// Valve's tier0 logging listener receives the final formatted message from every logging channel,
+// including resource/model loading failures that never pass through advancedfx::Message/Warning.
+// The LoggingContext is intentionally opaque: mvm_debug needs the complete text stream, while
+// categorisation and duplicate compression happen inside the logger.
+class CMvmTier0LoggingListener {
+public:
+	virtual void Log(const void*, const char* message) {
+		Filmmaker::MvmDebugLog_ConsoleLine("engine", -1, message);
+	}
+};
+
+typedef void (__fastcall* LoggingSystem_ListenerFn_t)(void* listener);
+
+CMvmTier0LoggingListener g_MvmTier0LoggingListener;
+LoggingSystem_ListenerFn_t g_LoggingSystem_UnregisterLoggingListener = nullptr;
+bool g_MvmTier0LoggingListenerRegistered = false;
+
+} // namespace
+
+bool Filmmaker::MvmConsoleCapture_Start() {
+	if (g_MvmTier0LoggingListenerRegistered)
+		return true;
+	HMODULE tier0 = GetModuleHandleW(L"tier0.dll");
+	if (!tier0)
+		return false;
+	auto registerListener = (LoggingSystem_ListenerFn_t)GetProcAddress(
+		tier0, "LoggingSystem_RegisterLoggingListener");
+	g_LoggingSystem_UnregisterLoggingListener = (LoggingSystem_ListenerFn_t)GetProcAddress(
+		tier0, "LoggingSystem_UnregisterLoggingListener");
+	if (!registerListener || !g_LoggingSystem_UnregisterLoggingListener)
+		return false;
+	registerListener(&g_MvmTier0LoggingListener);
+	g_MvmTier0LoggingListenerRegistered = true;
+	return true;
+}
+
+void Filmmaker::MvmConsoleCapture_Stop() {
+	if (!g_MvmTier0LoggingListenerRegistered || !g_LoggingSystem_UnregisterLoggingListener)
+		return;
+	g_LoggingSystem_UnregisterLoggingListener(&g_MvmTier0LoggingListener);
+	g_MvmTier0LoggingListenerRegistered = false;
+}
+
+bool Filmmaker::MvmConsoleCapture_Active() {
+	return g_MvmTier0LoggingListenerRegistered;
+}
+
 class CConsolePrint_Message : public IConsolePrint {
 public:
 	virtual void Print(const char * text) {
+		if (!g_MvmTier0LoggingListenerRegistered)
+			Filmmaker::MvmDebugLog_ConsoleLine("message", -1, text);
 		Tier0_Message("%s", text);
 	}
 };
@@ -2150,6 +2202,8 @@ public:
 class CConsolePrint_Warning : public IConsolePrint {
 public:
 	virtual void Print(const char * text) {
+		if (!g_MvmTier0LoggingListenerRegistered)
+			Filmmaker::MvmDebugLog_ConsoleLine("warning", -1, text);
 		Tier0_Warning("%s", text);
 	}
 };
@@ -2162,6 +2216,8 @@ public:
 	}
 
 	virtual void Print(const char * text) {
+		if (!g_MvmTier0LoggingListenerRegistered)
+			Filmmaker::MvmDebugLog_ConsoleLine("message", m_Level, text);
 		Tier0_DevMessage(m_Level, "%s", text);
 	}
 private:
@@ -2176,6 +2232,8 @@ public:
 	}
 
 	virtual void Print(const char * text) {
+		if (!g_MvmTier0LoggingListenerRegistered)
+			Filmmaker::MvmDebugLog_ConsoleLine("warning", m_Level, text);
 		Tier0_DevWarning(m_Level, "%s", text);
 	}
 private:
@@ -2495,6 +2553,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved)
 		case DLL_PROCESS_DETACH:
 		{
 			// actually this gets called now.
+			Filmmaker::MvmConsoleCapture_Stop();
 
 			g_CampathDrawer.End();
 

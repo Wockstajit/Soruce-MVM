@@ -7,12 +7,15 @@
 // CosmeticProfile.cpp / CosmeticCatalog.cpp already split this way).
 
 #include "CosmeticOverrideSystem.h"
+#include "CosmeticDebugLog.h"
+#include "CosmeticModelSwap.h"
 
 #include "../../../shared/AfxConsole.h"
 
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
+#include <cstddef>
 #include <string>
 
 namespace Filmmaker {
@@ -43,12 +46,13 @@ uint64_t ResolveSteamIdArg(const char* cmd, const char* token) {
 	return id;
 }
 
-// After a successful profile mutation: persist, and surface the two gating hints (disabled /
+// After a successful profile mutation: arm this demo session and surface the two gating hints (disabled /
 // offsets unresolved) so the user understands why they might not see a change. The confirmation
 // line itself is printed by the caller (so it can use advancedfx::Message's printf-style
 // formatting directly, matching the existing DoCosmetics() style).
 void AfterMutation(const char* cmd) {
-	CosmeticsRef().Save();
+	CosmeticsRef().Arm();               // an explicit apply this session -> allow it to render (start-clean)
+	CosmeticsRef().RequestApplyNudge(); // refresh the demo render after the change (PostDataUpdate + play-out)
 	if (!CosmeticsRef().Enabled())
 		advancedfx::Message("cosmetics are disabled -- run '%s cosmetics enabled 1' to see them.\n", cmd);
 	if (!CosmeticsRef().OffsetsAvailable())
@@ -74,10 +78,16 @@ void PrintUsage(const char* cmd) {
 			"  %s cosmetics rebuild auto [0|1]   (per-frame writing of enabled rebuildflags on change)\n"
 			"  %s cosmetics rebuildflags [<name> 0|1 | all 0|1]   (toggle individual stale-mark writes)\n"
 			"  %s cosmetics paintkitbridge [0|1|auto|force <paint>]   (global deploy-time bridge)\n"
+			"  %s cosmetics composite once [ownerOffsetHex]   (experimental direct composite refresh)\n"
+			"  %s cosmetics autocomposite [0|1]   (auto-refresh skin render on change; default 1)\n"
+			"  %s cosmetics modelswap [0|1 | knife 0|1]   (model swaps incl. knife type; both default on)\n"
+			"  %s cosmetics ticknudge [on|off|<ticks>]   (briefly play the demo after a change so body swaps re-render)\n"
+			"  %s cosmetics debuglog [start|stop]   (timestamped debug log; alias: mvm_debug start|stop)\n"
+			"  %s cosmetics mesh [auto|modern|legacy | masks <m> <l>]   (legacy-vs-CS2 weapon mesh selection)\n"
 			"  %s cosmetics recompose [0|1]   (force material re-composite after writes)\n"
 			"  %s cosmetics vtidx <comp> <sec>   (tune UpdateComposite vtable indices, -1=skip)\n"
 			"  %s cosmetics vtprobe <idx>   (bisect OnDataChanged: call weapon vtable[idx](this,0) now)\n",
-		cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
+		cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd);
 }
 
 // Parses ORDER-INDEPENDENT key/value tokens of the form "key=value" (or "key value", to be lenient)
@@ -124,7 +134,6 @@ void DoEnabled(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	}
 	bool enabled = 0 != atoi(args->ArgV(3));
 	CosmeticsRef().SetEnabled(enabled);
-	CosmeticsRef().Save();
 	advancedfx::Message("%s cosmetics enabled = %d.\n", cmd, CosmeticsRef().Enabled() ? 1 : 0);
 }
 
@@ -139,7 +148,7 @@ void DoDebug(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 
 void DoClear(const char* cmd) {
 	CosmeticsRef().ClearAll();
-	CosmeticsRef().Save();
+	CosmeticsRef().RequestApplyNudge();
 	advancedfx::Message("%s cosmetics: cleared all profiles.\n", cmd);
 }
 
@@ -152,7 +161,7 @@ void DoClearPlayer(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 	if (id == 0)
 		return;
 	CosmeticsRef().ClearPlayer(id);
-	CosmeticsRef().Save();
+	CosmeticsRef().RequestApplyNudge();
 	advancedfx::Message("%s cosmetics: cleared profile for steamId %llu.\n", cmd, (unsigned long long)id);
 }
 
@@ -220,6 +229,10 @@ void DoPlayer(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 		AfterMutation(cmd);
 	} else if (TokenIs(slot, "agent")) {
 		const char* model = args->ArgV(5);
+		if (0 != _stricmp(model, "default") && !IsValidAgentModelPath(model)) {
+			advancedfx::Warning("%s cosmetics: rejected invalid agent model path '%s'.\n", cmd, model);
+			return;
+		}
 		CosmeticsRef().SetAgent(id, model, 0);
 		advancedfx::Message("%s cosmetics: agent steamId=%llu model='%s'.\n", cmd, (unsigned long long)id, model);
 		AfterMutation(cmd);
@@ -316,6 +329,114 @@ void DoPaintkitBridge(int argc, advancedfx::ICommandArgs* args, const char* cmd)
 		"and is not per-player. Disable to restore the previous cvar value.\n");
 }
 
+// Auto-composite toggle: when ON (default), the per-frame apply loop fires the direct composite
+// refresh on every matched weapon whose skin data changed -- this is what makes a UI skin pick render
+// instantly and re-apply after a demo seek. OFF lets you A/B the field-write-only path. See
+// CosmeticOverrideSystem::SetAutoComposite.
+void DoAutoComposite(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4)
+		CosmeticsRef().SetAutoComposite(0 != atoi(args->ArgV(3)));
+	advancedfx::Message("%s cosmetics: autocomposite = %d (per-frame direct composite refresh on skin-data change).\n",
+		cmd, CosmeticsRef().AutoComposite() ? 1 : 0);
+}
+
+// Master toggle for the client-side model-swap path (agent / gloves / legacy mesh / knife type). Knife
+// TYPE swaps are separately toggleable because they mutate weapon subclass/model state and have been
+// crash-prone on weapon switch in demo playback; both default ON, disable with "modelswap knife 0" if a
+// demo's weapon switches destabilize.
+// Tick-nudge: after a cosmetic change, re-seek the demo so the engine recreates entities and runs
+// real frames -- the user-requested lever that makes model/glove/agent/mesh swaps pop without a
+// manual scrub. PostDataUpdate refreshes the weapon SKIN in place; body/model swaps (agent/glove/
+// knife type/mesh) need real rendered frames, so this briefly resumes playback then re-pauses.
+void DoTickNudge(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4) {
+		const char* a = args->ArgV(3);
+		if (TokenIs(a, "on")) CosmeticsRef().SetTickNudge(true);
+		else if (TokenIs(a, "off")) CosmeticsRef().SetTickNudge(false);
+		else { CosmeticsRef().SetTickNudgeTicks(atoi(a)); CosmeticsRef().SetTickNudge(true); }
+	}
+	advancedfx::Message("%s cosmetics: ticknudge=%d ticks=%d totalNudges=%llu (after a change, briefly "
+		"play the demo so agent/glove/knife/mesh swaps re-render).\n", cmd, CosmeticsRef().TickNudge() ? 1 : 0,
+		CosmeticsRef().TickNudgeTicks(), (unsigned long long)CosmeticsRef().TotalNudges());
+}
+
+void DoModelSwap(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4) {
+		if (TokenIs(args->ArgV(3), "knife")) {
+			if (argc >= 5)
+				CosmeticsRef().SetKnifeModelSwap(0 != atoi(args->ArgV(4)));
+		} else {
+			CosmeticsRef().SetModelSwap(0 != atoi(args->ArgV(3)));
+		}
+	}
+	advancedfx::Message("%s cosmetics: modelswap = %d knifeType=%d (agent/gloves/legacy mesh + knife type; both default on). resolved=%d.\n",
+		cmd, CosmeticsRef().ModelSwap() ? 1 : 0, CosmeticsRef().KnifeModelSwap() ? 1 : 0,
+		CosmeticsRef().ModelSwapResolved() ? 1 : 0);
+	if (!CosmeticsRef().ModelSwapResolved())
+		advancedfx::Warning("%s cosmetics: model-swap client.dll functions did NOT all resolve; knife/agent/glove "
+			"swaps will be skipped (paint-only still works).\n", cmd);
+}
+
+// Legacy-vs-CS2 mesh-group selection tuning. "mesh" with no args prints the state; "mesh auto|modern|legacy"
+// sets the mode; "mesh masks <modern> <legacy>" sets the bit values (defaults 1/2). See SetMeshMasks.
+void DoMesh(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	if (argc >= 4) {
+		const char* mode = args->ArgV(3);
+		if (TokenIs(mode, "auto")) CosmeticsRef().SetMeshLegacyMode(-2);
+		else if (TokenIs(mode, "modern")) CosmeticsRef().SetMeshLegacyMode(-1);
+		else if (TokenIs(mode, "legacy")) CosmeticsRef().SetMeshLegacyMode(1);
+		else if (TokenIs(mode, "masks")) {
+			if (argc < 6) {
+				advancedfx::Warning("usage: %s cosmetics mesh masks <modernMask> <legacyMask>\n", cmd);
+				return;
+			}
+			CosmeticsRef().SetMeshMasks((uint64_t)_strtoui64(args->ArgV(4), nullptr, 0),
+				(uint64_t)_strtoui64(args->ArgV(5), nullptr, 0));
+		} else {
+			advancedfx::Warning("usage: %s cosmetics mesh [auto|modern|legacy | masks <modern> <legacy>]\n", cmd);
+			return;
+		}
+	}
+	const char* modeStr = CosmeticsRef().MeshLegacyMode() == -2 ? "auto"
+		: CosmeticsRef().MeshLegacyMode() == -1 ? "modern" : "legacy";
+	advancedfx::Message("%s cosmetics: mesh mode=%s maskModern=%llu maskLegacy=%llu "
+		"(auto reads the paint kit's IsUseLegacyModel from the econ schema).\n",
+		cmd, modeStr, (unsigned long long)CosmeticsRef().MaskModern(),
+		(unsigned long long)CosmeticsRef().MaskLegacy());
+}
+
+void DoComposite(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	const char* mode = (argc >= 4) ? args->ArgV(3) : "";
+	if (!TokenIs(mode, "once")) {
+		advancedfx::Warning("usage: %s cosmetics composite once [ownerOffsetHex]\n", cmd);
+		return;
+	}
+	if (argc >= 5) {
+		char* end = nullptr;
+		long long offset = _strtoi64(args->ArgV(4), &end, 0);
+		if (end == args->ArgV(4) || offset <= 0) {
+			advancedfx::Warning("%s cosmetics composite: invalid owner offset '%s' (example: 0x608).\n",
+				cmd, args->ArgV(4));
+			return;
+		}
+		CosmeticsRef().SetCompositeOwnerOffset((ptrdiff_t)offset);
+	}
+
+	int n = CosmeticsRef().CompositeOnce();
+	const CosmeticFrameStats& s = CosmeticsRef().LastFrameStats();
+	advancedfx::Message("%s cosmetics: composite once -> touched %d matched weapon entit%s, "
+		"resolved=%d calls=%d faulted=%d ownerOffset=0x%llx.\n",
+		cmd, n, (n == 1 ? "y" : "ies"), s.directCompositeResolved, s.directCompositeCalls,
+		s.directCompositeFaulted, (unsigned long long)CosmeticsRef().CompositeOwnerOffset());
+	if (n == 0)
+		advancedfx::Warning("%s cosmetics: composite once touched nothing -- needs a demo playing, a "
+			"stored profile for the spectated owner, and resolved offsets.\n", cmd);
+	if (!s.directCompositeResolved)
+		advancedfx::Warning("%s cosmetics: direct composite patterns did not all resolve in client.dll.\n", cmd);
+	if (s.directCompositeFaulted)
+		advancedfx::Warning("%s cosmetics: direct composite call faulted (caught); owner offset/signature is likely wrong for this build.\n", cmd);
+}
+
 // Forced material re-composite tuning (the refresh path). OFF by default; the correct CS2
 // UpdateComposite vtable index is build-specific, so it is live-tunable here. See
 // CosmeticOverrideSystem.h / SetRecompose.
@@ -389,6 +510,44 @@ void DoVtProbe(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 			"(this,int) virtual; try the next candidate index.\n", cmd, idx);
 }
 
+// Self-service debug log: start writes a timestamped file under %APPDATA%\HLAE\debuglogs\ that the
+// cosmetics apply loop fills with per-event + heartbeat lines (wall time + demo tick + frame); stop
+// closes it and prints the folder/file path so the user can paste it into File Explorer and share it.
+void DoDebugLog(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
+	const char* mode = (argc >= 4) ? args->ArgV(3) : "";
+	if (TokenIs(mode, "start")) {
+		std::string file;
+		if (MvmDebugLog_Start(&file)) {
+			const bool consoleCapture = MvmConsoleCapture_Start();
+			MvmDebugLog_Linef("command", "%s cosmetics debuglog start", cmd);
+			MvmDebugLog_Linef("system", "fullConsoleCapture=%d", consoleCapture ? 1 : 0);
+			advancedfx::Message("%s cosmetics: debug log STARTED. file: %s ('%s cosmetics debuglog stop' or 'mvm_debug stop' when done).\n", cmd, file.c_str(), cmd);
+		} else
+			advancedfx::Warning("%s cosmetics: debug log already running (or file could not be opened).\n", cmd);
+	} else if (TokenIs(mode, "stop")) {
+		std::string folder, file;
+		MvmDebugLogStats stats;
+		MvmConsoleCapture_Stop();
+		if (MvmDebugLog_Stop(&folder, &file, &stats)) {
+			advancedfx::Message("%s cosmetics: debug log STOPPED. captured %llu events; combined %llu repeats.\n",
+				cmd, (unsigned long long)stats.eventsReceived,
+				(unsigned long long)stats.repeatsCombined);
+			advancedfx::Message("  file:   %s\n", file.c_str());
+			advancedfx::Message("  folder: %s\n", folder.c_str());
+		} else {
+			advancedfx::Warning("%s cosmetics: no debug log is running.\n", cmd);
+		}
+	} else {
+		const MvmDebugLogStats stats = MvmDebugLog_GetStats();
+		advancedfx::Message("%s cosmetics: debuglog is %s (events=%llu unique=%llu repeats_combined=%llu). "
+			"Use '%s cosmetics debuglog start|stop' (or 'mvm_debug start|stop|status').\n",
+			cmd, MvmDebugLog_Active() ? "RUNNING" : "stopped",
+			(unsigned long long)stats.eventsReceived,
+			(unsigned long long)stats.uniqueEventsWritten,
+			(unsigned long long)stats.repeatsCombined, cmd);
+	}
+}
+
 } // namespace
 
 void Cosmetics_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
@@ -418,6 +577,18 @@ void Cosmetics_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* 
 		DoRebuildFlags(argc, args, cmd);
 	} else if (TokenIs(sub, "paintkitbridge")) {
 		DoPaintkitBridge(argc, args, cmd);
+	} else if (TokenIs(sub, "composite")) {
+		DoComposite(argc, args, cmd);
+	} else if (TokenIs(sub, "autocomposite")) {
+		DoAutoComposite(argc, args, cmd);
+	} else if (TokenIs(sub, "modelswap")) {
+		DoModelSwap(argc, args, cmd);
+	} else if (TokenIs(sub, "ticknudge")) {
+		DoTickNudge(argc, args, cmd);
+	} else if (TokenIs(sub, "debuglog")) {
+		DoDebugLog(argc, args, cmd);
+	} else if (TokenIs(sub, "mesh")) {
+		DoMesh(argc, args, cmd);
 	} else if (TokenIs(sub, "recompose")) {
 		DoRecompose(argc, args, cmd);
 	} else if (TokenIs(sub, "vtidx")) {

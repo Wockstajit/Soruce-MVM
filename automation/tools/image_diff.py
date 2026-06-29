@@ -15,12 +15,20 @@ def main() -> int:
     ap.add_argument("before")
     ap.add_argument("after")
     ap.add_argument("--min-mean", type=float, default=0.0)
+    ap.add_argument("--crop", default=None,
+                    help="left,top,right,bottom region to restrict the diff to "
+                         "(e.g. a weapon-viewmodel box); diff is computed on the crop only.")
     args = ap.parse_args()
 
     before = Image.open(Path(args.before)).convert("RGB")
     after = Image.open(Path(args.after)).convert("RGB")
     if before.size != after.size:
         raise SystemExit(f"image sizes differ: {before.size} vs {after.size}")
+
+    if args.crop:
+        box = tuple(int(v) for v in args.crop.split(","))
+        before = before.crop(box)
+        after = after.crop(box)
 
     diff = ImageChops.difference(before, after)
     stat = ImageStat.Stat(diff)

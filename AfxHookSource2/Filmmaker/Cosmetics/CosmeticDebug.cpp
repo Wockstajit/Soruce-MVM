@@ -6,6 +6,7 @@
 
 #include "CosmeticOverrideSystem.h"
 #include "CosmeticCatalog.h"
+#include "CosmeticModelSwap.h"
 
 #include "../Platform/TextEncoding.h"
 
@@ -352,8 +353,8 @@ void Cosmetics_PrintStatus(const char* cmd) {
 	CosmeticOverrideSystem& sys = CosmeticsRef();
 	const CosmeticFrameStats& stats = sys.LastFrameStats();
 
-	advancedfx::Message("%s cosmetics: enabled=%d offsetsResolved=%d demoContext=%d debug=%d\n",
-		cmd, sys.Enabled() ? 1 : 0, sys.OffsetsAvailable() ? 1 : 0, sys.InDemoContext() ? 1 : 0, sys.Debug() ? 1 : 0);
+	advancedfx::Message("%s cosmetics: enabled=%d armed=%d offsetsResolved=%d demoContext=%d debug=%d\n",
+		cmd, sys.Enabled() ? 1 : 0, sys.Armed() ? 1 : 0, sys.OffsetsAvailable() ? 1 : 0, sys.InDemoContext() ? 1 : 0, sys.Debug() ? 1 : 0);
 
 	const std::wstring wpath = sys.Store().FilePath();
 	const std::string upath = WideToUtf8(wpath);
@@ -372,6 +373,25 @@ void Cosmetics_PrintStatus(const char* cmd) {
 	advancedfx::Message("  paintkitbridge=%d cvarFound=%d value=%d forced=%d (global deploy-time cl_paintkit_override)\n",
 		sys.PaintkitBridge() ? 1 : 0, sys.PaintkitBridgeCvarFound() ? 1 : 0,
 		sys.PaintkitBridgeLastValue(), sys.PaintkitBridgeForcedValue());
+	advancedfx::Message("  directComposite: resolved=%d calls=%d faulted=%d ownerOffset=0x%llx\n",
+		stats.directCompositeResolved, stats.directCompositeCalls, stats.directCompositeFaulted,
+		(unsigned long long)sys.CompositeOwnerOffset());
+	const char* meshModeStr = sys.MeshLegacyMode() == -2 ? "auto" : (sys.MeshLegacyMode() == -1 ? "modern" : "legacy");
+	advancedfx::Message("  modelswap=%d knifeType=%d resolved=%d  mesh=%s(modern=%llu legacy=%llu)\n",
+		sys.ModelSwap() ? 1 : 0, sys.KnifeModelSwap() ? 1 : 0,
+		sys.ModelSwapResolved() ? 1 : 0, meshModeStr,
+		(unsigned long long)sys.MaskModern(), (unsigned long long)sys.MaskLegacy());
+	advancedfx::Message("  lastFrame modelSwap: knife=%d weaponMesh=%d pawns=%d gloves=%d agents=%d\n",
+		stats.knifeModelsApplied, stats.weaponMeshFixed, stats.pawnsScanned, stats.glovesApplied, stats.agentsApplied);
+	advancedfx::Message("  ticknudge=%d ticks=%d totalNudges=%llu (auto play-out so body swaps re-render)\n",
+		sys.TickNudge() ? 1 : 0, sys.TickNudgeTicks(), (unsigned long long)sys.TotalNudges());
+	advancedfx::Message("  totalApplied: knife=%llu weaponMesh=%llu gloves=%llu agents=%llu (cumulative, proof of execution)\n",
+		(unsigned long long)sys.TotalKnifeApplied(), (unsigned long long)sys.TotalWeaponMeshApplied(),
+		(unsigned long long)sys.TotalGlovesApplied(), (unsigned long long)sys.TotalAgentsApplied());
+	const ModelSwapResolveStatus& ms = ResolveModelSwapFns();
+	advancedfx::Message("  modelSwapFns: setModel=%d meshMask=%d subclass=%d bodyGroup=%d bodyGroupChoice=%d staticData=%d econSchema=%d\n",
+		ms.setModel ? 1 : 0, ms.setMeshGroupMask ? 1 : 0, ms.updateSubclass ? 1 : 0, ms.setBodyGroup ? 1 : 0,
+		ms.updateBodyGroupChoice ? 1 : 0, ms.getStaticData ? 1 : 0, ms.econItemSystem ? 1 : 0);
 
 	if (sys.Store().All().empty())
 		advancedfx::Message("  (no profiles)\n");
@@ -382,11 +402,13 @@ void Cosmetics_PrintStatus(const char* cmd) {
 		PrintItemLine("secondary", profile.secondary);
 		PrintItemLine("knife", profile.knife);
 		if (profile.gloves.set) {
-			advancedfx::Message("    gloves def=%d paint=%d wear=%.4f seed=%d (stored, not yet applied)\n",
-				profile.gloves.defIndex, profile.gloves.paintKit, profile.gloves.wear, profile.gloves.seed);
+			advancedfx::Message("    gloves def=%d paint=%d wear=%.4f seed=%d%s\n",
+				profile.gloves.defIndex, profile.gloves.paintKit, profile.gloves.wear, profile.gloves.seed,
+				sys.ModelSwap() ? "" : " (modelswap OFF -> not applied)");
 		}
 		if (profile.agent.set) {
-			advancedfx::Message("    agent model='%s' (stored, not yet applied)\n", profile.agent.model.c_str());
+			advancedfx::Message("    agent model='%s'%s\n", profile.agent.model.c_str(),
+				sys.ModelSwap() ? "" : " (modelswap OFF -> not applied)");
 		}
 		if (!profile.primary.set && !profile.secondary.set && !profile.knife.set &&
 			!profile.gloves.set && !profile.agent.set) {

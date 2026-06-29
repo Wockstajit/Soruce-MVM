@@ -182,6 +182,15 @@ void initCosmeticsOffsets()
 	// Equipped gloves on the pawn -- optional (kept OFF the `ok` chain so a missing field disables
 	// only the "current gloves" read, not the whole skin-changer). Guarded by != 0 at the read site.
 	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_EconGloves, "client.dll", "C_CSPlayerPawn", "m_EconGloves");
+	// Model-swap (knife/glove/agent) APPLY offsets -- all optional/non-fatal (guarded by != 0 at the
+	// write site). See docs/cosmetics-cs2-methodology-notes.md for the Andromeda/nerv recipes.
+	getOffset(&g_clientDllOffsets.C_BaseEntity.m_nSubclassID, "client.dll", "C_BaseEntity", "m_nSubclassID");
+	getOffset(&g_clientDllOffsets.C_EconItemView.m_iEntityQuality, "client.dll", "C_EconItemView", "m_iEntityQuality");
+	getOffset(&g_clientDllOffsets.CGameSceneNode.m_pChild, "client.dll", "CGameSceneNode", "m_pChild");
+	getOffset(&g_clientDllOffsets.CGameSceneNode.m_pNextSibling, "client.dll", "CGameSceneNode", "m_pNextSibling");
+	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_bNeedToReApplyGloves, "client.dll", "C_CSPlayerPawn", "m_bNeedToReApplyGloves");
+	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_hHudModelArms, "client.dll", "C_CSPlayerPawn", "m_hHudModelArms");
+	getOffset(&g_clientDllOffsets.C_CSPlayerPawn.m_flLastSpawnTimeIndex, "client.dll", "C_CSPlayerPawnBase", "m_flLastSpawnTimeIndex");
 	// Read-only model-state chain (agent/player-model display). Off the `ok` chain: a missing field
 	// just disables the agent read, not the whole skin-changer. Guarded by != 0 at the read site.
 	getOffset(&g_clientDllOffsets.ModelChain.m_CBodyComponent, "client.dll", "C_BaseEntity", "m_CBodyComponent");

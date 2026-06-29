@@ -27,6 +27,7 @@ struct ClientDllOffsets_t {
 		ptrdiff_t m_iHealth = 0; // int32
 		ptrdiff_t m_iTeamNum = 0; // uint8
 		ptrdiff_t m_hOwnerEntity = 0; // CHandle<C_BaseEntity>
+		ptrdiff_t m_nSubclassID = 0; // CUtlStringToken (uint32 hash at +0); knife model swap UpdateSubclass()
 	} C_BaseEntity;
 
 	struct C_BaseModelEntity {
@@ -37,6 +38,8 @@ struct ClientDllOffsets_t {
 	    ptrdiff_t m_pOwner = 0; // CEntityInstance*
         ptrdiff_t m_pParent = 0; // CGameSceneNode*
         ptrdiff_t m_vecAbsOrigin = 0; // VectorWS
+        ptrdiff_t m_pChild = 0; // CGameSceneNode*    (viewmodel scene-node walk for knife model swap)
+        ptrdiff_t m_pNextSibling = 0; // CGameSceneNode* (viewmodel scene-node walk for knife model swap)
 	} CGameSceneNode;
 
 	struct C_BaseCSGrenadeProjectile {
@@ -115,6 +118,7 @@ struct ClientDllOffsets_t {
 		ptrdiff_t m_bInventoryImageTriedCache = 0;    // bool, optional cache invalidation hint
 		ptrdiff_t m_szCurrentLoadCachedFileName = 0;  // char[], optional cache invalidation hint
 		ptrdiff_t m_iItemDefinitionIndex = 0; // uint16
+		ptrdiff_t m_iEntityQuality = 0;       // int32 (set to 3 = unusual on knife/glove swap; optional)
 		ptrdiff_t m_iItemIDHigh = 0;          // uint32 (-1 forces fallback fields)
 		ptrdiff_t m_iItemIDLow = 0;           // uint32
 		ptrdiff_t m_iAccountID = 0;           // uint32
@@ -153,6 +157,13 @@ struct ClientDllOffsets_t {
 	// fall back to the team default. Optional/non-fatal: a 0 offset just means "treat as default".
 	struct C_CSPlayerPawn {
 		ptrdiff_t m_EconGloves = 0; // C_EconItemView (value member)
+		// Glove APPLY path (Andromeda/nerv): after writing m_EconGloves, set m_bNeedToReApplyGloves and
+		// fire SetBodyGroup()/UpdateBodyGroupChoice() for a few frames. m_hHudModelArms is the viewmodel
+		// arms entity whose scene-node children include the first-person weapon/knife viewmodel.
+		// m_flLastSpawnTimeIndex (on C_CSPlayerPawnBase) gates re-apply on spawn/round/team change.
+		ptrdiff_t m_bNeedToReApplyGloves = 0; // bool
+		ptrdiff_t m_hHudModelArms = 0;        // CHandle< C_CS2HudModelArms >
+		ptrdiff_t m_flLastSpawnTimeIndex = 0; // float (GameTime_t), resolved on C_CSPlayerPawnBase
 	} C_CSPlayerPawn;
 
 	// READ-ONLY model-state chain for showing which agent/player-model a spectated player wears
