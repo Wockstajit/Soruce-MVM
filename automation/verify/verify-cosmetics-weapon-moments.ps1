@@ -104,10 +104,14 @@ function Read-Diag {
     $t = NC @('mirv_filmmaker cosmetics visualdiag') $readDiag 'diag'
     $health = LastMatch $t 'spectateHealth=(\d+)'
     $isDead = ($t -match 'is dead \(health=') -or ($health -and [int]$health -le 0) -or ($t -match 'no spectated pawn')
+    $paint = LastMatch $t 'paint\(def6\)=(\d+)'
+    if (-not $paint -or $paint -eq 'absent') {
+        $paint = LastMatch $t 'fallback: paint=(\d+)'
+    }
     return @{
         defIndex = LastMatch $t 'defIndex=(\d+)'
         steam = LastMatch $t 'spectateSteam=(\d+)'
-        paint = LastMatch $t 'paint\(def6\)=(\d+)'
+        paint = $paint
         health = $health
         raw = $t
         text = $t
@@ -157,7 +161,7 @@ $paintsMap = $paintsJson | ConvertFrom-Json
 $proof = [ordered]@{ runAt = (Get-Date -Format o); fast = [bool]$Fast; demo = $demoPlay; weapons = @(); crashVeh = 0 }
 
 try {
-    if (-not $NoLaunch -and -not (Test-Netcon $Port)) {
+    if (-not $NoLaunch -and -not (Wait-Cs2Netcon -Port $Port -Retries 3)) {
         Get-Process -Name cs2,hlae -EA SilentlyContinue | Stop-Process -Force
         Start-Sleep -Seconds 1
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $automationRoot 'launch\launch-cs2-netcon.ps1') `
@@ -285,7 +289,7 @@ try {
 
     if (-not $Fast) {
         foreach ($st in @(4000, 16000, 32000)) {
-            if (-not (Test-Netcon $Port)) { break }
+            if (-not (Wait-Cs2Netcon -Port $Port -Retries 3)) { break }
             NC @("demo_gototick $st", 'demo_pause') 2.5 "stress$st" | Out-Null
             NC @('mirv_filmmaker cosmetics skinlog') 1.0 "log$st" | Out-Null
         }

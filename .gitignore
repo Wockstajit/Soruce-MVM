@@ -101,3 +101,11 @@ Thumbs.db
 # Local agent / tooling state
 .agents/
 .claude/
+
+# Cursor / agent debug session logs (NDJSON mirrors from CosmeticDebugLog / Cursor Debug panel).
+# Canonical mvm logs live in %APPDATA%\HLAE\debuglogs\ — never commit copies here.
+/debug-af2ef9.log
+/debug-*.log
+/.cursor/debug-*.log
+/.cursor/*.log
+mvm_debug_*.log
