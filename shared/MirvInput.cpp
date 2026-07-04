@@ -437,6 +437,36 @@ bool MirvInput::GetCameraControlMode(void)
 void MirvInput::SetCameraControlMode(bool enable)
 {
 	m_CameraControlMode = enable;
+	if (enable)
+		SetThirdPersonOrbitMode(false);
+}
+
+void MirvInput::SetThirdPersonOrbitMode(bool enable)
+{
+	m_ThirdPersonOrbitMode = enable;
+	if (enable)
+		m_CameraControlMode = false;
+	if (!enable) {
+		m_ThirdPersonOrbitYaw = 0.0;
+		m_ThirdPersonOrbitPitch = 0.0;
+	}
+}
+
+void MirvInput::SupplyThirdPersonOrbitPixels(int dX, int dY)
+{
+	if (!m_ThirdPersonOrbitMode)
+		return;
+	m_ThirdPersonOrbitYaw += -dX; // mouse right = orbit right (yaw decreases)
+	m_ThirdPersonOrbitPitch += dY;
+}
+
+bool MirvInput::ConsumeThirdPersonOrbitDelta(double& dYawPixels, double& dPitchPixels)
+{
+	dYawPixels = m_ThirdPersonOrbitYaw;
+	dPitchPixels = m_ThirdPersonOrbitPitch;
+	m_ThirdPersonOrbitYaw = 0.0;
+	m_ThirdPersonOrbitPitch = 0.0;
+	return dYawPixels != 0.0 || dPitchPixels != 0.0;
 }
 
 double MirvInput::GetKeyboardSensitivty(void)
@@ -853,7 +883,7 @@ void MirvInput::ProcessRawInputData(PRAWINPUT pData) {
 			dX = rawmouse->lLastX;
 			dY = rawmouse->lLastY;
 
-			if (m_CameraControlMode) {
+			if (m_CameraControlMode || m_ThirdPersonOrbitMode) {
 				rawmouse->lLastX = 0;
 				rawmouse->lLastY = 0;
 			}
@@ -877,7 +907,7 @@ void MirvInput::ProcessRawInputData(PRAWINPUT pData) {
 			lastX = rawmouse->lLastX;
 			lastY = rawmouse->lLastY;
 
-			if (m_CameraControlMode) {
+			if (m_CameraControlMode || m_ThirdPersonOrbitMode) {
 				rawmouse->lLastX -= dX;
 				rawmouse->lLastY -= dY;
 			}
@@ -886,8 +916,13 @@ void MirvInput::ProcessRawInputData(PRAWINPUT pData) {
 		m_MouseInput.Raw.LeftButtonDown = m_MouseInput.Raw.LeftButtonDown || (rawmouse->usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN);
 		m_MouseInput.Raw.RightButtonDown = m_MouseInput.Raw.RightButtonDown || (rawmouse->usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN);
 
-
-		if (m_CameraControlMode) {
+		if (m_ThirdPersonOrbitMode) {
+			// Deltas were already ZEROED above so the game can't see them. Do NOT
+			// accumulate here: orbit input comes solely from the once-per-frame
+			// cursor-vs-center delta (SupplyThirdPersonOrbitPixels) to avoid the
+			// same movement being counted once per input pipe.
+		}
+		else if (m_CameraControlMode) {
 			if (!(m_MMove && (m_MouseInput.Raw.LeftButtonDown || m_MouseInput.Raw.RightButtonDown)))
 			{
 				m_MouseInput.Raw.Yaw += m_MouseSens * m_MouseYawSpeed * -dX;
@@ -1054,9 +1089,24 @@ void MirvInput::Supply_GetCursorPos(LPPOINT lpPoint)
 		lpPoint->x = m_LastCursorX;
 		lpPoint->y = m_LastCursorY;
 	}
+	else if(m_ThirdPersonOrbitMode)
+	{
+		// Only HIDE the movement from the game (the spectator UI must see a still
+		// cursor). No accumulation here -- the game may poll GetCursorPos several
+		// times per frame, which would count the same movement repeatedly; orbit
+		// input comes solely from SupplyThirdPersonOrbitPixels (once per frame).
+		if(m_FirstGetCursorPos)
+		{
+			m_FirstGetCursorPos = false;
+		}
+
+		// pretend we didn't move from last SetCursorPos call:
+		lpPoint->x = m_LastCursorX;
+		lpPoint->y = m_LastCursorY;
+	}
 
 	m_MNormalLeftButtonWasDown = m_MouseInput.Normal.LeftButtonDown;
-	m_MNormalRightButtonWasDown = m_MouseInput.Normal.RightButtonDown;		
+	m_MNormalRightButtonWasDown = m_MouseInput.Normal.RightButtonDown;
 }
 
 void MirvInput::Supply_SetCursorPos(int x, int y)
@@ -1094,7 +1144,7 @@ void MirvInput::Supply_MouseFrameEnd(void)
 		return;
 	}
 
-	if(m_CameraControlMode)
+	if(m_CameraControlMode || m_ThirdPersonOrbitMode)
 	{
 		if(m_FirstGetCursorPos)
 		{

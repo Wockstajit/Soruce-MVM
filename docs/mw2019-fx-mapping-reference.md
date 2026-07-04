@@ -55,9 +55,22 @@ SWEP:PrimaryAttack()
             :SetControlPoint(1, hitPos)      -- CP1 = end
 ```
 
-**Key fact for the port:** the tracer is a genuine two-control-point beam particle
-(CP0 = start, CP1 = end) — exactly like CS2's native `weapon_tracers_*` particles. This
-is the most directly portable piece.
+**Key fact for the port:** in GMod the tracer is a genuine two-control-point beam
+particle (CP0 = start, CP1 = end).
+
+> ⚠️ **Correction (2026-07-04): CS2's native tracers are NOT two-control-point beams.**
+> Decompiling stock `weapon_tracers.vpcf` shows it spawns particles at CP0 and gives them a
+> muzzle-**local forward velocity** (`C_INIT_CreateWithinSphereTransform`
+> `m_LocalCoordinateSystemSpeed = [2400,0,0]`) plus `C_INIT_LifespanFromVelocity`
+> (`m_flMaxTraceLength = 2048`) — it flies straight down the barrel and traces to the
+> impact surface, and **never reads CP1**. CS2's weapon-tracer dispatch does not populate a
+> tracer end control point. The converted GMod tracers kept `C_INIT_MoveBetweenPoints`
+> (CP0→CP1), so with CP1 unset they interpolate toward the world origin — the user-reported
+> "tracer locked to the gun / fires in a random direction, not toward what you're shooting."
+> `postprocess_modern.patch_modern_tracer_forward` rebuilds the four routed parents
+> (`mw2019_tracer{,_fast,_slow,_small}`) on the native chassis: drop `MoveBetweenPoints` +
+> the fixed `RandomLifeTime`, set the local-forward velocity, add `LifespanFromVelocity`.
+> This is the exact shape Povarehok's own working `weapon_tracers.vpcf` already uses.
 
 `GetProcessedValue()` is ARC9's attachment-aware property resolver — it lets an
 attachment (e.g. a suppressor) override a weapon's base field at runtime. That
@@ -159,6 +172,35 @@ your view/weapon around — distinct from the single per-shot muzzle puff descri
   single ribbon across the muzzle's *entire* sweep between puffs rather than reading as
   drifting smoke — it needs to become a sprite emitter (with frame blending) and a
   shorter lifetime (~2–3s) to look right, not a literal 1:1 rope port.
+
+## 6c. First-person vs world muzzle-flash split (`_fp` twins)
+
+Bug (user report 2026-07-04): in first person the Modern muzzle flash floats off to the
+side of the gun, while in third person it sits correctly on the weapon; the barrel smoke
+lines up in both. Root cause: the pack ships **one** flash asset per weapon, and
+`kVariantWeaponFx` routed BOTH the first-person (`*_fps`) and the world CS2 muzzle systems
+to it. A world-space flash (`m_bViewModelEffect = false`) anchors on the weapon muzzle in
+third person / free cam, but the first-person viewmodel is drawn in a separate pass with
+viewmodel FOV — a world-space particle placed at the viewmodel muzzle does not line up.
+(Barrel smoke aligned because `patch_cs2_modern_barrel_smoke_alignment` already gives it its
+own `m_bViewModelEffect = true` viewmodel attach.)
+
+CS2 and Povarehok solve this by shipping a **separate `_fp` flash** with
+`m_bViewModelEffect = true` and routing the `_fps` systems to it (see `weapon_muzzle_flash_*_fp`
+in `kVariantWeaponFx` / `kSprayPairs`). Modern now does the same:
+
+- `postprocess_modern.make_modern_muzzleflash_fp` writes a `<flash>_fp.vpcf` viewmodel-effect
+  twin of every world flash in `MODERN_MUZZLEFLASH_FILES` (identical apart from the flag),
+  plus `_fp` variants of the two sniper compositions (`MVM_COMPOSITIONS_FP`, whose flash
+  child is the `_fp` leaf; the shock-dust / plume / heat children stay world-space).
+- The `*_fps` rows in `kVariantWeaponFx` point at the `_fp` target; the world rows keep the
+  world target.
+- Detached-camera handling is unchanged: `g_fpFxSuppress` + `IsFirstPersonWeaponFxPath`
+  still key on the **source** `_fps`/`_fp` system name (not the swap target), so a
+  third-person / free-cam view still suppresses the viewmodel flash and shows the world one
+  via the spec_mode-3 chase path. Spray upgrades key on the resolved **target**, and `_fp`
+  targets are not `kSprayPairs` bases, so a first-person flash is never re-upgraded to a
+  world-space spray wrapper.
 
 ## 7. Particle source files (what to extract/convert)
 

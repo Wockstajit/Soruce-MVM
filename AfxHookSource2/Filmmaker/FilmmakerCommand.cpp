@@ -21,6 +21,7 @@
 #include "Movie/ParticleFx.h"
 #include "Movie/MovieMode.h"
 #include "Movie/DemoEndHold.h"
+#include "Movie/ThirdPersonCamera.h"
 #include "Cosmetics/CosmeticOverrideSystem.h"
 
 #include "../ClientEntitySystem.h"
@@ -67,11 +68,12 @@ void PrintHelp(const char* cmd) {
 		"Movie director (in a demo):\n"
 		"%s hud [on|off|toggle] - show/hide the camera help/status panel (also F8).\n"
 		"   Scroll = cycle First/Third/Free cam; LMB/RMB = next/prev player;\n"
-		"   X = X-ray (when not in free cam); Shift+Scroll = cam speed;\n"
+		"   X = X-ray (when not in free cam); Shift+Scroll = cam speed / third-person distance;\n"
 		"   Space = pause/resume; Left/Right = skip -/+15s.\n"
+		"%s thirdperson on|off|toggle|state / preset front|back|left|right / angles <yaw> <pitch> / distance <30-200>.\n"
 		"%s speedbar [on|off|toggle] - inline demo-bar speed buttons (off = native dropdown).\n"
 		"%s endhold [on|off|toggle] - hold on the demo's last tick instead of exiting to menu (play again = restart).\n"
-		, cmd, cmd, cmd
+		, cmd, cmd, cmd, cmd
 	);
 	advancedfx::Message(
 		"Camera markers / dolly path (in free cam):\n"
@@ -245,6 +247,8 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "0")) Filmmaker::DemoEndHold_SetEnabled(false);
 		else Filmmaker::DemoEndHold_SetEnabled(!Filmmaker::DemoEndHold_Enabled());
 		advancedfx::Message("mirv_filmmaker: end-of-demo hold %s.\n", Filmmaker::DemoEndHold_Enabled() ? "on" : "off");
+	} else if (0 == _stricmp(sub, "thirdperson")) {
+		Filmmaker::ThirdPerson_RunCommand(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "marker")) {
 		Filmmaker::Marker_RunCommand(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "camtl")) {

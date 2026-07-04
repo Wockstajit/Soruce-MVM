@@ -15,6 +15,14 @@ namespace Filmmaker {
 bool  CameraBridge_GetFreeCamEnabled();
 void  CameraBridge_SetFreeCamEnabled(bool enable);
 
+// Third-person orbit input. Captures the mouse through MirvInput without enabling the HLAE
+// free camera. Deltas are raw cursor PIXELS, single-sourced from the once-per-frame
+// cursor-vs-center measurement in main.cpp (see MirvInput::SupplyThirdPersonOrbitPixels);
+// the consumer (ThirdPersonCamera) applies its own degrees-per-pixel sensitivity.
+bool  CameraBridge_GetThirdPersonOrbitEnabled();
+void  CameraBridge_SetThirdPersonOrbitEnabled(bool enable);
+bool  CameraBridge_ConsumeThirdPersonOrbit(double& dYawPixels, double& dPitchPixels);
+
 // Free-cam speed multiplier; dir > 0 increases, dir < 0 decreases (one step).
 float CameraBridge_GetFreeCamSpeed();
 void  CameraBridge_AdjustFreeCamSpeed(int dir);

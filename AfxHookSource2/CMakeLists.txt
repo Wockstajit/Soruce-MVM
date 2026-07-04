@@ -403,6 +403,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/ParticleFxDiagnostics.cpp
     Filmmaker/Movie/FxAlign.cpp
     Filmmaker/Movie/FxAlign.h
+    Filmmaker/Movie/ThirdPersonCamera.cpp
+    Filmmaker/Movie/ThirdPersonCamera.h
+    Filmmaker/Movie/ThirdPersonCameraMath.h
     Filmmaker/Movie/MovieMode.cpp
     Filmmaker/Movie/MovieMode.h
 
@@ -452,6 +455,7 @@ add_executable(FollowCameraMathTests
     ../automation/tests/follow-camera-math-tests.cpp
     Filmmaker/Movie/FollowCameraMath.cpp
     Filmmaker/Movie/FollowCameraMath.h
+    Filmmaker/Movie/ThirdPersonCameraMath.h
 )
 target_compile_features(FollowCameraMathTests PRIVATE cxx_std_17)
 add_test(NAME FollowCameraMathTests COMMAND FollowCameraMathTests)

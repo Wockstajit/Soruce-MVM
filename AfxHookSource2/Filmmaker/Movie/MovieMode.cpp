@@ -3,6 +3,7 @@
 #include "CameraBridge.h"
 #include "CameraPath.h"
 #include "FollowCamera.h"
+#include "ThirdPersonCamera.h"
 #include "../Filmmaker.h"            // CameraTimeline_Visible()
 #include "../Panorama/ConfigHud.h"   // ConfigHud_Enabled: Config panel gets editor-style G/wheel input priority
 #include "../Panorama/MovieHud.h"
@@ -45,7 +46,6 @@ namespace {
 	// confirmed `spec_mode 4` is roaming (free fly), so first person (in-eye) = 2
 	// and third person (chase) = 3. Centralised so it's a one-line tweak.
 	const char* const kSpecModeFirstPerson = "spec_mode 2"; // in-eye
-	const char* const kSpecModeThirdPerson = "spec_mode 3"; // chase
 
 	// The director input taps must do NOTHING (and must not consume the event)
 	// unless a demo is actively playing. Otherwise they swallow main-menu /
@@ -54,7 +54,7 @@ namespace {
 		if (!g_pEngineToClient)
 			return false;
 		auto pDemo = g_pEngineToClient->GetDemoFile();
-		return pDemo && pDemo->IsPlayingDemo();
+		return pDemo && (pDemo->IsPlayingDemo() || pDemo->IsDemoPaused());
 	}
 }
 
@@ -94,6 +94,12 @@ bool MovieMode::OnMouseWheel(int delta, bool shiftDown, bool ctrlDown, int x, in
 	if (CameraBridge_GetFreeCamEnabled() && (ctrlDown || shiftDown)) {
 		if (ctrlDown) CameraBridge_AdjustFreeCamFov(delta > 0 ? +1 : -1);
 		else CameraBridge_AdjustFreeCamSpeed(delta > 0 ? +1 : -1);
+		return true;
+	}
+
+	if (GetMode() == Mode::ThirdPerson && shiftDown) {
+		ThirdPersonCameraState s = ThirdPersonCameraRef().State();
+		ThirdPersonCameraRef().SetDistance(s.distance + (delta > 0 ? -10.0 : 10.0));
 		return true;
 	}
 
@@ -158,11 +164,16 @@ bool MovieMode::OnMouseButton(int button, bool down) {
 	// timeline / curve editor / Customize modal usable. NOTE: consuming here (return true) makes
 	// main.cpp's WndProc `return 0` BEFORE CallWindowProcW, so Panorama never sees the click --
 	// that is exactly why the modal must be excepted, or every click in it is swallowed.
-	if (IsDemoActive() && (CameraBridge_GetFreeCamEnabled() || GetMode() == Mode::FreeCam)
+	// THIRD PERSON swallows clicks for the same reason: the orbit mouse-look is active,
+	// and an unswallowed LMB/RMB is CS2's next/prev-player spectator bind -- so trying
+	// to "drag" the orbit silently switched the spectated player. Switch players from
+	// first person (scroll back) or the demoui player rows instead.
+	if (IsDemoActive()
+		&& (CameraBridge_GetFreeCamEnabled() || GetMode() == Mode::FreeCam || GetMode() == Mode::ThirdPerson)
 		&& !CameraPathRef().MenuOpen() && !CameraTimeline_WantsCursor()
 		&& !GraphEditorExperiment_WantsCursor() && !CameraEditor_CustomizeModalOpen())
 		return true;
-	// Otherwise never consume clicks: first/third-person spectator switches players on
+	// Otherwise never consume clicks: the first-person spectator switches players on
 	// LMB/RMB and the native demo UI (demoui) needs clicks to reach Panorama.
 	return false;
 }
@@ -420,12 +431,15 @@ bool MovieMode::OnKey(int vkey, bool down) {
 void MovieMode::ApplyMode(Mode m) {
 	switch (m) {
 	case Mode::FreeCam:
+		// Release the orbit camera (and its mouse capture) before handing the view to
+		// HLAE freecam -- the two both ride MirvInput and must not overlap.
+		ThirdPersonCameraRef().Exit();
 		CameraBridge_SetFreeCamEnabled(true);
 		break;
 	case Mode::ThirdPerson:
 		CameraBridge_SetFreeCamEnabled(false);
+		ThirdPersonCameraRef().Enter();
 		if (g_pEngineToClient) {
-			g_pEngineToClient->ExecuteClientCmd(0, kSpecModeThirdPerson, true);
 			// Leaving free cam: drop the UI cursor so it can't linger into a normal
 			// spectator view (and stays in sync for the next time you enter free cam).
 			g_pEngineToClient->ExecuteClientCmd(0, "mirv_filmmaker camtl cursor off", true);
@@ -433,6 +447,7 @@ void MovieMode::ApplyMode(Mode m) {
 		break;
 	case Mode::Default:
 		CameraBridge_SetFreeCamEnabled(false);
+		ThirdPersonCameraRef().Exit();
 		if (g_pEngineToClient) {
 			g_pEngineToClient->ExecuteClientCmd(0, kSpecModeFirstPerson, true);
 			g_pEngineToClient->ExecuteClientCmd(0, "mirv_filmmaker camtl cursor off", true);
@@ -465,6 +480,13 @@ MovieMode::Mode MovieMode::GetMode() { std::lock_guard<std::mutex> lk(m_mutex); 
 bool MovieMode::GetXray() { std::lock_guard<std::mutex> lk(m_mutex); return m_xray; }
 bool MovieMode::GetCursor() { std::lock_guard<std::mutex> lk(m_mutex); return m_cursor; }
 
+void MovieMode::SetMode(Mode mode) {
+	std::lock_guard<std::mutex> lk(m_mutex);
+	m_mode = mode;
+	m_pendingMode = mode;
+	m_modeDirty = true;
+}
+
 const char* MovieMode::ModeName() {
 	switch (GetMode()) {
 	case Mode::FreeCam: return "Free cam";
@@ -487,6 +509,8 @@ void MovieMode::SyncFromFreeCam(bool freeCamEnabled) {
 
 	if (freeCamEnabled) {
 		m_mode = Mode::FreeCam;
+	} else if (ThirdPersonCameraRef().State().active) {
+		m_mode = Mode::ThirdPerson;
 	} else if (m_mode == Mode::FreeCam) {
 		// Free cam was turned off elsewhere; fall back to third person.
 		m_mode = Mode::ThirdPerson;

@@ -18,6 +18,7 @@
 #include "Filmmaker/Cosmetics/CosmeticDebugLog.h"
 #include "Filmmaker/Movie/CameraBridge.h"
 #include "Filmmaker/Movie/FollowCamera.h"
+#include "Filmmaker/Movie/ThirdPersonCamera.h"
 #include "Filmmaker/Movie/ViewFx.h"
 #include "ReplaceName.h"
 #include "SchemaSystem.h"
@@ -404,10 +405,13 @@ namespace Filmmaker {
 		// The live x/y already land in the state JSON, so the state string changes every frame the
 		// cursor moves -- that is what re-triggers the JS render()/processInput during a drag.
 		seq = g_UiCursorProbe.seq;
-	}
-	bool  CameraBridge_GetFreeCamEnabled() { return g_MirvInputEx.m_MirvInput->GetCameraControlMode(); }
-	void  CameraBridge_SetFreeCamEnabled(bool enable) { g_MirvInputEx.m_MirvInput->SetCameraControlMode(enable); }
-	float CameraBridge_GetFreeCamSpeed() { return (float)g_MirvInputEx.m_MirvInput->GetCamSpeed(); }
+        }
+        bool  CameraBridge_GetFreeCamEnabled() { return g_MirvInputEx.m_MirvInput->GetCameraControlMode(); }
+        void  CameraBridge_SetFreeCamEnabled(bool enable) { g_MirvInputEx.m_MirvInput->SetCameraControlMode(enable); }
+        bool  CameraBridge_GetThirdPersonOrbitEnabled() { return g_MirvInputEx.m_MirvInput->GetThirdPersonOrbitMode(); }
+        void  CameraBridge_SetThirdPersonOrbitEnabled(bool enable) { g_MirvInputEx.m_MirvInput->SetThirdPersonOrbitMode(enable); }
+        bool  CameraBridge_ConsumeThirdPersonOrbit(double& dYaw, double& dPitch) { return g_MirvInputEx.m_MirvInput->ConsumeThirdPersonOrbitDelta(dYaw, dPitch); }
+        float CameraBridge_GetFreeCamSpeed() { return (float)g_MirvInputEx.m_MirvInput->GetCamSpeed(); }
 	void  CameraBridge_AdjustFreeCamSpeed(int dir) {
 		if (dir > 0) g_MirvInputEx.m_MirvInput->IncreaseCamSpeed();
 		else if (dir < 0) g_MirvInputEx.m_MirvInput->DecreaseCamSpeed();
@@ -920,6 +924,18 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 		}
 	}
 
+	// Third-person orbit camera: solved HERE from the spectated pawn's render-time
+	// (interpolated) eye pose, so it is jitter-free and works while the demo is paused.
+	// No-ops while the free cam / a FollowCamera preview owns the view (checked inside).
+	{
+		double tx = Tx, ty = Ty, tz = Tz, tp = Rx, tyaw = Ry, tr = Rz;
+		if (Filmmaker::ThirdPersonCameraRef().ViewSetupOverride(tx, ty, tz, tp, tyaw, tr)) {
+			Tx = (float)tx; Ty = (float)ty; Tz = (float)tz;
+			Rx = (float)tp; Ry = (float)tyaw; Rz = (float)tr;
+			originOrAnglesOverriden = true;
+		}
+	}
+
 	if(g_b_on_c_view_render_setup_view) {
 		AfxHookSourceRsView currentView = {Tx,Ty,Tz,Rx,Ry,Rz,Fov};
 		AfxHookSourceRsView gameView = {(float)g_MirvInputEx.GameCameraOrigin[0],(float)g_MirvInputEx.GameCameraOrigin[1],(float)g_MirvInputEx.GameCameraOrigin[2],(float)g_MirvInputEx.GameCameraAngles[0],(float)g_MirvInputEx.GameCameraAngles[1],(float)g_MirvInputEx.GameCameraAngles[2],(float)g_MirvInputEx.GameCameraFov};
@@ -1030,7 +1046,11 @@ bool CS2_Client_CSetupView_Trampoline_IsPlayingDemo(void *ThisCViewSetup) {
 	// the pose we just wrote. Range-gated playpath out-of-range remains unaffected because
 	// it releases free cam and stops pushing a path pose before this hook runs.
 	const bool pathOwnsView = Filmmaker::CameraPathOwnsView() || Filmmaker::GraphEditorExperiment_OwnsView();
-	const bool blockDemoViewOverride = inputOverride || pathOwnsView;
+	// The third-person orbit camera must also block the pass, or the engine re-asserts
+	// the spectator view over the orbit pose every frame while the demo plays (the
+	// close/far "flicker" the old cvar-based implementation suffered from).
+	const bool thirdPersonOwnsView = Filmmaker::ThirdPersonCameraRef().OwnsView();
+	const bool blockDemoViewOverride = inputOverride || pathOwnsView || thirdPersonOwnsView;
 
 	if (Filmmaker::CampathDebug()) {
 		static unsigned s_ownerLogThrottle = 0;
@@ -1722,17 +1742,26 @@ void  new_CS2_Client_FrameStageNotify(void* This, SOURCESDK::CS2::ClientFrameSta
 	if(g_MirvInputEx.m_MirvInput->IsActive()) {
 		HWND hWnd = GetActiveWindow();
 		if(NULL != hWnd) {
+			POINT point;
+			const bool bHavePoint = 0 != GetCursorPos(&point);
+			// new_GetCursorPos FAKES the position it is handed while a capture mode is on
+			// (Supply_GetCursorPos), so keep the REAL cursor position for the orbit delta.
+			const POINT realPoint = point;
 			if(!bCursorHidden) ShowCursor(FALSE);
-			else {
-				POINT point;
-				if(GetCursorPos(&point)) {
-					new_GetCursorPos(&point);
-				}
+			else if(bHavePoint) {
+				new_GetCursorPos(&point);
 			}
 			RECT rect;
 			if(GetClientRect(hWnd, &rect)) {
 				POINT pt {(rect.left+rect.right)/2,(rect.top+rect.bottom)/2};
 				if(ClientToScreen(hWnd,&pt)) {
+					// Third-person orbit input: ONE authoritative pixel delta per frame --
+					// how far the real cursor drifted from the center we parked it at last
+					// frame. Only valid once the park below has happened at least once
+					// (bCursorHidden). See MirvInput::SupplyThirdPersonOrbitPixels.
+					if(bCursorHidden && bHavePoint && g_MirvInputEx.m_MirvInput->GetThirdPersonOrbitMode()) {
+						g_MirvInputEx.m_MirvInput->SupplyThirdPersonOrbitPixels(realPoint.x - pt.x, realPoint.y - pt.y);
+					}
 					new_SetCursorPos(pt.x, pt.y);
 				}
 			}

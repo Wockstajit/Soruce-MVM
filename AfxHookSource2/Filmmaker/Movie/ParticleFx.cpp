@@ -62,6 +62,11 @@ std::atomic<int> g_demoTickNow{ -1 };
 // splatter on walls) are not particles and are unaffected.
 std::atomic<unsigned long long> g_applyAtMs{ 0 };
 
+// Camera-detached FP-FX suppression (see ParticleFxInternal.h). Driven from
+// Filmmaker::RunMainThreadFrame whenever the free cam / third-person orbit camera
+// takes or releases the view.
+std::atomic<bool> g_fpFxSuppress{ false };
+
 bool DemoIsPlaying() {
 	if (!g_pEngineToClient) return false;
 	if (auto pDemo = g_pEngineToClient->GetDemoFile()) return pDemo->IsPlayingDemo();
@@ -126,6 +131,19 @@ bool FxModeSupported(FxCategory cat, FxMode mode) {
 
 bool ParticleFx::EnsureInstalled() { return TryInstall(); }
 bool ParticleFx::Installed() const { return g_installed.load(); }
+
+void ParticleFx_SetFirstPersonFxSuppressed(bool on) {
+	if (g_fpFxSuppress.exchange(on, std::memory_order_relaxed) == on)
+		return;
+	if (on)
+		ParticleFxRef().EnsureInstalled(); // the gate lives in the create hook
+	// Keep dev/empty resolvable even when every EFFECTS category is Off.
+	RebuildActiveSwapTargets(false);
+}
+
+bool ParticleFx_FirstPersonFxSuppressed() {
+	return g_fpFxSuppress.load(std::memory_order_relaxed);
+}
 
 bool ParticleFx::WantsHook() const {
 	std::lock_guard<std::mutex> lock(g_mx);

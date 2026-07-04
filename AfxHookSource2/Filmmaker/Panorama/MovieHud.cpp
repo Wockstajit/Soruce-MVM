@@ -6,6 +6,7 @@
 #include "../Filmmaker.h"            // CameraPath_PreviewHudHidden()
 #include "../Movie/MovieMode.h"
 #include "../Movie/CameraBridge.h"
+#include "../Movie/ThirdPersonCamera.h"
 
 #include "../../DeathMsg.h" // AfxHookSource2_GetPanoramaHudPanel + PanoramaUIPanel offsets + g_CurrentGameCamera
 #include "../../MirvTime.h"
@@ -75,7 +76,8 @@ std::string MovieHud::BuildStateJson() {
 	if (g_pEngineToClient) {
 		if (auto pDemo = g_pEngineToClient->GetDemoFile()) {
 			playing = pDemo->IsPlayingDemo();
-			if (playing) paused = pDemo->IsDemoPaused();
+			paused = pDemo->IsDemoPaused();
+			playing = playing || paused;
 		}
 	}
 
@@ -93,6 +95,7 @@ std::string MovieHud::BuildStateJson() {
 	o << ",\"paused\":" << (paused ? "true" : "false");
 	o << ",\"freecam\":" << (CameraBridge_GetFreeCamEnabled() ? "true" : "false");
 	o << ",\"speed\":" << r1(CameraBridge_GetFreeCamSpeed());
+	o << ",\"thirdperson\":" << ThirdPersonCameraRef().BuildStateJson();
 	o << ",\"xray\":" << (mode.GetXray() ? "true" : "false");
 	o << ",\"cursor\":" << (mode.GetCursor() ? "true" : "false");
 	o << ",\"player\":\"\"";
@@ -121,7 +124,7 @@ void MovieHud::RunFrame() {
 	bool playingDemo = false;
 	if (g_pEngineToClient) {
 		if (auto pDemo = g_pEngineToClient->GetDemoFile())
-			playingDemo = pDemo->IsPlayingDemo();
+			playingDemo = pDemo->IsPlayingDemo() || pDemo->IsDemoPaused();
 	}
 
 	unsigned char* hud = playingDemo ? AfxHookSource2_GetPanoramaHudPanel() : nullptr;

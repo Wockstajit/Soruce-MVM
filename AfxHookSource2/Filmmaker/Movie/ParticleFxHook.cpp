@@ -384,7 +384,14 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 		{
 			std::lock_guard<std::mutex> lock(g_mx);
 			logging = g_logging;
-			if (g_enabled) {
+			// Camera detached from the spectated eye (third person / free cam): the engine
+			// still spawns the FIRST-PERSON viewmodel weapon FX anchored to the camera, so
+			// flashes/smoke float in mid-air where the camera's "gun" would be. Block the
+			// _fp/_fps systems entirely while detached. Checked BEFORE (and independent of)
+			// g_enabled -- this is a camera-correctness gate, not an EFFECTS mode.
+			if (g_fpFxSuppress.load(std::memory_order_relaxed) && IsFirstPersonWeaponFxPath(low))
+				action = 'X';
+			if (action == '=' && g_enabled) {
 				// Custom rules outrank category modes (they're the power-user override).
 				for (const CustomRule& r : g_customRules) {
 					if (std::strstr(low, r.match.c_str())) {

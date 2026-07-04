@@ -75,6 +75,25 @@ MVM_COMPOSITIONS = {
     ),
 }
 
+# First-person twins of the sniper compositions above: identical except the flash CHILD is
+# the viewmodel-effect _fp leaf (the shock-dust / plume / heat children stay world-space, as
+# they do for the world composition -- only the flash needs the viewmodel pass to align in
+# first person). The _fps sniper rows in kVariantWeaponFx route here.
+MVM_COMPOSITIONS_FP = {
+    f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_awp_fp.vpcf": (
+        f"{MODERN_MUZZLE_DIR}/muzzleflash_smg_fp.vpcf",
+        f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
+        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
+        f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
+    ),
+    f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_auto_fp.vpcf": (
+        f"{MODERN_MUZZLE_DIR}/muzzleflash_dmr_fp.vpcf",
+        f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
+        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
+        f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
+    ),
+}
+
 # Grenade-trail systems, authored from scratch (see _trail_system_text). The old
 # approach cloned barrel_smoke_trail with un-capped emission, which kept puffing
 # forever once the grenade landed or stuck in a wall (user report 2026-07-03);
@@ -451,6 +470,41 @@ MODERN_MUZZLEFLASH_FILES = (
     f"{MODERN_MUZZLE_DIR}/muzzleflash_suppressed.vpcf",
 )
 
+# First-person (_fp) muzzle-flash twins. Bug (user report 2026-07-04, "modern first-person
+# muzzle flashes don't align -- they float off to the side of the gun; in third person the
+# flash sits right"): the pack ships ONE flash asset per weapon and kVariantWeaponFx routed
+# BOTH the first-person (_fps) and the world CS2 muzzle systems to it. A world-space flash
+# (m_bViewModelEffect = false) anchors correctly on the weapon in third person / free cam,
+# but the first-person viewmodel is drawn in a separate pass with viewmodel FOV, so a
+# world-space flash placed at the viewmodel muzzle floats out of line. Povarehok solves this
+# by shipping a SEPARATE _fp flash with m_bViewModelEffect = true and routing the _fps
+# systems to it (see weapon_muzzle_flash_*_fp in kVariantWeaponFx / kSprayPairs). We do the
+# same: apply_modern_gameplay_composites writes a viewmodel-effect twin of every world flash
+# above, and the _fps rows in kVariantWeaponFx point at the _fp twin (barrel smoke already
+# gets its own viewmodel attach, which is why it aligned while the flash did not).
+
+# Modern tracer parents actually routed to at runtime (kVariantTracers + kTracerFallbacks in
+# ParticleFxRules.cpp). Bug (user report 2026-07-04, "tracers don't work on every gun -- some
+# pistols shoot the tracer in a random direction, and on the AK/M249 the tracer is locked to
+# the gun instead of flying toward what you're shooting"): converted from GMod, these fly via
+# C_INIT_MoveBetweenPoints from CP0 (muzzle) to CP1. CS2's own weapon-tracer dispatch never
+# sets a tracer END control point -- stock weapon_tracers.vpcf flies FORWARD on a local-space
+# velocity and ignores CP1. With CP1 unset the converted tracer interpolates toward the world
+# origin (a fixed wrong direction) or, where a stray local-forward velocity also survived
+# conversion (mw2019_tracer_small), fights it. Rebuild them on the SAME native chassis
+# Povarehok's own working tracer uses: muzzle-local forward velocity + a velocity-traced
+# lifespan, no CP1 dependency.
+MODERN_TRACER_DIR = "particles/filmmaker/modern/mw2019_tracer"
+MODERN_TRACER_PARENTS = (
+    f"{MODERN_TRACER_DIR}/mw2019_tracer.vpcf",
+    f"{MODERN_TRACER_DIR}/mw2019_tracer_fast.vpcf",
+    f"{MODERN_TRACER_DIR}/mw2019_tracer_slow.vpcf",
+    f"{MODERN_TRACER_DIR}/mw2019_tracer_small.vpcf",
+)
+# Local +X (muzzle-forward) tracer speed, matched to CS2 stock weapon_tracers and Povarehok's
+# converted tracer (both 2400 u/s + a 2048u velocity-traced lifespan).
+_TRACER_LOCAL_FORWARD = "2400.0"
+
 # Modern rope wisps attach to the barrel and trace gun motion (§6b). The Povarehok
 # plume offset (postprocess_common._CS2_MUZZLE_OFFSET_BLOCK) pushes spawn 1-6 units
 # forward and 2-4 up -- user report 2026-07-03 night: Modern FP rope reads in front of
@@ -573,10 +627,34 @@ def patch_cs2_modern_barrel_smoke_alignment(text: str) -> str:
 
 
 def patch_cs2_modern_muzzleflash_alignment(text: str) -> str:
-    """Modern per-shot muzzle flash: viewmodel-local, no GMod forward velocity kick."""
+    """Modern per-shot muzzle flash: WORLD-space, muzzle-attachment anchored.
+
+    Bug (user report 2026-07-04, "modern muzzle flash unaligns when you move the
+    camera; there's no third-person flash at all"): this used to force
+    m_bViewModelEffect = true. A viewmodel-effect system renders ONLY in the
+    first-person viewmodel pass -- it is drawn at the viewmodel's position with
+    viewmodel FOV, which is fine while the camera sits on the spectated eye but
+    floats out into mid-air the instant the view detaches (third-person orbit /
+    free cam), and never produces a world-anchored flash on the actual weapon.
+    Because the SAME asset is the swap target for both the first-person (_fps) and
+    the third-person (world) CS2 muzzle systems (kVariantWeaponFx), forcing the
+    viewmodel flag broke BOTH camera-detached cases at once.
+
+    Povarehok's own world muzzle flashes (weapon_muzzle_flash_*.vpcf) never set
+    this flag -- they render in WORLD space and anchor to the weapon's muzzle
+    control point, so they look right from every camera (first person, third
+    person, free cam) with no extra machinery. Match that here: leave the flash
+    world-space (viewmodel effect OFF) and keep only the muzzle-local spawn offset
+    so it still sits at the barrel tip. First-person in-eye spectating still shows
+    it correctly (the control point is at the viewmodel muzzle then, exactly as it
+    is for Povarehok); detached cameras now get a real world flash via the existing
+    _fps-suppress + spec_mode-3 chase path (see Filmmaker.cpp RunMainThreadFrame).
+    """
     new = text.replace("m_bLocalCoords = false", "m_bLocalCoords = true")
-    new = new.replace("m_bViewModelEffect = false", "m_bViewModelEffect = true")
-    new = common._ensure_viewmodel_effect_flag(new)
+    # World-space, NOT a viewmodel effect (see the docstring). Clear any inherited
+    # true and never re-add the flag; an absent key defaults to false = world-space,
+    # which is exactly what Povarehok's flashes carry.
+    new = new.replace("m_bViewModelEffect = true", "m_bViewModelEffect = false")
     new = _ensure_cs2_modern_rope_trail_position_offset(new)
     new = re.sub(
         r"m_LocalCoordinateSystemSpeedMin = \[[^\]]*\]",
@@ -589,6 +667,86 @@ def patch_cs2_modern_muzzleflash_alignment(text: str) -> str:
         new,
     )
     return new
+
+
+def _fp_variant_res(res: str) -> str:
+    """particles/.../muzzleflash_ar.vpcf -> particles/.../muzzleflash_ar_fp.vpcf."""
+    assert res.endswith(".vpcf"), res
+    return res[:-len(".vpcf")] + "_fp.vpcf"
+
+
+def make_modern_muzzleflash_fp(world_text: str) -> str:
+    """First-person viewmodel twin of a world muzzle flash.
+
+    Identical to the world flash except drawn in the viewmodel pass
+    (m_bViewModelEffect = true) so it lines up with the foreshortened first-person weapon,
+    exactly how CS2 (and Povarehok) ship a separate _fp flash. The world twin keeps
+    viewmodel OFF so it anchors on the weapon for third person / free cam. The _fps CS2
+    source systems route here; the world systems route to the world twin.
+    """
+    new = world_text.replace("m_bViewModelEffect = false", "m_bViewModelEffect = true")
+    return common._ensure_viewmodel_effect_flag(new)
+
+
+def _remove_init_blocks(text: str, class_name: str) -> str:
+    """Delete every initializer/operator array element of the given _class, comma and all."""
+    needle = f'_class = "{class_name}"'
+    while True:
+        idx = text.find(needle)
+        if idx < 0:
+            return text
+        start, end = common.block_span(text, idx)
+        line_start = text.rfind("\n", 0, start) + 1
+        j = end
+        if j < len(text) and text[j] == ",":
+            j += 1
+        if j < len(text) and text[j] == "\n":
+            j += 1
+        text = text[:line_start] + text[j:]
+
+
+def patch_modern_tracer_forward(text: str) -> str:
+    """Native-chassis forward-flying tracer (see MODERN_TRACER_PARENTS).
+
+    Drops the CP1-dependent C_INIT_MoveBetweenPoints (CS2 never sets a tracer end CP) and
+    the fixed C_INIT_RandomLifeTime, gives the spawn a muzzle-local forward velocity, and
+    derives lifespan from that velocity so the streak ends at the impact surface -- the
+    same shape CS2's stock weapon_tracers and Povarehok's converted tracer already use.
+    """
+    text = _remove_init_blocks(text, "C_INIT_MoveBetweenPoints")
+    text = _remove_init_blocks(text, "C_INIT_RandomLifeTime")
+    m = re.search(r'_class = "C_INIT_CreateWithinSphere"', text)
+    if m:
+        start, end = common.block_span(text, m.start())
+        block = text[start:end]
+        block = re.sub(
+            r"m_LocalCoordinateSystemSpeedMin = \[[^\]]*\]",
+            f"m_LocalCoordinateSystemSpeedMin = [{_TRACER_LOCAL_FORWARD}, 0.0, 0.0]", block)
+        block = re.sub(
+            r"m_LocalCoordinateSystemSpeedMax = \[[^\]]*\]",
+            f"m_LocalCoordinateSystemSpeedMax = [{_TRACER_LOCAL_FORWARD}, 0.0, 0.0]", block)
+        block = re.sub(r"m_bLocalCoords = (?:true|false)", "m_bLocalCoords = true", block)
+        text = text[:start] + block + text[end:]
+        if "C_INIT_LifespanFromVelocity" not in text:
+            m2 = re.search(r'_class = "C_INIT_CreateWithinSphere"', text)
+            _, e2 = common.block_span(text, m2.start())
+            j = e2
+            if j < len(text) and text[j] == ",":
+                j += 1
+            if j < len(text) and text[j] == "\n":
+                j += 1
+            lifespan = (
+                "\t\t{\n"
+                '\t\t\t_class = "C_INIT_LifespanFromVelocity"\n'
+                "\t\t\tm_flMaxTraceLength = 2048.0\n"
+                "\t\t},\n"
+            )
+            text = text[:j] + lifespan + text[j:]
+    # The GMod tracer spawned 150u ahead of the muzzle (a MoveBetweenPoints head-start);
+    # with real forward motion that just opens a gap between the muzzle and the streak.
+    text = text.replace("m_OffsetMin = [150.0, 0.0, 0.0]", "m_OffsetMin = [0.0, 0.0, 0.0]")
+    text = text.replace("m_OffsetMax = [150.0, 0.0, 0.0]", "m_OffsetMax = [0.0, 0.0, 0.0]")
+    return text
 
 
 def apply_modern_gameplay_composites(root: Path) -> list[str]:
@@ -625,8 +783,24 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
         path = common.resource_path(root, res)
         if not path.is_file():
             continue
-        text = new_text = path.read_text(encoding="utf-8")
-        new_text = patch_cs2_modern_muzzleflash_alignment(new_text)
+        text = path.read_text(encoding="utf-8")
+        world = patch_cs2_modern_muzzleflash_alignment(text)
+        if world != text:
+            path.write_text(world, encoding="utf-8")
+            changed.append(res)
+        # First-person viewmodel twin, written from the freshly-patched world flash so the
+        # two only ever differ by the viewmodel-effect flag (see make_modern_muzzleflash_fp
+        # and the _fps routing in kVariantWeaponFx). Must precede the _fp sniper
+        # compositions below, which reference the _fp leaves as children.
+        common.write_if_different(
+            root, _fp_variant_res(res), make_modern_muzzleflash_fp(world), changed)
+
+    for res in MODERN_TRACER_PARENTS:
+        path = common.resource_path(root, res)
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        new_text = patch_modern_tracer_forward(text)
         if new_text != text:
             path.write_text(new_text, encoding="utf-8")
             changed.append(res)
@@ -650,7 +824,7 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
         if common._add_child_once(common.resource_path(root, parent_res), child_res):
             changed.append(parent_res)
 
-    for res, children in MVM_COMPOSITIONS.items():
+    for res, children in {**MVM_COMPOSITIONS, **MVM_COMPOSITIONS_FP}.items():
         if not all(common.resource_path(root, c).is_file() for c in children):
             continue
         common.write_if_different(root, res, common._composition_text(children), changed)

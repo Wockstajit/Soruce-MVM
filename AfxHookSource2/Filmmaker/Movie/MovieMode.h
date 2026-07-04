@@ -40,6 +40,7 @@ public:
 	const char* ModeName();
 
 	// Programmatic mode set (e.g. when the user toggles free cam via console).
+	void SetMode(Mode mode);
 	void SyncFromFreeCam(bool freeCamEnabled);
 
 private:

@@ -142,6 +142,12 @@ bool TryInstall();
 // MAIN THREAD ONLY (see the crash lesson at its definition).
 void ResolveHandleOnMainThread(const char* name);
 
+// Camera-detached first-person-FX suppression (ParticleFx.cpp): while the rendered
+// camera is away from the spectated eye (third person / free cam), _fp/_fps viewmodel
+// weapon FX are blocked to dev/empty -- they anchor to the CAMERA and would float in
+// mid-air. Independent of g_enabled (a camera-correctness gate, not an EFFECTS mode).
+extern std::atomic<bool> g_fpFxSuppress;
+
 // ============================== spray (ParticleFxSpray.cpp) ========================
 
 extern std::atomic<bool> g_sprayGateBypass;

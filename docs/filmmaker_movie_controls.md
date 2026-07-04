@@ -28,7 +28,7 @@ Plain scroll cycles through three camera modes and **wraps around** at the ends:
 
 | Action | Control | Under the hood |
 | --- | --- | --- |
-| Cycle mode up | **Scroll Up** | `spec_mode 2/3` (in-eye / chase) + free-cam toggle |
+| Cycle mode up | **Scroll Up** | first-person / native third-person orbit / free-cam |
 | Cycle mode down | **Scroll Down** | same, reversed |
 
 ## Playback (in a demo)
@@ -43,7 +43,9 @@ The native demo-bar timescale dropdown is replaced by inline speed buttons
 (0.1x–4x). Toggle that off to restore the native dropdown:
 `mirv_filmmaker speedbar [on|off|toggle]`.
 
-> First person = `spec_mode 2` (in-eye), Third person = `spec_mode 3` (chase),
+> First person = `spec_mode 2` (in-eye), Third person = the HLAE-owned orbit camera
+> (`ThirdPersonCamera.cpp`, solved in the view-setup hook — CS2's native
+> `thirdperson`/chase cvars are NOT used; they fight the demo view pass and jitter),
 > Free cam = HLAE free camera. `spec_mode 4` is CS2's native roaming. Numbers are
 > centralised in `MovieMode.cpp` — confirm in-game and adjust if needed.
 
@@ -67,17 +69,43 @@ when you scroll into Free cam. They do nothing in first/third person.
 | Cam speed up / down | **Shift + Scroll** |
 | Exit camera control | **Esc** |
 
-> **Shift-slow only affects the free camera.** In first/third person the camera is
-> CS2's own spectator view, driven by your in-game `sensitivity` cvar — Shift can't
-> slow that without overriding your sensitivity.
+> **Shift-scroll changes third-person distance** and free-cam speed. Shift-hold slow
+> movement only affects the free camera.
 
 ## Spectator (first / third person)
 
 | Action | Control | Notes |
 | --- | --- | --- |
-| Next player | **Left click** | CS2's own spectator bind (we don't touch it) |
-| Previous player | **Right click** | CS2's own spectator bind |
+| Next player | **Left click** | CS2's own spectator bind — **first person only**; in Third person clicks are consumed so orbiting can't switch players |
+| Previous player | **Right click** | CS2's own spectator bind — first person only (see above) |
+| Orbit current player | **Mouse move in Third person** | HLAE-owned orbit camera locked to the spectated player's eye; works identically while the demo is paused. |
+| Third-person distance | **Shift + Scroll** | Clamped to 30–200 units. |
 | Toggle X-ray | **X** | `spec_show_xray` — **first/third person only**. In free cam, X is camera roll instead. |
+
+Third-person commands:
+
+```text
+mirv_filmmaker thirdperson on|off|toggle|state
+mirv_filmmaker thirdperson preset front|back|left|right
+mirv_filmmaker thirdperson angles <yaw> <pitch>
+mirv_filmmaker thirdperson distance <30-200>
+mirv_filmmaker thirdperson sens <deg per pixel, 0.005-0.5>   (default 0.05)
+```
+
+Presets and the orbit yaw are relative to the spectated player's facing: `back = 0`
+(camera stays behind them as they turn), `front = 180`, `left = -90`, `right = 90`.
+The orbit yaw is eased (~0.12 s) so player flicks swing the camera instead of snapping
+it. The camera is solved by HLAE from the pawn's render-time eye pose — no engine
+`cam_*` cvars are touched. While the camera is detached (third person OR free cam) the
+first-person viewmodel is hidden (`r_drawviewmodel false`) and its `_fp/_fps` particle
+systems are blocked to `dev/empty` — they anchor to the CAMERA and would otherwise
+render as giant floating arms and mid-air muzzle flashes. The spectator is also held in
+chase mode (`spec_mode 3`, re-asserted every 2 s) while detached: in-eye spawns ONLY the
+`_fp` variants for the spectated player, so without chase there would be no weapon FX on
+their gun at all (this is what makes the Modern/Povarehok swaps show in third person).
+Everything restores automatically when the camera returns to first person. World collision (pull-in at walls) is not implemented yet:
+the DLL has no engine trace hooked; adding one (Source 2 `GameTraceManager` AOB) is the
+known follow-up.
 
 ## Native CS2 demo playback UI (pause / speed / highlights / round)
 
@@ -95,5 +123,6 @@ UI) is fully clickable. Bind it for convenience, e.g. `bind "p" "demoui"`.
 | Command | Purpose |
 | --- | --- |
 | `mirv_filmmaker hud [on\|off\|toggle]` | Show/hide the help+status HUD |
+| `mirv_filmmaker thirdperson ...` | Third-person orbit camera controls and presets |
 | `mirv_filmmaker speedbar [on\|off\|toggle]` | Inline demo-bar speed buttons (off = native dropdown) |
 | `mirv_filmmaker hud_eval <panorama js>` | Run Panorama JS in the HUD context (debug) |

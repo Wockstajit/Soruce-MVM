@@ -11,6 +11,7 @@
 #include "Panorama/ConfigHud.h"
 #include "Panorama/GraphEditorExperimentHud.h"
 #include "Panorama/DemoBarButtons.h"
+#include "Movie/CameraBridge.h"
 #include "Movie/MovieMode.h"
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
@@ -19,6 +20,7 @@
 #include "Movie/ViewFxVm.h"
 #include "Movie/ParticleFx.h"
 #include "Movie/DemoEndHold.h"
+#include "Movie/ThirdPersonCamera.h"
 #include "Cosmetics/CosmeticOverrideSystem.h"
 #include "Platform/FolderPicker.h"
 #include "Platform/TextEncoding.h"
@@ -241,6 +243,46 @@ void RunMainThreadFrame() {
 	// Movie director: apply queued input actions (engine commands / free-cam
 	// toggle) on this thread, then refresh the in-game help/status HUD panel.
 	MovieModeRef().FlushActions();
+	ThirdPerson_RunFrame();
+
+	// Camera detached from the spectated eye (free cam or third-person orbit): hide the
+	// first-person viewmodel and suppress its _fp weapon FX. Both are anchored to the
+	// CAMERA, so once the view leaves the eye they render as giant floating arms and
+	// mid-air muzzle flashes/smoke. Restored the frame the camera re-attaches.
+	{
+		static bool s_fpViewHidden = false;
+		static ULONGLONG s_lastSpecAssertMs = 0;
+		const bool camDetached = CameraBridge_GetFreeCamEnabled()
+			|| ThirdPersonCameraRef().State().active;
+		if (camDetached != s_fpViewHidden) {
+			s_fpViewHidden = camDetached;
+			s_lastSpecAssertMs = 0;
+			ParticleFx_SetFirstPersonFxSuppressed(camDetached);
+			if (g_pEngineToClient) {
+				g_pEngineToClient->ExecuteClientCmd(0,
+					camDetached ? "r_drawviewmodel false" : "r_drawviewmodel true", true);
+				// CHASE while detached: in-eye spectating spawns ONLY the _fp viewmodel
+				// weapon FX for the spectated player (suppressed above -> no flashes at
+				// all on their gun). Chase makes the engine spawn the THIRD-PERSON
+				// world-model FX -- which the ParticleFx swap tables (Modern/Povarehok)
+				// then apply to, same as for every other player. The rendered view stays
+				// ours either way (the view-setup override outranks the chase camera).
+				g_pEngineToClient->ExecuteClientCmd(0,
+					camDetached ? "spec_mode 3" : "spec_mode 2", true);
+			}
+		}
+		// Re-assert chase while detached: spec_mode does NOT apply while the demo is
+		// paused (verified live), and the engine resets the observer mode on round
+		// changes / player switches -- a one-shot exec at the transition silently
+		// reverts to in-eye and the spectated player's weapon FX vanish again.
+		if (camDetached && g_pEngineToClient) {
+			const ULONGLONG now = GetTickCount64();
+			if (now - s_lastSpecAssertMs >= 2000) {
+				s_lastSpecAssertMs = now;
+				g_pEngineToClient->ExecuteClientCmd(0, "spec_mode 3", true);
+			}
+		}
+	}
 	MovieHudRef().RunFrame();
 
 	// Camera-marker / dolly path: hover picking, playback driver, auto-save, then

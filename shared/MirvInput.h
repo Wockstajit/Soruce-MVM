@@ -62,6 +62,17 @@ public:
 
 	bool GetCameraControlMode(void);
 	void SetCameraControlMode(bool enable);
+	bool GetThirdPersonOrbitMode(void) const { return m_ThirdPersonOrbitMode; }
+	void SetThirdPersonOrbitMode(bool enable);
+	// Orbit input is fed from EXACTLY ONE place: the once-per-frame cursor-vs-center
+	// delta in main.cpp's FrameStageNotify recenter block (SupplyThirdPersonOrbitPixels).
+	// The raw-input / GetCursorPos hooks only BLOCK the game from seeing the mouse in
+	// orbit mode -- they must not accumulate, or the same physical movement gets counted
+	// once per pipe (raw + every cursor poll) and the orbit spins wildly.
+	// Units are raw PIXELS (yaw sign already applied); the consumer applies its own
+	// degrees-per-pixel sensitivity.
+	void SupplyThirdPersonOrbitPixels(int dX, int dY);
+	bool ConsumeThirdPersonOrbitDelta(double& dYawPixels, double& dPitchPixels);
 
 	// Current free-cam speed multiplier (read for the movie director HUD).
 	double GetCamSpeed(void) const { return m_CamSpeed; }
@@ -75,7 +86,7 @@ public:
 	void SetSlowFactor(double value) { m_SlowFactor = value; }
 
 	bool IsActive() {
-		return m_Focus && !m_Dependencies->GetSuspendMirvInput() && m_CameraControlMode;
+		return m_Focus && !m_Dependencies->GetSuspendMirvInput() && (m_CameraControlMode || m_ThirdPersonOrbitMode);
 	}
 
 	double GetKeyboardSensitivty(void);
@@ -400,6 +411,9 @@ private:
 
 	bool m_MMove = false;
 	bool m_CameraControlMode;
+	bool m_ThirdPersonOrbitMode = false;
+	double m_ThirdPersonOrbitYaw = 0.0;
+	double m_ThirdPersonOrbitPitch = 0.0;
 	bool m_Focus;
 	bool m_IgnoreKeyUp;
 	bool m_IgnoreNextKey;

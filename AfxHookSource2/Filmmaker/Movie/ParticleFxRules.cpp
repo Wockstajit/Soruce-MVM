@@ -216,36 +216,36 @@ const VariantRule kVariantTracers[] = {
 };
 const VariantRule kVariantWeaponFx[] = {
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_ak47.vpcf",         "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle",    "arc9_fas_muzzleflashes/muzzleflash_ar"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_ak47_fps.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_ak47_fps.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle.vpcf",       "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle",    "arc9_fas_muzzleflashes/muzzleflash_ar"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle_fps.vpcf",   "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle_fps.vpcf",   "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_aug.vpcf",          "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle",    "arc9_fas_muzzleflashes/muzzleflash_ar"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_aug_fps.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_aug_fps.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_shot.vpcf",         "weapons/cs_weapon_fx", "weapon_muzzle_flash_shotgun",         "arc9_fas_muzzleflashes/muzzleflash_shotgun"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_shot_fps.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_shotgun_fp",      "arc9_fas_muzzleflashes/muzzleflash_shotgun"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_shot_fps.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_shotgun_fp",      "arc9_fas_muzzleflashes/muzzleflash_shotgun_fp"),
 	// The MW2019 pack's own big-bore snipers (AX-50/HDR/Rytec) use the SMG flash; the mvm
 	// sniper composition wraps it with the pack's .50-cal extras the mod adds via Lua --
 	// M82 shock-dust ring around the shooter, heavy barrel plume, muzzle heat distortion
 	// (synthesized by postprocess_modern.py's apply_modern_gameplay_composites, user request 2026-07-03).
 	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_awp",             "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_awp"),
-	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_huntingrifle_fp", "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_awp"),
+	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_huntingrifle_fp", "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_awp_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_subm.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg",             "arc9_fas_muzzleflashes/muzzleflash_smg"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_subm_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg_fp",          "arc9_fas_muzzleflashes/muzzleflash_smg"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_subm_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg_fp",          "arc9_fas_muzzleflashes/muzzleflash_smg_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_subm.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg_silenced",    "arc9_fas_muzzleflashes/muzzleflash_suppressed"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_subm_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg_silenced_fp", "arc9_fas_muzzleflashes/muzzleflash_suppressed"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_subm_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_smg_silenced_fp", "arc9_fas_muzzleflashes/muzzleflash_suppressed_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_rif.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_silenced", "arc9_fas_muzzleflashes/muzzleflash_suppressed"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_rif_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_silenced", "arc9_fas_muzzleflashes/muzzleflash_suppressed"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzsilenced_rif_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_silenced", "arc9_fas_muzzleflashes/muzzleflash_suppressed_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",          "arc9_fas_muzzleflashes/muzzleflash_pistol"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp",       "arc9_fas_muzzleflashes/muzzleflash_pistol"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp",       "arc9_fas_muzzleflashes/muzzleflash_pistol_fp"),
 	// Deagle/R8, ironsight (scoped) AUG/SG556, and LMG muzzles are separate
 	// top-level systems (verified via `fx names` on a live demo, 2026-07-02).
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_deagle.vpcf",            "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",    "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_deagle_fps.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp", "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_aug_fps_ironsight.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_sg_fps_ironsight.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_deagle_fps.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp", "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle_fp"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_aug_fps_ironsight.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar_fp"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_sg_fps_ironsight.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_ar_fp"),
 	// riffle_lrg = SCAR-20/G3SG1 autosnipers: the pack's Rytec/AX-50 class (SMG flash).
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle_lrg.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle",    "arc9_fas_muzzleflashes/muzzleflash_smg"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle_lrg_fps.vpcf",    "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_smg"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_riffle_lrg_fps.vpcf",    "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle_fp", "arc9_fas_muzzleflashes/muzzleflash_smg_fp"),
 	// weapon_muzzleflash_snip_ar(_fps) is the REAL top-level auto-sniper (SCAR-20/G3SG1)
 	// system (verified via `fx names` on the all-weapons test demo 2026-07-03 -- it was
 	// unmapped and passing through 100% vanilla, the actual cause of a user-reported
@@ -254,12 +254,12 @@ const VariantRule kVariantWeaponFx[] = {
 	// Modern already makes); Modern gets the mvm sniper composition around the pack's DMR
 	// flash (shock-dust ring + plume + heat distortion, like the AWP above).
 	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip_ar.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_awp", "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_auto"),
-	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip_ar_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_awp", "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_auto"),
+	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_snip_ar_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_awp", "arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_auto_fp"),
 	// uweapon_muzflsh_mach(_fps) is the LMG (M249/Negev) top-level system -- also unmapped
 	// (verified live 2026-07-03), so LMGs got 100% vanilla flash under Modern. "para" is the
 	// mod's own LMG-class naming; the arc9 pack ships a dedicated LMG flash.
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_mach.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_para",    "arc9_fas_muzzleflashes/muzzleflash_lmg"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_mach_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_para_fp", "arc9_fas_muzzleflashes/muzzleflash_lmg"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzflsh_mach_fps.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_para_fp", "arc9_fas_muzzleflashes/muzzleflash_lmg_fp"),
 	// The thrown-molotov flight trail (the "smoke trail that follows the grenade" a user
 	// reported missing 2026-07-03): unmapped before, so it played 100% vanilla CS2's own
 	// (much thinner) trail. Povarehok ships its own weapon_molotov_thrown +
@@ -271,7 +271,7 @@ const VariantRule kVariantWeaponFx[] = {
 	// R8 primary fire ("fanning") uses its own pist_revolver systems, distinct
 	// from the deagle-shared secondary fire.
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_revolver.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",    "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
-	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_revolver_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp", "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
+	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_revolver_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp", "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_fire_revolver.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",    "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
 	// Sustained-fire barrel smoke: On/Less swap to the pack's weapon_muzzle_smoke_long
 	// (per-shot wisps + lingering plume). Modern uses the MW2019 barrel_smoke assets.
@@ -497,6 +497,9 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 	}
 	if (needsEmptySystem)
 		add(kEmptySystem);
+	// FP-FX suppression blocks to dev/empty regardless of the category modes.
+	if (g_fpFxSuppress.load(std::memory_order_relaxed))
+		add(kEmptySystem);
 	if (g_moneyHeadshot)
 		add(kMoneyBurst);
 	const VariantRule* tables[] = { kVariantWeaponFx, kVariantTracers, kVariantBlood,
@@ -546,8 +549,16 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 
 	g_activeTargets.clear();
 	g_resolveQueue.clear();
-	if (!g_enabled)
+	if (!g_enabled) {
+		// The FP-FX suppression gate must stay functional with the EFFECTS master off:
+		// keep dev/empty resolvable so the hook's block target can swap.
+		if (g_fpFxSuppress.load(std::memory_order_relaxed)) {
+			g_activeTargets.push_back(kEmptySystem);
+			if (g_handleCache.find(kEmptySystem) == g_handleCache.end())
+				g_resolveQueue.push_back(kEmptySystem);
+		}
 		return;
+	}
 
 	g_activeTargets = desired;
 	for (const std::string& name : desired)

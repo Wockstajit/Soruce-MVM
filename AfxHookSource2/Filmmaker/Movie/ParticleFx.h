@@ -140,6 +140,14 @@ void ParticleFx_GetDebugHudState(FxDebugHudState& out);
 // events instead of generic particle names.
 void ParticleFx_OnGameEvent(SOURCESDK::CS2::CGameEvent* event);
 
+// Camera-detached first-person-FX suppression: while the rendered camera is away from
+// the spectated eye (third person / free cam), the engine still spawns the viewmodel's
+// _fp/_fps weapon FX anchored to the CAMERA -- floating mid-air muzzle flashes. This
+// gate blocks those creations to dev/empty. Independent of the EFFECTS modes; driven
+// from Filmmaker::RunMainThreadFrame alongside r_drawviewmodel.
+void ParticleFx_SetFirstPersonFxSuppressed(bool on);
+bool ParticleFx_FirstPersonFxSuppressed();
+
 // Spray-heat gate bypass ("fx align gate off"): while bypassed, EVERY shot upgrades to
 // its wisp wrapper instead of only sustained fire -- so the alignment probe (FxAlign)
 // gets wisp samples for every weapon class. TESTING ONLY; not persisted, defaults to
