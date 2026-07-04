@@ -78,8 +78,9 @@ One responsibility per file. Public headers are the `*.h` without "Internal" in 
 |---|---|
 | `CosmeticCommands.cpp` | The `mirv_filmmaker cosmetics <subcommand>` console grammar. |
 | `CosmeticUiQueries.{h,cpp}` | Customize-modal queries: live weapon/glove/agent econ reads for the spectated pawn, surfaced to Panorama as JSON. |
-| `CosmeticDebug.cpp` | Read-only diagnostics printing (`cosmetics status`, spectated econ dump, visual diag). |
-| `CosmeticDebugLog.{h,cpp}` | The `mvm_debug` flight-recorder log (grew beyond cosmetics; covers the whole filmmaker surface). |
+| `CosmeticDebug.cpp` | Read-only diagnostics printing (`cosmetics status`, spectated econ dump, visual diag) + the shared SEH-guarded entity readers (`CosmeticDebugRead`, declared in `CosmeticDebugInternal.h`). |
+| `CosmeticDebugEvents.cpp` | Structured mvm_debug event logging: uiclick / glove-pick / weapon-pick / spectate-switch / `skin.live` snapshots + the per-frame change detector. |
+| `CosmeticDebugLog.{h,cpp}` | The `mvm_debug` log transport: file writer, VEH crash breadcrumb, agent ingest (grew beyond cosmetics; covers the whole filmmaker surface). |
 
 ## Demo-playback caveats
 

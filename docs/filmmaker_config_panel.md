@@ -5,8 +5,9 @@ the editor's inspector look but carries no camera tools. Toggle with
 `mirv_filmmaker config [on|off|toggle]`.
 
 Implementation: `AfxHookSource2/Filmmaker/Panorama/ConfigHud.{h,cpp}` (bridge) +
-`ConfigHudJs.h` (embedded Panorama JS). Unlike the Camera Editor it does not host the
-timeline and does not hide the native HUD.
+`ConfigHudJs.h` (embedded Panorama JS; the MODIFIERS section is the spliced fragment
+`ConfigHudModifiersJs.h`). Unlike the Camera Editor it does not host the timeline and
+does not hide the native HUD.
 
 ## Sections
 

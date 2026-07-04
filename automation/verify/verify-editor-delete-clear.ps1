@@ -8,7 +8,8 @@ $movieMode = Join-Path $root 'AfxHookSource2\Filmmaker\Movie\MovieMode.cpp'
 $cameraEditorJs = Join-Path $root 'AfxHookSource2\Filmmaker\Panorama\CameraEditorJs.h'
 $graphEditorJs = Join-Path $root 'AfxHookSource2\Filmmaker\Panorama\GraphEditorJs.h'
 $cameraPath = Join-Path $root 'AfxHookSource2\Filmmaker\Movie\CameraPath.cpp'
-$command = Join-Path $root 'AfxHookSource2\Filmmaker\FilmmakerCommand.cpp'
+# grapheditor grammar moved to its own dispatcher TU (file-per-feature split)
+$command = Join-Path $root 'AfxHookSource2\Filmmaker\GraphEditorCommand.cpp'
 
 $mm = Get-Content -Raw -Path $movieMode
 $cej = Get-Content -Raw -Path $cameraEditorJs
@@ -32,8 +33,8 @@ if ($cp -notmatch 'GraphEditorExperimentHudRef\(\)\.CmdReseed\(\)' -or $cp -notm
     throw 'CameraPath delete/delete-all must keep graph model in sync.'
 }
 
-if ($fc -notmatch 'grapheditor.*clear' -or $fc -notmatch 'ge\.CmdClear\(\)') {
-    throw 'Filmmaker command dispatch must expose grapheditor clear.'
+if ($fc -notmatch '"clear"' -or $fc -notmatch 'ge\.CmdClear\(\)') {
+    throw 'GraphEditor command dispatch must expose grapheditor clear.'
 }
 
 Write-Host 'editor delete/clear regression checks passed'

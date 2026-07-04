@@ -338,6 +338,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/ConfigHud.cpp
     Filmmaker/Panorama/ConfigHud.h
     Filmmaker/Panorama/ConfigHudJs.h
+    Filmmaker/Panorama/ConfigHudModifiersJs.h
     Filmmaker/Cosmetics/CosmeticUiQueries.cpp
     Filmmaker/Cosmetics/CosmeticUiQueries.h
     Filmmaker/FilmmakerDebugCommand.cpp
@@ -347,6 +348,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/CameraEditorJs.h
     Filmmaker/Panorama/CameraEditorWidgetsJs.h
     Filmmaker/Panorama/CameraEditorCustomizeJs.h
+    Filmmaker/Panorama/CameraEditorCustomizePreviewJs.h
     Filmmaker/Panorama/CameraEditorFollowInspectorJs.h
     Filmmaker/Panorama/CameraEditorPathInspectorJs.h
     Filmmaker/Panorama/CameraEditorDebugJs.h
@@ -365,6 +367,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/CamPlayback.cpp
     Filmmaker/Movie/CamPlayback.h
     Filmmaker/Movie/CameraPath.cpp
+    Filmmaker/Movie/CameraPathPicking.cpp
     Filmmaker/Movie/CameraPath.h
     Filmmaker/Movie/GraphExpModel.cpp
     Filmmaker/Movie/GraphExpModel.h
@@ -423,6 +426,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Cosmetics/CosmeticAnimFix.h
     Filmmaker/Cosmetics/CosmeticCommands.cpp
     Filmmaker/Cosmetics/CosmeticDebug.cpp
+    Filmmaker/Cosmetics/CosmeticDebugInternal.h
+    Filmmaker/Cosmetics/CosmeticDebugEvents.cpp
     Filmmaker/Cosmetics/CosmeticDebugLog.cpp
     Filmmaker/Cosmetics/CosmeticDebugLog.h
     Filmmaker/Cosmetics/CosmeticGloveLabels.cpp

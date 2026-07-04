@@ -24,13 +24,13 @@ They confirm the native player-preview route:
 - Enable `player`, `mouse_rotate`, `sync_spawn_addons`, `transparent-background`, and `pin-fov`.
 - Pair `require-composition-layer` with `composition-layer-texture-name`.
 
-This directly matches the current repo direction in `AfxHookSource2/Filmmaker/Panorama/CameraEditorCustomizeJs.h`.
+This directly matches the current repo direction in `AfxHookSource2/Filmmaker/Panorama/CameraEditorCustomizePreviewJs.h` (the Customize modal's 3D-preview fragment, split out of `CameraEditorCustomizeJs.h`).
 
 ### 2. The repo already has most of the preview implementation
 
 The existing customize modal already creates a native `MapPlayerPreviewPanel` in:
 
-`AfxHookSource2/Filmmaker/Panorama/CameraEditorCustomizeJs.h`
+`AfxHookSource2/Filmmaker/Panorama/CameraEditorCustomizePreviewJs.h` (preview wiring; modal in `CameraEditorCustomizeJs.h`)
 
 Important existing pieces:
 
