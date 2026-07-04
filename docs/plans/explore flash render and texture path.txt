@@ -1,0 +1,259 @@
+I'll explore this codebase systematically to understand the current muzzle-flash rendering and postprocess capabilities. Let me start by mapping the structure and finding the key files.
+
+Ran
+a command
+Now let me search for the postprocess files and the modern muzzleflash directory structure:
+
+
+Found files
+Let me refine the search for the muzzleflash directory:
+
+
+Found files, ran a command
+Good! Now let me read the postprocess files to find the helpers and patterns:
+
+
+Read 2 files
+Now let me search for the specific muzzleflash files and read some of them:
+
+
+Read 2 files
+Now let me search for muzzle-related textures and their dimensions. Let me first locate the materials/effects and materials/particle directories:
+
+Ran
+a command
+Let me search more specifically for the files mentioned in the requirements:
+
+Ran
+a command
+Good! Now let me find the povarehok muzzleflash file and read it:
+
+Searched
+**/povarehok/**/weapon_muzzle_flash_assaultrifle.vpcf
+Let me read the regular Povarehok muzzleflash:
+
+Read
+weapon_muzzle_flash_assaultrifle.vpcf
+Now let me read the main flame child:
+
+Read
+weapon_muzzle_flash_assualtrifle_flame.vpcf
+Good! Now let me create a Python script to examine the TGA headers for dimensions and count frames in .mks files:
+
+Ran
+a command
+Excellent! Now let me search for more flash/flame related renderers and also look for PositionLock usage:
+
+Searched
+_class = "C_OP_PositionLock"
+Now let me look at what fires are used - search for all unique texture references in the modern muzzleflashes:
+
+Ran
+a command
+Now let me check the povarehok fire texture and see what other fire_particle textures exist:
+
+Ran
+a command
+Let me get all fire_particle vtex files and their dimensions:
+
+Ran
+a command
+Perfect! Now let me look at more details in the modern files - specifically the glow and flash center files:
+
+Read
+muzzle_center_big.vpcf
+Now let me look at more files to understand the complete landscape. Let me check a glow file:
+
+Read
+muzzle_glow_b.vpcf
+Perfect! Now let me check muzzle_glow_lmg to see what it uses since muzzleflash_ar has it as a child:
+
+Ran
+a command
+Now let me compile a final summary by looking at the key helper functions in postprocess_common in more detail:
+
+Read
+postprocess_common.py
+(140–239, 199–298)
+Excellent! Now I have enough information. Let me create one more quick check to see some details of the muzzleflash_ar_fp to understand that pattern:
+
+Ran
+a command
+Perfect! Now I have all the information needed. Let me compile the comprehensive report:
+
+Exploration Report: Modern Muzzle-Flash Rendering & Postprocess Capabilities
+1. POSTPROCESS HELPERS FOR RENDERER/TEXTURE EDITING
+File: fx/tools/postprocess_common.py
+
+iter_renderer_blocks(text: str) — Lines 140-162
+Purpose: Generator that yields (start, end) span tuples for each element inside m_Renderers = [ ... ] arrays. Depth-tracks braces to find complete { ... } renderer blocks.
+Usage Pattern: Iterate over individual renderer definitions in a system to inspect or rewrite them.
+
+block_span(text: str, class_pos: int) -> tuple[int, int] — Lines 165-176
+Purpose: Given a position within a _class = "..." match, returns the (start, end) span of the enclosing { ... } block. Used to isolate an operator/renderer for editing.
+Key Detail: Backwards-searches for opening brace, then forward-counts depth to find matching close.
+
+fix_textureless_renderers(root: Path, source1_root: Path) -> tuple[int, int] — Lines 199-249
+Purpose: Repairs sprite renderers with m_hMaterial reference but missing m_hTexture. Strategy: (1) Lookup the material's original VMT and extract $basetexture, (2) Inject a new m_hTexture line pointing to the converted .vtex, or (3) remove the renderer block entirely if no texture exists.
+Texture Injection Pattern: (Lines 232-239)
+
+insert_at = mat.end()
+indent = block[: mat.start()].rsplit("\n", 1)[-1]
+block = (
+    block[:insert_at]
+    + f'\n{indent}m_hTexture = resource:"{new_tex}"'
+    + block[insert_at:]
+)
+Returns: (repaired_count, removed_count)
+
+dedup_blend_frames_key(text: str) -> str — Lines 447-470
+Purpose: Drops surplus m_bBlendFramesSeq0 = true lines when a block already carries the key (preventing "duplicate member" compile errors during rewrites).
+Pattern: Uses BLEND_FRAMES_KEY_RE to find all occurrences, keeps one, deletes extras.
+
+add_sheet_frame_blending(root: Path) -> int — Lines 473-522
+Purpose: Enables m_bBlendFramesSeq0 = true on sprite renderers backed by .mks sheet files where the key is missing. Idempotent via sheet_cache.
+Key Detail: Searches for m_hTexture resource reference, checks if the VTEX file contains .mks, only then adds blending.
+
+File: fx/tools/postprocess_modern.py
+
+patch_cs2_modern_muzzleflash_alignment(text: str) -> str — Lines 629-669
+Purpose: Aligns Modern per-shot muzzle flash to WORLD space (not viewmodel), with muzzle-local spawn offset.
+Key Changes:
+
+m_bLocalCoords = false → true (keep spawn offset local to muzzle)
+m_bViewModelEffect = true → false (world-space rendering, not viewmodel-only)
+m_LocalCoordinateSystemSpeedMin/Max → [0, 0, 0] (no inherited velocity)
+Calls _ensure_cs2_modern_rope_trail_position_offset() to ensure spawn is at barrel tip
+make_modern_muzzleflash_fp(world_text: str) -> str — Lines 678-688
+Purpose: Creates first-person twin from world flash. Identical except m_bViewModelEffect = true (drawn in viewmodel pass for FP alignment).
+Single Key Edit: m_bViewModelEffect = false → true
+
+patch_modern_tracer_forward(text: str) -> str — Lines 708-749
+Purpose: Converts GMod CP1-dependent tracers to native forward-flying tracers.
+Technique: Removes C_INIT_MoveBetweenPoints and C_INIT_RandomLifeTime, injects muzzle-local forward velocity and C_INIT_LifespanFromVelocity.
+
+2. MODERN MUZZLEFLASH FILES & TEXTURE DETAILS
+Root: build/fx/povarehok-source1import/source2/content/source_mvm_fx/particles/filmmaker/modern/arc9_fas_muzzleflashes/
+
+muzzleflash_ar.vpcf — Parent container
+Children: muzzle_trace, muzzle_glow_lmg, muzzle_sparks_ar, muzzleflash_none_red, muzzle_flame, muzzle_smoke_pistol (and others)
+m_bViewModelEffect: false (world-space)
+Lifetime: 0.04–0.05s (per muzzle_flame child)
+muzzle_flame.vpcf — Flash burst leaf
+Renderer Class: C_OP_RenderTrails (not RenderSprites)
+m_hTexture: materials/effects/fas_muzzle_break_test.vtex
+m_flAnimationRate: 35.0
+m_bBlendFramesSeq0: NOT SET (trail renderer, not sprite)
+Particle Max Lifetime: 0.03–0.04s (C_INIT_RandomLifeTime)
+C_OP_PositionLock: ABSENT
+Notes: Rope/trail trails the muzzle motion; LocalCoordinateSystemSpeed is [-5 to -4, ±0.1] (backward velocity relative to muzzle forward).
+muzzle_center_big.vpcf — Central bright flash burst
+Renderer Class: C_OP_RenderSprites
+m_hTexture: materials/effects/hl2_muzzleflash.vtex
+m_flAnimationRate: 12.0
+m_bBlendFramesSeq0: true
+Particle Max Lifetime: 0.05–0.065s
+C_OP_PositionLock: ABSENT
+Color: Warm tan/gold ([219–220, 176–200, 141–146])
+Additive Blend: Yes
+muzzle_glow_b.vpcf — Halo/bloom glow
+Renderer Class: C_OP_RenderSprites
+m_hTexture: materials/particle/particle_glow_05.vtex
+m_flAnimationRate: 11.0
+m_bBlendFramesSeq0: NOT SET
+Additive Blend: Yes
+muzzle_glow_lmg.vpcf — Alternate glow
+m_hTexture: materials/particle/particle_glow_04.vtex
+m_flAnimationRate: 11.0
+Particle Lifetime: 0.03–0.05s
+3. AVAILABLE FLASH-RELATED TEXTURES
+Path: build/fx/povarehok-source1import/source2/content/source_mvm_fx/materials/
+
+Texture File	Dimensions	Frame Count	Notes
+effects/hl2_muzzleflash.tga	1024×512	7 frames	Classic Half-Life muzzle flash; currently used in muzzle_center_big
+effects/fas_muzzleflash_test_b.tga	2048×1024	18 frames	Higher res burst; best candidate for upgrade
+effects/fas_muzzle_break_test.tga	1024×512	6 frames	Trail/spark texture; currently used in muzzle_flame
+effects/fas_flamering.tga	512×256	2 frames	Ring/halo burst (low detail)
+effects/ar2_altfire1b.tga	64×64	no .mks	Small energy burst; minimal
+particle/muzzleflash1.tga	256×256	13 frames	Mid-res, many frames
+particle/fire_particle_4.tga	1024×1024	96 frames	Povarehok's main flame (richly animated, large sheet)
+particle/fire_particle_2.tga	1024×512	51 frames	Dense fire animation
+particle/fire_particle_6.tga	2048×512	70 frames	Very detailed, wide
+particle/fire_particle_7.tga	2048×512	224 frames	Ultra-detailed, many frames
+4. POVAREHOK MUZZLE-FLASH COMPARISON
+File: build/fx/povarehok-source1import/source2/content/source_mvm_fx/particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx/weapon_muzzle_flash_assualtrifle_flame.vpcf
+
+Renderer Class: C_OP_RenderSprites
+m_hTexture: materials/particle/fire_particle_4/fire_particle_4.vtex
+m_flAnimationRate: 8.0 (slower than Modern's 35.0 trail, deliberate)
+m_bBlendFramesSeq0: true
+Particle Lifetime: 0.0075s emission duration; particles start at sequence 5–20
+C_OP_PositionLock: YES (operator present; keeps flame locked to spawn point)
+Spawn Offset: OffsetMin/Max = [1.0, 0.0, 0.0] (local forward, minimal)
+Color Init: Warm orange ([254, 233, 216])
+Additive Blend: Yes
+Self-Illum: 1.0
+Notes: Rich 96-frame sheet animates slowly to show detailed fire progression; PositionLock keeps each particle "locked" in place after spawn for a more compact, tight burst.
+5. PATCH INFRASTRUCTURE IN postprocess_modern.py
+File: fx/tools/postprocess_modern.py
+
+MODERN_MUZZLEFLASH_FILES — Lines 462-471
+MODERN_MUZZLEFLASH_FILES = (
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_ar.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_smg.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_shotgun.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_pistol.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_pistol_deagle.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_lmg.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_dmr.vpcf",
+    "particles/filmmaker/modern/arc9_fas_muzzleflashes/muzzleflash_suppressed.vpcf",
+)
+Root files that get patched and duplicated as _fp twins.
+
+apply_modern_gameplay_composites(root: Path) -> list[str] — Lines 752-864
+Main patcher function. Processes:
+
+Heatwave distortion systems (already authored behavior-12 files)
+Grenade trails (synthesized behavior-12 systems)
+Barrel trail alignment via patch_cs2_modern_rope_trail_alignment()
+Barrel smoke alignment via patch_cs2_modern_barrel_smoke_alignment()
+Muzzleflash alignment via patch_cs2_modern_muzzleflash_alignment() (Lines 782–790)
+First-person twins via make_modern_muzzleflash_fp() (Lines 795–796)
+Tracer rework via patch_modern_tracer_forward()
+Sniper composition files (MVM_COMPOSITIONS, MVM_COMPOSITIONS_FP)
+Spray-gated barrel smoke wrapper files
+Key Hook: Lines 782–796 show where flash files are read, patched, written, and their FP twins generated.
+
+6. EXISTING PATTERN FOR TEXTURE INJECTION
+From fix_textureless_renderers() (postprocess_common.py:199–249) and the muzzleflash patcher:
+
+Find renderer blocks via iter_renderer_blocks(text) and block_span(text, class_pos)
+Search for m_hMaterial key using regex: r'm_hMaterial = resource:"([^"]+)"'
+Inject new m_hTexture line after the material reference:
+insert_at = mat.end()
+indent = block[: mat.start()].rsplit("\n", 1)[-1]
+new_line = f'\n{indent}m_hTexture = resource:"{new_tex_resource}"'
+block = block[:insert_at] + new_line + block[insert_at:]
+Handle deduplication if m_bBlendFramesSeq0 is being added via dedup_blend_frames_key()
+Write back if changed via path.write_text(new_text, encoding="utf-8")
+7. KEY PARAMETERS TO CONTROL MUZZLE FLASH VISUALS
+For tighter, sparklier muzzle-flash appearance:
+
+Texture (m_hTexture): Swap from hl2_muzzleflash / fas_muzzle_break_test to higher-resolution, multi-frame burst (e.g., fas_muzzleflash_test_b at 2048×1024/18 frames, or fire_particle_6 at 2048×512/70 frames)
+Animation Rate (m_flAnimationRate): Lower value = slower, more deliberate frame progression; higher = fast flicker (Modern's trail uses 35.0; Povarehok's flame uses 8.0)
+Lifetime (m_fLifetimeMin/Max): Shorter = tighter burst; currently Modern flames are 0.04–0.05s
+PositionLock (C_OP_PositionLock): If present, each particle stays anchored after spawn, creating a compact burst; if absent, particles drift away
+Spawn Offset (m_OffsetMin/Max, m_bLocalCoords): Keep local coords TRUE and offset minimal (1.0 forward) so flash sits tight on muzzle
+m_bBlendFramesSeq0: Ensure TRUE for multi-frame textures to avoid jittery steps
+Blend Mode (m_nOutputBlendMode): Additive (PARTICLE_OUTPUT_BLEND_MODE_ADD) for bright flashes
+Color Init: Bright, warm tones (white-yellow-orange range)
+Summary: Terrain Map
+The postprocess pipeline provides a foundation for texture/renderer rewrites:
+
+iter_renderer_blocks() + block_span() isolate any renderer for inspection/rewrite
+fix_textureless_renderers() shows the canonical pattern for injecting m_hTexture references
+patch_cs2_modern_muzzleflash_alignment() + make_modern_muzzleflash_fp() are the existing hooks in apply_modern_gameplay_composites() where muzzle-flash edits attach
+Modern's current flash uses hl2_muzzleflash (1024×512, 7 frames) and fas_muzzle_break_test (1024×512, 6 frames) — both mid-res and low-frame-count
+Povarehok's superior flame uses fire_particle_4 (1024×1024, 96 frames) WITH C_OP_PositionLock for a compact, detailed burst
+Better burst textures available: fas_muzzleflash_test_b (2048×1024, 18 frames) or Povarehok's fire sheets (up to 2048×512, 224 frames)
+The plan knows exactly where to hook new texture/lifetime/PositionLock edits for Modern muzzle-flashes.

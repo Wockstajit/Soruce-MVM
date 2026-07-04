@@ -110,6 +110,52 @@ void RequestApplyReseek() {
 	g_applyAtMs.store(GetTickCount64() + 400);
 }
 
+constexpr unsigned long long kPausedResolveIntervalMs = 500;
+constexpr unsigned long long kPlaybackResolveIntervalMs = 1000;
+constexpr unsigned long long kHeavyResolveMs = 15;
+constexpr unsigned long long kPausedHeavyResolveBackoffMs = 250;
+constexpr unsigned long long kPlaybackHeavyResolveBackoffMs = 2000;
+constexpr unsigned long long kResolveAfterLevelSettleMs = 3000;
+unsigned long long g_nextResolveAtMs = 0; // main-thread only
+
+std::string PopResolveTargetLocked() {
+	if (g_resolveQueue.empty())
+		return std::string();
+	std::string name = g_resolveQueue.front();
+	g_resolveQueue.erase(g_resolveQueue.begin());
+	return name;
+}
+
+void DrainResolveQueueMainThread() {
+	const bool playing = DemoIsPlaying();
+	if (!playing)
+		return;
+	const bool paused = DemoIsPaused();
+	const unsigned long long now = GetTickCount64();
+	if (now < g_nextResolveAtMs)
+		return;
+
+	std::string name;
+	{
+		std::lock_guard<std::mutex> lock(g_mx);
+		name = PopResolveTargetLocked();
+	}
+	if (name.empty())
+		return;
+
+	const unsigned long long beforeMs = GetTickCount64();
+	ResolveHandleOnMainThread(name.c_str());
+	const unsigned long long afterMs = GetTickCount64();
+	const unsigned long long costMs = afterMs - beforeMs;
+	if (paused) {
+		g_nextResolveAtMs = afterMs
+			+ (costMs >= kHeavyResolveMs ? kPausedHeavyResolveBackoffMs : kPausedResolveIntervalMs);
+	} else {
+		g_nextResolveAtMs = afterMs
+			+ (costMs >= kHeavyResolveMs ? kPlaybackHeavyResolveBackoffMs : kPlaybackResolveIntervalMs);
+	}
+}
+
 } // namespace fx
 
 // ============================== public API =========================================
@@ -213,22 +259,15 @@ void ParticleFx::PumpMainThread() {
 			g_handleCache.clear();
 			g_resolveQueue.clear();
 			RebuildActiveSwapTargetsLocked(false);
+			g_nextResolveAtMs = GetTickCount64() + kResolveAfterLevelSettleMs;
 			if (MvmDebugLog_Active())
 				MvmDebugLog_Linef("fx.resolve", "level change -> handle cache cleared, %zu target(s) requeued",
 					g_resolveQueue.size());
 		}
-		// Drain swap-target resolves here, in the engine's own precache context. One per
-		// frame: a cold resolve blocking-loads the resource and can hitch.
-		std::string name;
-		{
-			std::lock_guard<std::mutex> lock(g_mx);
-			if (!g_resolveQueue.empty()) {
-				name = g_resolveQueue.front();
-				g_resolveQueue.erase(g_resolveQueue.begin());
-			}
-		}
-		if (!name.empty())
-			ResolveHandleOnMainThread(name.c_str());
+		// Drain swap-target resolves here, in the engine's own precache context. A cold
+		// resolve can blocking-load the resource, so playback gets a slower demand-only
+		// trickle with heavier backoff; paused demos warm faster. The main menu never drains.
+		DrainResolveQueueMainThread();
 		// Debounced apply-now: re-create the paused moment's live effects under the new
 		// rules (see the g_applyAtMs comment). Skipped while playing -- self-corrects.
 		const unsigned long long applyAt = g_applyAtMs.load();

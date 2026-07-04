@@ -470,6 +470,9 @@ MODERN_MUZZLEFLASH_FILES = (
     f"{MODERN_MUZZLE_DIR}/muzzleflash_suppressed.vpcf",
 )
 
+MODERN_FLASH_BURST_OLD_TEXTURE = "materials/effects/hl2_muzzleflash.vtex"
+MODERN_FLASH_BURST_NEW_TEXTURE = "materials/effects/fas_muzzleflash_test_b.vtex"
+
 # First-person (_fp) muzzle-flash twins. Bug (user report 2026-07-04, "modern first-person
 # muzzle flashes don't align -- they float off to the side of the gun; in third person the
 # flash sits right"): the pack ships ONE flash asset per weapon and kVariantWeaponFx routed
@@ -688,6 +691,43 @@ def make_modern_muzzleflash_fp(world_text: str) -> str:
     return common._ensure_viewmodel_effect_flag(new)
 
 
+def _ensure_modern_flash_position_lock(text: str) -> str:
+    if 'C_OP_PositionLock' in text:
+        return text
+    element = (
+        "\t\t{\n"
+        '\t\t\t_class = "C_OP_PositionLock"\n'
+        "\t\t},\n"
+    )
+    match = re.search(r"m_Operators = \n(\t*)\[\n", text)
+    if match:
+        return text[:match.end()] + element + text[match.end():]
+    anchor = re.search(r'_class = "CParticleSystemDefinition"\n', text)
+    if not anchor:
+        return text
+    block = "\tm_Operators = \n\t[\n" + element + "\t]\n\n"
+    return text[:anchor.end()] + block + text[anchor.end():]
+
+
+def patch_modern_flash_burst(text: str) -> str:
+    """Retarget old HL2 sprite bursts and keep them locked to the muzzle."""
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if '_class = "C_OP_RenderSprites"' not in block:
+            continue
+        if MODERN_FLASH_BURST_OLD_TEXTURE not in block:
+            continue
+        replacement = block.replace(
+            MODERN_FLASH_BURST_OLD_TEXTURE,
+            MODERN_FLASH_BURST_NEW_TEXTURE,
+        )
+        edits.append((start, end, replacement))
+    for start, end, replacement in reversed(edits):
+        text = text[:start] + replacement + text[end:]
+    return _ensure_modern_flash_position_lock(text) if edits else text
+
+
 def _remove_init_blocks(text: str, class_name: str) -> str:
     """Delete every initializer/operator array element of the given _class, comma and all."""
     needle = f'_class = "{class_name}"'
@@ -758,6 +798,17 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
 
     for res, params in MVM_GRENADE_TRAILS.items():
         common.write_if_different(root, res, _trail_system_text(**params), changed)
+
+    muzzle_root = common.resource_path(root, MODERN_MUZZLE_DIR)
+    if muzzle_root.is_dir():
+        for path in muzzle_root.glob("*.vpcf"):
+            if path.name.lower().startswith("testd"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            new_text = patch_modern_flash_burst(text)
+            if new_text != text:
+                path.write_text(new_text, encoding="utf-8")
+                changed.append(path.relative_to(root).as_posix())
 
     for res in MODERN_BARREL_TRAIL_FILES:
         path = common.resource_path(root, res)

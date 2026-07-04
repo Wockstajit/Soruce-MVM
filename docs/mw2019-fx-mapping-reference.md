@@ -202,6 +202,37 @@ in `kVariantWeaponFx` / `kSprayPairs`). Modern now does the same:
   targets are not `kSprayPairs` bases, so a first-person flash is never re-upgraded to a
   world-space spray wrapper.
 
+## 6d. Flash sheet + thrown-grenade trail port
+
+Modern central muzzle-flash sprite leaves that reference `hl2_muzzleflash` are retargeted
+to the pack's higher-resolution `fas_muzzleflash_test_b` sheet and receive
+`C_OP_PositionLock` so the center burst remains attached to the muzzle. Authored animation
+rates, alpha behavior, and frame-blend settings are left intact. The `_fp` twins described
+above inherit the texture and lock, differing from their world flashes only in the required
+viewmodel flag.
+
+Thrown-grenade smoke trails are a synthesized CS2-side composition, not a converted
+`mw2019_effects.pcf` system. The runtime swaps CS2's demo-only
+`particles/entity/spectator_utility_trail.vpcf` to `mvm_grenade_trail` in Modern mode only.
+Its two children retain the earlier `materials/effects/fas_dust_a.vtex` and
+`fas_dust_b.vtex` recipes, including their original alpha, radius, lifetime, fade, and
+growth values. A `PF_TYPE_CONTROL_POINT_SPEED` emit-rate gate makes the trail stop emitting
+when the grenade lands. The actual deployed smoke grenade cloud remains CS2's native
+volumetric system and is not part of this particle swap.
+
+## 6e. Runtime resolve/precache pacing
+
+The Modern pack has enough top-level swap targets that cold resolution can hitch if demo
+entry forces the whole table through synchronous particle-resource loads. The active target
+set is therefore separate from the resolve queue: mode rebuilds make Modern targets
+eligible, but they do not enqueue the entire pack. The create hook queues a target only
+after first real use, that creation fails open, and `ParticleFx.cpp` warms the demand-only
+queue one target at a time. Active playback uses a slow wall-clock-spaced trickle with
+heavier backoff after cold loads, paused demos warm faster, and the main menu does not
+resolve queued FX targets. This changes only **when** target handles are resolved; the
+variant tables, cache lifetime, and fail-open behavior are unchanged. Level/demo changes
+still clear cached handles because CS2 purges particle resources across map transitions.
+
 ## 7. Particle source files (what to extract/convert)
 
 | File | Contents |

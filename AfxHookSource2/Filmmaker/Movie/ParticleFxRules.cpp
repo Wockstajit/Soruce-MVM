@@ -482,26 +482,35 @@ bool HasActiveFxLocked() {
 
 void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 	std::vector<std::string> desired;
-	auto add = [&desired](const char* n) {
+	std::vector<std::string> eager;
+	auto addActive = [&desired](const char* n) {
 		if (!n || !n[0])
 			return;
 		if (std::find(desired.begin(), desired.end(), n) == desired.end())
 			desired.push_back(n);
+	};
+	auto addEager = [&addActive, &eager](const char* n) {
+		addActive(n);
+		if (n && n[0] && std::find(eager.begin(), eager.end(), n) == eager.end())
+			eager.push_back(n);
+	};
+	auto selected = [&desired](const char* n) {
+		return n && std::find(desired.begin(), desired.end(), n) != desired.end();
 	};
 	bool needsEmptySystem = false;
 	for (const CustomRule& r : g_customRules) {
 		if (r.target.empty())
 			needsEmptySystem = true;
 		else
-			add(r.target.c_str());
+			addEager(r.target.c_str());
 	}
 	if (needsEmptySystem)
-		add(kEmptySystem);
+		addEager(kEmptySystem);
 	// FP-FX suppression blocks to dev/empty regardless of the category modes.
 	if (g_fpFxSuppress.load(std::memory_order_relaxed))
-		add(kEmptySystem);
+		addEager(kEmptySystem);
 	if (g_moneyHeadshot)
-		add(kMoneyBurst);
+		addActive(kMoneyBurst);
 	const VariantRule* tables[] = { kVariantWeaponFx, kVariantTracers, kVariantBlood,
 		kVariantExplosions, kVariantBomb, kVariantImpacts, kVariantMolotov };
 	const size_t counts[] = {
@@ -517,22 +526,25 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 			continue;
 		for (size_t i = 0; i < counts[t]; ++i)
 			if (const char* target = SelectVariantTarget(cats[t], mode, tables[t][i]))
-				add(target);
+				addActive(target);
 	}
-	// Spray wrappers must be resolvable before the first hot shot needs them.
+	// Spray wrappers are active swap targets, but they are not eagerly resolved during
+	// demo entry. If sustained fire needs one before it is hot, that one creation fails
+	// open and queues only that wrapper instead of cold-loading every wrapper up front.
 	if (g_modes[kFxWeaponFx] != FxMode::Off) {
 		size_t sprayCount = 0;
 		const SprayPair* pairs = SprayPairs(sprayCount);
 		for (size_t i = 0; i < sprayCount; ++i)
-			add(pairs[i].spray);
+			if (selected(pairs[i].base))
+				addActive(pairs[i].spray);
 	}
-	// Pre-resolve every TracerFallbackTarget bucket too (not just the exact-table
-	// targets above), so an untabled tracer name's first-ever creation doesn't have to
-	// fail open once while the async resolver catches up.
+	// Keep every TracerFallbackTarget bucket eligible too (not just the exact-table
+	// targets above), but do not force-load them during demo entry. Untabled tracer names
+	// may fail open once, then queue for paused warm-up.
 	if (const FxMode tracerMode = g_modes[kFxTracers]; tracerMode == FxMode::On || tracerMode == FxMode::Modern) {
-		add(TracerFallbackTarget(tracerMode, ""));
+		addActive(TracerFallbackTarget(tracerMode, ""));
 		for (const TracerFallback& f : kTracerFallbacks)
-			add(TracerFallbackTarget(tracerMode, f.substr));
+			addActive(TracerFallbackTarget(tracerMode, f.substr));
 	}
 
 	if (invalidateObsoleteHandles) {
@@ -561,7 +573,7 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 	}
 
 	g_activeTargets = desired;
-	for (const std::string& name : desired)
+	for (const std::string& name : eager)
 		if (g_handleCache.find(name) == g_handleCache.end())
 			g_resolveQueue.push_back(name);
 }

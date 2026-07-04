@@ -32,9 +32,8 @@ RESOURCE_RE = re.compile(r'resource:"([^"]+)"')
 # precached correctly" in-game, despite postprocess_povarehok.py/postprocess_modern.py
 # having just generated them). Seed them explicitly from the macro invocations instead.
 MODSPRAY_RE = re.compile(r'MODSPRAY\("([^"]+)"\)')
-BPSPRAY_RE = re.compile(r'BPSPRAY\("[^"]+"\s*,\s*"([^"]+)"\)')
+BPSPRAY_RE = re.compile(r'BPSPRAY\("([^"]+)"\s*,\s*"([^"]+)"\)')
 MODERN_MUZZLE_DIR = "particles/filmmaker/modern/arc9_fas_muzzleflashes"
-PVRH_WEAPON_DIR = "particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx"
 COMPILED_EXTENSIONS = {".vpcf", ".vmat", ".vtex", ".vmdl", ".vsnap"}
 
 
@@ -87,10 +86,11 @@ def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
             targets.add(path)
         for name in MODSPRAY_RE.findall(text):
             targets.add(f"{MODERN_MUZZLE_DIR}/mvm_spray_{name}.vpcf")
-    # BPSPRAY wrappers always resolve under povarehok/regular (see the BPSPRAY macro
-    # in ParticleFxSpray.cpp), regardless of which On variant table invokes them.
-    for name in BPSPRAY_RE.findall(text):
-        targets.add(f"{PVRH_WEAPON_DIR}/mvm_spray_{name}.vpcf")
+    for variant, name in BPSPRAY_RE.findall(text):
+        targets.add(
+            f"particles/filmmaker/povarehok/{variant}/weapons/cs_weapon_fx/"
+            f"mvm_spray_{name}.vpcf"
+        )
     money = MONEY_RE.search(text)
     if money:
         targets.add(money.group(1))

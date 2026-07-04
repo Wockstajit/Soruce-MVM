@@ -10,11 +10,16 @@ Fresh runtime defaults are fully opt-in: the master switch and all eight categor
 arm the particle hook or load anything under `particles/filmmaker/`. Explicitly saved
 configurations still load exactly as stored.
 
-Selecting a non-Off category automatically turns the master on and queues only that
-category's selected pack. Money on Headshot and newly added custom block/swap rules do the
-same. Pending names are deduplicated and resolved at one resource per frame. Switching a
-category replaces obsolete jobs; turning the master Off cancels all pending work while
-retaining the configured modes and already-resolved handles until the next level change.
+Selecting a non-Off category automatically turns the master on and makes only that
+category's selected pack eligible for swaps. It does **not** cold-resolve the whole pack
+during startup or demo entry: an unresolved target fails open once, gets queued on first
+real use, and is warmed later. Pending names are deduplicated and resolved by the
+main-thread pump with an adaptive throttle: active playback drains only the demand-created
+queue at a slow rate with heavier backoff after cold loads, paused demos warm faster, and
+the main menu does not drain the queue. Level/demo changes wait a short settle period
+before the first resolve. Switching a category replaces obsolete jobs; turning the master
+Off cancels all pending work while retaining the configured modes and already-resolved
+handles until the next level change.
 
 Two converted asset packs feed the modes:
 
@@ -92,8 +97,9 @@ Source 1 did; it never invents placeholder assets, it only repairs/tones the rea
 - `$DUALSEQUENCE` combine keys are stripped: the rebuilt sheets are single-mode, and the
   dual-sample modes produce background-dependent dark fringes ("black ring" smoke).
 - Impact world-trace constraints are forced to per-particle tracing so debris does not
-  land on a cached infinite plane at stair/ledge height, and physical impact chunks/bits
-  have their residual bounce zeroed so they settle after contact.
+  land on a cached infinite plane at stair/ledge height. Physical impact chunks/bits have
+  residual bounce zeroed and spin capped at 0.5 seconds, so they tumble in flight but stop
+  rotating shortly after reaching the floor.
 - Impact smoke/dust renderers are kept alpha-blended and capped to neutral overbright:
   additive/overbright converted smoke stacked repeated bullet hits into red/orange clouds
   instead of normal alpha fade. Re-run just these idempotent repairs on an existing tree
@@ -109,7 +115,10 @@ Source 1 did; it never invents placeholder assets, it only repairs/tones the rea
 - Sprite renderers backed by `.mks` sheets get `m_bBlendFramesSeq0 = true`: Source 1
   SpriteCard blended sheet frames by default, the conversions lost it, and stepped frames
   read as jittery/pixelated smoke.
-
+- Modern muzzle-flash sprite bursts that reference `hl2_muzzleflash` are retargeted to the
+  pack's higher-resolution `fas_muzzleflash_test_b` sheet and receive `C_OP_PositionLock`
+  so the burst stays attached to the muzzle. Their authored animation rate, alpha behavior,
+  and frame-blend setting stay intact.
 The idempotent in-place patch entry (`--gameplay-composites-only`) runs the three repairs
 above plus the gameplay composites; changed files still need a `resourcecompiler` pass.
 
@@ -151,18 +160,24 @@ not touched because the gameplay smoke is a volumetric system, not a normal part
 Modes (unsupported ones snap to On on the C++ side; the panel only offers the real ones):
 
 - **On**: converted Povarehok `regular` assets.
-- **Less**: the mod's reduced variants -- bullet impacts from `less/impacts`, HE/bomb
-  explosions from `less/smoke`. Only offered where those folders genuinely differ.
+- **Less**: reduced variants -- bullet impacts from `less/impacts`, HE/bomb explosions and
+  muzzle FX from `less/smoke`. Less impact debris emitters produce half as many physical
+  chunks; Less muzzle-smoke leaves retain the same timing and emission behavior as On but
+  render at 90% alpha and radius.
 - **Modern**: the converted MW2019 pack. Class flashes follow the pack's own weapon Lua
   (rifles `muzzleflash_ar`, SMGs `muzzleflash_smg`, LMGs `muzzleflash_lmg`, autosnipers the
   `mvm_muzzleflash_sniper_auto` composition around `muzzleflash_dmr`, the AWP/bolt snipers
   the `mvm_muzzleflash_sniper_awp` composition around `muzzleflash_smg`, pistols
   `muzzleflash_pistol(_deagle)`, shotguns `muzzleflash_shotgun`, silenced
-  `muzzleflash_suppressed`), tracers map to the `mw2019_tracer` family, and HE maps to
-  `explosion_grenade` -- the actual detonation system of the pack's frag grenade. Systems
-  with no modern equivalent pass through vanilla rather than silently mixing packs, with
-  one deliberate exception: **brass shell casings** (`weapon_shell_casing_*`) map to the
-  Povarehok casing systems in every non-Off mode, because those render the actual
+  `muzzleflash_suppressed`). Central sprite leaves use `fas_muzzleflash_test_b`, while their
+  authored timing, alpha behavior, and frame-blend settings remain intact; the retained
+  `C_OP_PositionLock` keeps the center burst attached to the muzzle.
+  Tracers map to the
+  `mw2019_tracer` family, and HE maps
+  to `explosion_grenade` -- the actual detonation system of the pack's frag grenade.
+  Systems with no modern equivalent pass through vanilla rather than silently mixing packs,
+  with one deliberate exception: **brass shell casings** (`weapon_shell_casing_*`) map to
+  the Povarehok casing systems in every non-Off mode, because those render the actual
   converted MW2019 shell meshes (`models/shells/*`); CS2 calibers without a mod
   counterpart use the nearest one (45acp/5.7 -> 9mm, MAG-7/Nova -> the shotgun shell,
   AWP -> the .50 cal).
@@ -187,6 +202,12 @@ Modes (unsupported ones snap to On on the C++ side; the panel only offers the re
     The converted `barrel_smoke_trail(_b)` renderers (both packs) are switched from ropes
     to sprites and shortened from 5s to 2-3s: as ropes the engine stretched one ribbon
     across the muzzle's whole sweep, the "smoke arc floating in mid-air" artifact.
+    Regular and Less own separate Povarehok wrappers; the Less wrappers reference the
+    10%-reduced `less/smoke` plume while preserving the same flash. Only wrappers whose base
+    flash is selected by the current mode are active, and wrappers
+    are resolved lazily on first sustained-fire need rather than pre-resolved during demo
+    entry; Modern mode therefore does not cold-load the Povarehok spray-wrapper family, nor
+    its own spray wrappers, while a demo is opening.
   - **Sniper shots** (AWP + autosnipers): the `mvm_muzzleflash_sniper_*` compositions add
     the pack's M82 treatment -- `m82_shocksmoke` dust ring around the shooter,
     `barrel_smoke_plume`, and `muzzle_heatwave` heat distortion. **This is the ONLY place
@@ -199,7 +220,9 @@ Modes (unsupported ones snap to On on the C++ side; the panel only offers the re
     behavior-12 systems whose emit rate is driven by **control-point speed**
     (`PF_TYPE_CONTROL_POINT_SPEED`, 30-500 u/s -> 0-16 puffs/s), so a grenade at rest --
     landed, or a smoke stuck against a wall -- emits nothing instead of puffing forever
-    (the previous un-capped clone did; user report 2026-07-03). One trail style for all
+    (the previous un-capped clone did; user report 2026-07-03). The two layers retain the
+    earlier `fas_dust_a` / `fas_dust_b` textures, alpha, radius, lifetime, and fade values;
+    the deployed smoke cloud remains CS2's vanilla volumetric system. One trail style for all
     grenade types -- the engine uses a single system name, so per-nade styling is not
     possible at the particle layer. On/Less keep the stock spectator line.
   - **Heat distortion restored**: converted explosions lost vanilla's refraction children

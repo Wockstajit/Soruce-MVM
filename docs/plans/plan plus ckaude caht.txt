@@ -1,0 +1,312 @@
+Is there anything else that the POV does differently that we do in modern? because POV does it really good, and I don't really have any issues. But modern is the one that's giving me a lot of issues. Also, compare textures and things like that. Like, just give me the whole shebang, and let me know. Don't do anything, but just explain. Things we could change.
+
+I'll do a full side-by-side audit of the two packs — structure, provenance, renderers, textures, lifetimes, control points, and what the postprocess has to do to each. Read-only, no changes.
+
+
+Ran 7 commands
+One more angle — what Modern never converted at all, plus the operator style differences:
+
+Surveyed pack coverage and tracer child structure
+No more digging needed — I have the full picture. Here's the whole shebang.
+
+Why Povarehok "just works" and Modern fights you
+The one-sentence version: Povarehok is a CS:GO mod that edits Valve's own weapon FX in place, so every convention CS2 inherited is already correct in the source; Modern is a GMod mod where half the effect's brain lived in Lua scripts that the PCF conversion cannot carry — every Modern bug you've hit is a piece of that missing Lua being rediscovered.
+
+1. Provenance — the root cause of everything
+Povarehok	Modern (MW2019/ARC9)
+Authored for	CS:GO itself (same engine family as CS2)	Garry's Mod + ARC9 weapon base
+Positioning logic	Inside the particle files	In Lua (attach selection, timing, control points, suppressor overrides)
+First-person handling	Ships authored _fp variants per class (even "cheap" LOD ones)	One asset for both views — I generated the _fp twins yesterday
+Composition (flash + smoke + dust)	Inside the particle files	In Lua (AfterShotParticle, MakeEnvironmentDust) — our spray wrappers/sniper comps re-implement it
+Scale	7,247 files, overhauls everything (blood, impacts, explosions, inferno, money)	322 files from 3 PCFs (flashes, tracer, explosions)
+2. Structural differences inside the flash trees (measured)
+Muzzle-follow: 19 Povarehok flash files carry C_OP_PositionLock (particles keep tracking the muzzle after spawning) vs 5 in Modern. This is why POV looks glued to the gun during fast pans and Modern needed all the wisp/plume local-vs-world surgery.
+Spawn spaces: POV flash trees are 100% local-coords (51 true / 0 false). Modern is a coin flip — 37 true / 39 false. Those 39 world-space initializers in the children are the biggest remaining alignment risk after the _fp split (my patches only normalized the 8 top-level flashes).
+Lifetimes: POV flash particles all die within 0.35s. Modern's trees run up to 1.5s — long-lived quads that don't position-lock read as smear/misalignment the moment the gun moves.
+3. Textures — a genuine quality gap
+Texture	Used by	Size	Flipbook
+fire_particle_4	POV flashes	1024²	96 frames
+vistasmokev1_emods	POV smoke	1024²	256 frames
+hl2_muzzleflash	MOD flashes	1024×512	7 frames — a literal 2004 Half-Life 2 asset
+muzzleflash1	MOD flashes	256²	13 frames — also HL2
+fas_muzzleflash_test_b	MOD flashes	2048×1024	18 frames — "test" is in the filename
+fas_dust_a/b	MOD smoke	2048²	42–49 frames — these are actually good
+tracer_middle	MOD tracers	16×64	none — a postage stamp
+Modern's smoke holds up; its flash and tracer textures are prototype/HL2-era. POV's are production CS:GO sheets with an order of magnitude more animation frames.
+
+4. Tracers — an honest correction to yesterday's story
+POV's per-class tracers (weapon_tracers_assrifle etc.) also use MoveBetweenPoints CP0→CP1 — but with the CS:GO tracer discipline Modern lacks: moderate 13,000 u/s speed and C_OP_FadeAndKillForTracers, the operator built to kill the particle on arrival. Modern's converted tracers had 42–43,000 u/s (streak crosses the map in ~1 frame), a −25u start offset, a +150u spawn offset, a fixed 1s life with no kill operator (so it keeps flying 40k units past the wall), and a muzzle-anchored glow child — the visible "stuck at the gun" part.
+
+So there are two theories: either CS2 does populate CP1 (and Modern's extreme parameters broke it anyway), or CP1 is degenerate and POV just fails invisibly (FadeAndKill removes the particle instantly — you see nothing, which isn't a glitch you'd notice). Yesterday's fly-forward rebuild is correct under both theories since it's CP-independent and matches CS2's native chassis — but if it looks wrong in-game, plan B is cloning POV's exact recipe. One relief from today's dig: mgbase_tracer_trail spawns via CreateFromParentParticles, so the ribbon follows the fixed parent; the muzzle glow child lives 0.005s. The stuck-glow worry from yesterday is mostly moot.
+
+5. Coverage gaps (Modern passes vanilla through)
+Never converted: mw2019_effects.pcf (grenade trails, molotov), mw2019_rockettrail.pcf, mw2019_explosions_pak.pcf (non-HE explosions). Under Modern: blood/impacts/molotov are vanilla or POV-borrowed, the grenade trail and heatwaves are our synthesized systems, shells reuse POV's converted MW meshes.
+
+What we could change (ranked, doing nothing now)
+Normalize the 39 world-space spawns in Modern's flash children — cheapest remaining alignment win; same recipe as the top-level patch.
+Add C_OP_PositionLock to Modern's short-lived flash quads — makes the flash track the muzzle during pans like POV.
+Retexture the flashes — swap hl2_muzzleflash/muzzleflash1 renderers to fas_muzzleflash_test_b (the pack's best sheet) or borrow POV's fire_particle_4. Biggest visual quality jump per line of code.
+Fatten the tracer — tracer_middle at 16×64 is why it reads as "no texture"; POV uses spark + a glow child.
+Cap child lifetimes ~0.5s on flash quads (keep smoke long — spray gating owns that).
+Convert the remaining 3 PCFs if you want Modern molotov/rockets/secondary explosions — the biggest-effort item.
+The meta-lesson: POV problems were conversion bugs (fixable once); Modern's are missing-Lua problems — each one needs behavior re-authored, which is exactly what the postprocess file has been accumulating.
+
+I want the flash stuff. I want the grenade trails when you throw stuff. I think those are pretty cool. I don't want anything changing, like the smoke. Actual smoke in CS2. The textures for the flash when the flash explodes would be cool. Stuff like that!
+
+I want you to make a plan on this, a very detailed plan of what I want. When you throw the smoke, you get the little smoke trail out. I want you to have a somewhat authentic version. Also, the pre-caching stuff needs to be updated because I'm getting that lag back again. Where stuff is pre-caching, the game is slowing down my whole PC.
+
+I'll research three areas in parallel — the flash rendering path, the grenade-throw trail routing, and the precache/lag mechanism — before drafting the plan.
+
+
+Ran 3 agents
+The three Explore agents are running in the background. I'll wait for them to complete before drafting the plan.
+
+Used ScheduleWakeup
+I've scheduled a check-in. The three Explore agents are mapping the flash render path, grenade-trail routing, and precache mechanism. Once they report back, I'll read the critical files myself and draft the detailed plan. Standing by for their completion.
+
+The precache agent reported. Key finding: resolution is a 1-per-frame synchronous blocking load — each cold resolve blocks the main thread ~10–50ms while it disk-loads a .vpcf_c + its child closure, and with ~250–350 targets that's several seconds of hitching. There's no frame-time-aware throttle (fixed 1/frame, no "skip if the frame is already slow," no pre-warm during load screens). That's the lever to tune.
+
+Two more agents (grenade trail, flash textures) are still running. I'll wait for them before drafting.
+
+Grenade-trail agent done. The throw trail already exists: spectator_utility_trail.vpcf → mvm_grenade_trail.vpcf (Modern only, CP-speed-gated two-layer sprite puffs using fas_dust_a/b). The deployed smoke cloud is confirmed 100% untouched (native voxel system) — so the user's "don't change the actual smoke" constraint is already satisfied. Alternate trail textures exist (fas_smoke_trail, fas_smoke_beam, fas_dust_thick).
+
+Waiting on the flash-texture agent before drafting.
+
+All three agents are back. Let me confirm the two most implementation-critical spots myself — the precache drain loop (to design the throttle) and the flash-burst child file (to target the texture swap).
+
+Read
+ParticleFx.cpp
+Now let me confirm the flash-burst child files and which textures they use across the Modern flash trees:
+
+Mapped flash burst child textures across Modern flashes
+I now have the full terrain. One nuance the flash agent surfaced: the Modern "flash burst" isn't one file — it's a set of per-class burst/flame leaves (muzzle_center_big, muzzle_flame, muzzle_center_heavy, muzzle_center_lmg_d, muzzleflash_*_break, etc.), using the low-res hl2_muzzleflash (2004 HL2 asset, 7 frames) and fas_muzzle_break_test (6 frames), none with PositionLock. The pack's own high-res flash sheet fas_muzzleflash_test_b (2048×1024, 18 frames) already exists in the closure.
+
+Two aesthetic decisions are genuinely yours before I lock the plan:
+
+Which muzzle-flash look do you want for Modern? (This is the 'flash when it explodes' texture.)
+
+Hybrid: MW burst + POV technique
+
+How intense should the thrown-grenade smoke trail be? (Smoke CLOUD stays vanilla either way.)
+
+Subtle wispy MW trail
+
+Both choices locked: Hybrid flash (fas_muzzleflash_test_b + PositionLock + frame blending) and subtle wispy grenade trail (fas_smoke_trail). Let me pin down the exact set of burst leaves to retexture (sprite bursts only, not streaks/glows) and confirm the trail texture exists.
+
+Classified flash leaves into burst vs streak
+The classifier returned empty — the texture reference format must differ from my regex. Let me inspect the actual reference lines directly:
+
+Inspected texture reference format in burst leaf
+The path bug was just MSYS vs native paths in my Python (the greps are authoritative). Confirmed:
+
+fas_smoke_trail.vtex + .mks sheet exist (frame-blendable) — good for the wispy trail.
+Retexture targets are the sprite-burst "center" leaves still on the old hl2_muzzleflash (muzzle_center_big, muzzle_center_heavy, muzzle_center_pistol_yellow); note they also carry a legacy m_hMaterial that CS2 ignores (renderer uses m_hTexture only). Some break/LMG leaves already use fas_muzzleflash_test_b.
+I have everything I need. Writing the plan.
+
+
+
+
+
+
+
+THE PLAN 
+
+# Modern FX: flash burst upgrade · thrown-grenade trail · precache stall fix
+
+## Context
+
+The Modern (MW2019/ARC9) particle pack has three loose ends the user wants closed, in
+priority order of "make it look good" + "stop lagging my PC":
+
+1. **Muzzle-flash burst looks dated.** The central "flash explosion" sprites still use
+   `hl2_muzzleflash` (a 2004 Half-Life 2 asset, 7 frames) and never `PositionLock`, so the
+   burst is low-res and drifts. The pack already ships a better flash sheet
+   (`fas_muzzleflash_test_b`, 2048×1024, 18 frames) — some break/LMG leaves already use it.
+   **User pick: Hybrid** — swap the remaining bursts to `fas_muzzleflash_test_b` AND adopt
+   Povarehok's technique (`C_OP_PositionLock` + `m_bBlendFramesSeq0`) for a tight, crisp
+   COD-style flash.
+2. **Thrown-grenade smoke trail.** Already exists (Modern-only, `spectator_utility_trail.vpcf`
+   → `mvm_grenade_trail.vpcf`, CP-speed-gated sprite puffs). **User pick: subtle wispy MW
+   trail** using the dedicated `fas_smoke_trail` texture. The deployed smoke **cloud** is a
+   native CS2 voxel system and is **not touched by anything here** (confirmed) — it stays
+   100% vanilla.
+3. **Precache stall is back.** Swap targets resolve via a **synchronous blocking load, one
+   per frame, unconditionally** (`ParticleFx::PumpMainThread`, ParticleFx.cpp:220-231). Each
+   cold resolve disk-loads a `.vpcf_c` + its child closure (~10-50ms) and blocks the main
+   thread, so a demo load / mode change (~250-350 targets) hitches for seconds. There is **no
+   frame-time-aware throttle**. This is what tanks the whole PC. Note: parts 1 and 2 add
+   **zero** new top-level swap targets, so they do not worsen precache — the recent growth was
+   the 10 `_fp` files (kept). The throttle is the net fix.
+
+All three parts are FX-asset/postprocess changes plus one small C++ throttle. No new engine
+RE. Requires a **full FX reconvert** to compile the changed `.vpcf` + the DLL rebuild for the
+throttle.
+
+---
+
+## Part A — Flash burst upgrade (Hybrid)
+
+**Where:** `fx/tools/postprocess_modern.py`, run inside `apply_modern_gameplay_composites()`
+(the existing muzzle-flash loop, ~line 782), plus reuse helpers in `postprocess_common.py`.
+
+**Target set:** the per-class **sprite-burst "center" leaves** under
+`particles/filmmaker/modern/arc9_fas_muzzleflashes/` that currently render
+`hl2_muzzleflash.vtex` in a `C_OP_RenderSprites` block — representative files:
+`muzzle_center_big.vpcf`, `muzzle_center_heavy.vpcf`, `muzzle_center_pistol_yellow.vpcf`.
+Exclude test files (`testd*.vpcf`) and **do not** retexture the streak/trail layers
+(`muzzle_flame.vpcf`, `muzzle_heavy_flame.vpcf` — those are `C_OP_RenderTrails` on
+`fas_muzzle_break_test` and should keep a streak texture). Discover the set programmatically
+(sprite renderer + `hl2_muzzleflash` texture) rather than hard-coding, so future pack files
+are covered.
+
+**New helper `patch_modern_flash_burst(text)`** applied to each burst leaf:
+1. **Retexture:** replace `m_hTexture = resource:"materials/effects/hl2_muzzleflash.vtex"` →
+   `.../fas_muzzleflash_test_b.vtex`. The legacy `m_hMaterial = ...hl2_muzzleflash_add.vmat`
+   is ignored by CS2's sprite renderer (see `fix_textureless_renderers` note in
+   postprocess_common.py) — leave it or drop it; the `.vtex` drives the look.
+2. **Tight anchor:** ensure a `C_OP_PositionLock` operator exists in `m_Operators` (append a
+   minimal `{ _class = "C_OP_PositionLock" }` element if absent). This is exactly what
+   Povarehok's flame does (`weapon_muzzle_flash_assualtrifle_flame.vpcf`) for a compact burst.
+3. **Smooth frames:** reuse `common.add_sheet_frame_blending(root)` (postprocess_common.py:473)
+   OR ensure `m_bBlendFramesSeq0 = true` in the sprite renderer, and guard duplicates with
+   `common.dedup_blend_frames_key`. `fas_muzzleflash_test_b` has an `.mks` sheet, so blending
+   is valid.
+4. **Anim rate:** re-tune `m_flAnimationRate` for the 18-frame sheet (the old value was set for
+   a 7-frame sheet). A modest value (~10-15) with the short ~0.05s lifetime shows a crisp
+   1-2 frame burst.
+
+**Reuse:** `common.iter_renderer_blocks`, `common.block_span` to scope edits to the sprite
+renderer; follow the exact `m_hTexture` injection/rewrite idiom already in
+`fix_textureless_renderers`. Idempotent by construction (exact-string retexture + presence
+checks), matching every other patch in this file.
+
+**Closure/precache impact:** none new — `fas_muzzleflash_test_b.vtex` is already referenced
+(in closure), and no new `.vpcf` targets are added; existing burst leaves just change content.
+
+---
+
+## Part B — Thrown-grenade smoke trail (subtle wispy MW)
+
+**Where:** `fx/tools/postprocess_modern.py` — `MVM_GRENADE_TRAILS` dict (~line 97) +
+`_trail_system_text()` (~line 291). Already wired: `ParticleFxRules.cpp:315` routes
+`spectator_utility_trail.vpcf` → `mvm_grenade_trail.vpcf` (Modern only; On/Less pass vanilla).
+
+**Retune for a thin, realistic MW smoke tail (keep the good bones):**
+- **Texture:** swap the two layers from `fas_dust_a/b.vtex` → `materials/effects/fas_smoke_trail.vtex`
+  (dedicated wispy trail sheet; `.mks` present → keep `m_bBlendFramesSeq0`). Optionally keep
+  one dust layer for body and make the second `fas_smoke_trail` for wisp — but default: both
+  wispy.
+- **Lower alpha** (~0.25-0.35 → thinner), slightly **longer/continuous emit** so the ribbon
+  reads as continuous, **smaller radius** growth, and a **~1.5s** fade so spent smoke clears.
+- **Keep unchanged:** the `C_OP_ContinuousEmitter` **CP0-speed gate** (`PF_TYPE_CONTROL_POINT_SPEED`
+  remap [30,500]→[0,rate]) so a resting/stuck grenade emits nothing; **discrete sprites**
+  (never ropes — ropes stretch across flight corners, per §6b); light gravity/drag so puffs
+  settle.
+
+**Explicitly not touched:** deployed smoke cloud (native voxel; no rule references
+`smokegrenade`/`smoke_emit`/`smoke_cloud` — verified). Molotov/incendiary flight trail
+(`weapon_molotov_thrown`) is a separate existing rule and out of scope here.
+
+**Closure/precache impact:** none new — `fas_smoke_trail.vtex` already in the tree; the trail
+`.vpcf` already exists and is authored idempotently via `common.write_if_different`.
+
+---
+
+## Part C — Precache stall fix (frame-time-aware drain)
+
+**Where:** `AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp`, `PumpMainThread()` drain block
+(lines 220-231). This is the only correctness-adjacent change; keep it small and local.
+
+**Problem:** the drain resolves exactly one target every frame with no regard to how long the
+last one took or whether the game is under render pressure, so a run of heavy cold loads after
+a demo load / mode switch produces a sustained multi-second, PC-wide stall.
+
+**Design — replace the unconditional "1 per frame" with an adaptive, wall-clock-spread drain**
+(all state main-thread-only statics; no new locks beyond the existing `g_mx` guard around the
+queue pop):
+- **While playing (`DemoIsPlaying() && !DemoIsPaused()`):** resolve **at most one target per
+  `kResolveIntervalMs`** of wall time (e.g. 50ms → ~20/sec) instead of every frame, leaving
+  recovery frames between heavy loads so FPS never floors.
+- **Adaptive backoff:** time each `ResolveHandleOnMainThread` call; if it exceeds
+  `kHeavyResolveMs` (e.g. 15ms), push the next allowed resolve out by a longer
+  `kHeavyBackoffMs` (e.g. 150ms) so consecutive heavy assets can't stack into a freeze.
+- **While paused (`DemoIsPaused()`):** the filmmaker's normal setup state has no live-render
+  pressure — drain a **small time-budgeted burst** (loop resolving until ~6ms elapsed or the
+  queue empties) so the queue clears quickly while the user is composing a shot, not during
+  motion.
+- Knobs as named `constexpr` at file scope so they're easy to tune; behavior is unchanged in
+  correctness (only *when* resolves happen), so risk is low.
+
+**Optional stretch (only if the trickle feels too slow in play):** priority-resolve the
+currently spectated weapon's flash/tracer targets first by moving them to the front of
+`g_resolveQueue`. Not required for the core fix; leave out unless verification shows a visible
+first-shot vanilla flash.
+
+**Do not** change the level-change full cache clear (ParticleFx.cpp:210-219) — it's required
+because resources purge on map transition (CRASH LESSON 4). The throttle simply spreads the
+requeue it produces.
+
+---
+
+## Files to modify
+
+| File | Change |
+|---|---|
+| `fx/tools/postprocess_modern.py` | Part A: `patch_modern_flash_burst` + call in the muzzle-flash loop of `apply_modern_gameplay_composites`. Part B: retune `MVM_GRENADE_TRAILS` texture/alpha/rate + tweak `_trail_system_text`. |
+| `fx/tools/postprocess_common.py` | Reuse only (`iter_renderer_blocks`, `block_span`, `add_sheet_frame_blending`, `dedup_blend_frames_key`); add a small shared renderer-texture-replace helper if it reads cleaner than inline. |
+| `AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp` | Part C: adaptive/time-budgeted resolve drain in `PumpMainThread` (lines 220-231). |
+| `docs/mw2019-fx-mapping-reference.md` | Note the flash-burst texture/PositionLock upgrade and the wispy-trail texture in §6/§6c; note the precache throttle where the pipeline is described. |
+| memory `particle-fx-effects-modifiers.md` | Append a 2026-07-04 note on all three changes. |
+
+## Verification
+
+1. **Build:** run `build.bat`, answer **Y** at the FX-conversion prompt (recompiles the changed
+   `.vpcf` and rebuilds the DLL for the throttle). A cancelled/absent pack forces reconvert
+   anyway.
+2. **Flash (Modern mode):** load a demo, spectate a shooter first-person AND third-person; the
+   muzzle burst should be a crisp high-res `fas_muzzleflash_test_b` flash sitting tight on the
+   muzzle (no drift), on AR/pistol/LMG. Confirm the `_fp` twins inherited the new texture (they
+   are regenerated from the patched world flash).
+3. **Grenade trail (Modern mode):** throw a smoke/HE; a thin wispy grey trail follows the
+   grenade in flight and **stops** once it lands/rests (CP-speed gate). Confirm the deployed
+   smoke **cloud** is unchanged vanilla.
+4. **Precache stall:** open a demo (or toggle Modern On→Off→On via the Config EFFECTS panel)
+   and watch FPS — resolution should trickle without the multi-second PC-wide freeze; when
+   **paused**, the queue should drain quickly. Cross-check `mvm_debug` `fx.resolve` log lines
+   for requeue counts. Idempotency: re-run the postprocess (`apply_modern_gameplay_composites`)
+   → 0 changes on a second pass.
+5. **Regression:** `ctest --test-dir build/x64-release -C Release -R FollowCameraMathTests`
+   (unaffected, but confirms the DLL build is sane).
+
+## Risks / notes
+
+- **Anim-rate mismatch:** `fas_muzzleflash_test_b` has 18 frames vs the old 7; if the burst
+  looks static or strobes, re-tune `m_flAnimationRate` on the burst leaves (verify in-game).
+- **PositionLock too tight:** if the flash looks *too* stuck, drop PositionLock from the flame
+  layer and keep it only on the center burst — mirror Povarehok's split.
+- **Throttle too slow:** if a vanilla flash flashes for the first shot after a load, lower
+  `kResolveIntervalMs` or enable the priority-resolve stretch; correctness is never at risk.
+- **MSYS vs native paths:** when scripting checks, invoke Python with native `C:\...` paths
+  (pathlib ignores `/c/...` MSYS paths) — cost me a false-empty survey during research.
+  
+  
+  
+  
+  
+  
+  
+  after plan creation 
+  
+  The plan in brief
+Part A — Flash burst (Hybrid, your pick): Retexture the Modern sprite-burst "center" leaves that still use the old 2004 hl2_muzzleflash (muzzle_center_big/heavy/pistol_yellow) → the pack's own high-res fas_muzzleflash_test_b (2048², 18 frames), and adopt Povarehok's technique: add C_OP_PositionLock (tight, no drift) + frame blending. Streak/trail layers stay on their streak texture. The _fp first-person twins inherit it automatically since they're regenerated from the patched world flash. Zero new precache targets.
+
+Part B — Grenade throw trail (Subtle wispy, your pick): The trail already exists (Modern-only, spectator_utility_trail → mvm_grenade_trail, CP-speed gated). Retune its two layers to the dedicated fas_smoke_trail texture, lower alpha, tuned rate/fade → a thin realistic MW smoke tail. Keeps the speed gate (resting grenades emit nothing) and stays sprites (never ropes). The deployed smoke cloud stays 100% vanilla — confirmed nothing touches it.
+
+Part C — Precache lag: The root cause is a synchronous 1-blocking-load-per-frame drain with no frame-time awareness (ParticleFx.cpp:220-231). Replace it with a wall-clock-spread + adaptive drain: while playing, ~1 resolve per 50ms with backoff after heavy loads (so a run of cold loads can't stack into a freeze); while paused (your normal shot-setup state), drain a small time-budgeted burst so the queue clears fast without disturbing playback. Correctness is unchanged — only when resolves happen. Parts A and B add no new targets, so this is a net reduction.
+
+Verification is a full FX reconvert (build.bat → Y) then in-game checks for each part, plus postprocess idempotency.
+
+One thing worth flagging: the plan's Part C throttle is the real lag fix, but if it ever makes the first shot after a demo-load show a vanilla flash, there's a built-in stretch option (priority-resolve the spectated weapon first) — I left it out of the core to keep the change small.
+
+
+

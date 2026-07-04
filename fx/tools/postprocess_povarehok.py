@@ -10,6 +10,7 @@ values unusable in CS2.
 from __future__ import annotations
 
 import argparse
+import math
 import re
 from pathlib import Path
 
@@ -186,18 +187,41 @@ IMPACT_SETTLE_SKIP_RE = re.compile(
     re.IGNORECASE,
 )
 BOUNCE_AMOUNT_LINE_RE = re.compile(r"(?m)^(\s*)m_flBounceAmount = [^\n]+")
+IMPACT_SPIN_CLASS_RE = re.compile(r'_class = "C_OP_Spin(?:Yaw)?"')
+SPIN_STOP_LINE_RE = re.compile(r"(?m)^(\s*)m_fSpinRateStopTime = (-?\d+(?:\.\d+)?)")
+MAX_IMPACT_SPIN_SECONDS = 0.5
 
 
 def _is_impact_debris_that_should_settle(path: Path, text: str) -> bool:
     name = path.name
     if IMPACT_SETTLE_SKIP_RE.search(name):
         return False
-    return "C_OP_RenderModels" in text or bool(IMPACT_SETTLE_HINT_RE.search(name))
+    collision_driven = "C_OP_WorldTraceConstraint" in text and (
+        "C_OP_RenderModels" in text or "C_OP_Spin" in text
+    )
+    return collision_driven or bool(IMPACT_SETTLE_HINT_RE.search(name))
 
 
-def settle_impact_debris(root: Path) -> tuple[int, int]:
-    """Stop physical bullet-impact chunks from bouncing forever after contact."""
-    changed_files = changed_constraints = 0
+def _cap_spin_stop_time(block: str) -> str:
+    match = SPIN_STOP_LINE_RE.search(block)
+    if match:
+        current = float(match.group(2))
+        if current <= MAX_IMPACT_SPIN_SECONDS:
+            return block
+        return SPIN_STOP_LINE_RE.sub(
+            rf"\1m_fSpinRateStopTime = {MAX_IMPACT_SPIN_SECONDS}", block, count=1
+        )
+    return re.sub(
+        r'(_class = "C_OP_Spin(?:Yaw)?")',
+        rf"\1\n\t\t\tm_fSpinRateStopTime = {MAX_IMPACT_SPIN_SECONDS}",
+        block,
+        count=1,
+    )
+
+
+def settle_impact_debris(root: Path) -> tuple[int, int, int]:
+    """Stop physical bullet-impact chunks from bouncing or spinning indefinitely."""
+    changed_files = changed_constraints = changed_spin_ops = 0
     for path in iter_povarehok_impact_vpcfs(root):
         text = path.read_text(encoding="utf-8")
         if not _is_impact_debris_that_should_settle(path, text):
@@ -210,12 +234,73 @@ def settle_impact_debris(root: Path) -> tuple[int, int]:
             if new_block != block:
                 edits.append((start, end, new_block))
                 changed_constraints += 1
+        for match in IMPACT_SPIN_CLASS_RE.finditer(text):
+            start, end = common.block_span(text, match.start())
+            block = text[start:end]
+            new_block = _cap_spin_stop_time(block)
+            if new_block != block:
+                edits.append((start, end, new_block))
+                changed_spin_ops += 1
         if edits:
-            for start, end, replacement in reversed(edits):
+            for start, end, replacement in sorted(edits, reverse=True):
                 text = text[:start] + replacement + text[end:]
             path.write_text(text, encoding="utf-8")
             changed_files += 1
-    return changed_files, changed_constraints
+    return changed_files, changed_constraints, changed_spin_ops
+
+
+DIRECT_EMIT_COUNT_RE = re.compile(r"(?m)^(\s*m_nParticlesToEmit = )(\d+)(\s*)$")
+RANDOM_EMIT_COUNT_RE = re.compile(r"(?m)^(\s*m_flRandom(?:Min|Max) = )(-?\d+(?:\.\d+)?)(\s*)$")
+
+
+def _format_scaled_number(source: str, value: float) -> str:
+    if "." not in source and value.is_integer():
+        return str(int(value))
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _halve_debris_emitter(block: str) -> str:
+    def direct_repl(match: re.Match[str]) -> str:
+        value = max(1, math.ceil(int(match.group(2)) * 0.5))
+        return f"{match.group(1)}{value}{match.group(3)}"
+
+    new = DIRECT_EMIT_COUNT_RE.sub(direct_repl, block)
+    if re.search(r"m_nParticlesToEmit =\s*\n\s*\{", block):
+        def random_repl(match: re.Match[str]) -> str:
+            value = float(match.group(2)) * 0.5
+            return f"{match.group(1)}{_format_scaled_number(match.group(2), value)}{match.group(3)}"
+
+        new = RANDOM_EMIT_COUNT_RE.sub(random_repl, new)
+    return new
+
+
+def halve_less_impact_debris(root: Path) -> tuple[int, int]:
+    """Halve physical debris emission in the Less impacts variant only.
+
+    This runs only in the clean conversion pipeline, which is already documented as
+    non-rerunnable because its other tone passes are multiplicative too.
+    """
+    changed_files = changed_emitters = 0
+    for path in iter_povarehok_impact_vpcfs(root):
+        if "less/impacts" not in path.as_posix():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not _is_impact_debris_that_should_settle(path, text):
+            continue
+        edits = []
+        for match in re.finditer(r'_class = "C_OP_InstantaneousEmitter"', text):
+            start, end = common.block_span(text, match.start())
+            block = text[start:end]
+            new_block = _halve_debris_emitter(block)
+            if new_block != block:
+                edits.append((start, end, new_block))
+                changed_emitters += 1
+        if edits:
+            for start, end, replacement in sorted(edits, reverse=True):
+                text = text[:start] + replacement + text[end:]
+            path.write_text(text, encoding="utf-8")
+            changed_files += 1
+    return changed_files, changed_emitters
 
 
 IMPACT_WARM_SMOKE_FILES = (
@@ -262,10 +347,15 @@ def fix_warm_impact_smoke_tints(root: Path) -> int:
 # one shotgun variant. Spray wrappers attach it to every automatic/pistol class
 # flash; the single-shot snipers get it as a direct per-shot child below
 # (a 4-shot spray gate can never trigger on a bolt gun).
-PVRH_WEAPON_DIR = "particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx"
+PVRH_WEAPON_VARIANTS = ("regular", "less/smoke")
+
+
+def _pvrh_weapon_dir(variant: str) -> str:
+    return f"particles/filmmaker/povarehok/{variant}/weapons/cs_weapon_fx"
+
+
 # Authentic Povarehok sustained barrel plume (not the FAS shotgun barrel_smoke
 # asset -- that is Modern-pack geometry and misaligns in CS2 viewmodel space).
-PVRH_REGULAR_BARREL_SMOKE = f"{PVRH_WEAPON_DIR}/weapon_muzzle_smoke_long.vpcf"
 PVRH_SPRAY_FLASHES = (
     "weapon_muzzle_flash_assaultrifle.vpcf",
     "weapon_muzzle_flash_assaultrifle_fp.vpcf",
@@ -281,6 +371,70 @@ PVRH_SPRAY_FLASHES = (
     "weapon_muzzle_flash_para.vpcf",
     "weapon_muzzle_flash_para_fp.vpcf",
 )
+
+LESS_MUZZLE_SMOKE_SCALE = 0.9
+MUZZLE_SMOKE_ALPHA_FIELDS = ("m_nAlphaMin", "m_nAlphaMax")
+MUZZLE_SMOKE_RADIUS_FIELDS = (
+    "m_flRadiusMin", "m_flRadiusMax", "m_flStartScale", "m_flEndScale"
+)
+
+
+def _scale_fields(block: str, fields: tuple[str, ...], factor: float, *, integer: bool) -> str:
+    field_group = "|".join(re.escape(field) for field in fields)
+    pattern = re.compile(rf"(?m)^(\s*(?:{field_group}) = )(-?\d+(?:\.\d+)?)(\s*)$")
+
+    def repl(match: re.Match[str]) -> str:
+        scaled = float(match.group(2)) * factor
+        value = str(max(0, round(scaled))) if integer else _format_scaled_number(match.group(2), scaled)
+        return f"{match.group(1)}{value}{match.group(3)}"
+
+    return pattern.sub(repl, block)
+
+
+def _reduce_muzzle_smoke_text(text: str) -> str:
+    edits = []
+    class_fields = {
+        "C_INIT_RandomAlpha": (MUZZLE_SMOKE_ALPHA_FIELDS, True),
+        "C_INIT_RandomRadius": (MUZZLE_SMOKE_RADIUS_FIELDS, False),
+        "C_OP_InterpolateRadius": (MUZZLE_SMOKE_RADIUS_FIELDS, False),
+    }
+    for class_name, (fields, integer) in class_fields.items():
+        for match in re.finditer(rf'_class = "{class_name}"', text):
+            start, end = common.block_span(text, match.start())
+            block = text[start:end]
+            new_block = _scale_fields(block, fields, LESS_MUZZLE_SMOKE_SCALE, integer=integer)
+            if new_block != block:
+                edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def _is_muzzle_smoke_leaf(path: Path) -> bool:
+    name = path.name.lower()
+    return "smoke" in name or ("ac_muzzle" in name and "trail" in name)
+
+
+def write_less_muzzle_smoke_variant(root: Path, changed: list[str]) -> None:
+    """Derive Less smoke leaves from repaired Regular leaves, then scale by 10%."""
+    regular_dir = common.resource_path(root, _pvrh_weapon_dir("regular"))
+    less_dir = common.resource_path(root, _pvrh_weapon_dir("less/smoke"))
+    if not regular_dir.is_dir() or not less_dir.is_dir():
+        return
+    for regular_path in regular_dir.glob("*.vpcf"):
+        if not _is_muzzle_smoke_leaf(regular_path):
+            continue
+        less_path = less_dir / regular_path.name
+        if not less_path.is_file():
+            continue
+        text = regular_path.read_text(encoding="utf-8").replace(
+            "/povarehok/regular/", "/povarehok/less/smoke/"
+        )
+        new_text = _reduce_muzzle_smoke_text(text)
+        old_text = less_path.read_text(encoding="utf-8")
+        if new_text != old_text:
+            less_path.write_text(new_text, encoding="utf-8")
+            changed.append(less_path.relative_to(root).as_posix())
 PVRH_PER_SHOT_SMOKE_FLASHES = (
     "weapon_muzzle_flash_awp.vpcf",
     "weapon_muzzle_flash_huntingrifle_fp.vpcf",
@@ -418,20 +572,24 @@ def apply_povarehok_gameplay_composites(root: Path) -> list[str]:
             rel = path.relative_to(root).as_posix()
             changed.append(rel)
 
-    if common.resource_path(root, PVRH_REGULAR_BARREL_SMOKE).is_file():
+    for variant in PVRH_WEAPON_VARIANTS:
+        weapon_dir = _pvrh_weapon_dir(variant)
+        barrel_smoke = f"{weapon_dir}/weapon_muzzle_smoke_long.vpcf"
+        if not common.resource_path(root, barrel_smoke).is_file():
+            continue
         for name in PVRH_SPRAY_FLASHES:
-            flash_res = f"{PVRH_WEAPON_DIR}/{name}"
+            flash_res = f"{weapon_dir}/{name}"
             if not common.resource_path(root, flash_res).is_file():
                 continue
             common.write_if_different(
                 root,
                 common._spray_wrapper_res(flash_res),
-                common._composition_text((flash_res, PVRH_REGULAR_BARREL_SMOKE)),
+                common._composition_text((flash_res, barrel_smoke)),
                 changed,
             )
         for name in PVRH_PER_SHOT_SMOKE_FLASHES:
-            res = f"{PVRH_WEAPON_DIR}/{name}"
-            if common._add_child_once(common.resource_path(root, res), PVRH_REGULAR_BARREL_SMOKE):
+            res = f"{weapon_dir}/{name}"
+            if common._add_child_once(common.resource_path(root, res), barrel_smoke):
                 changed.append(res)
 
         # Same rope-wisp reattachment as Modern (see postprocess_modern's
@@ -441,12 +599,17 @@ def apply_povarehok_gameplay_composites(root: Path) -> list[str]:
         # weapon_muzzle_smoke_long.vpcf instead so every spray-gated flash AND
         # both per-shot sniper flashes above get the same follow-the-barrel
         # wisp the mod's own shotgun already has, instead of just one weapon.
+        variant_root = common.resource_path(root, weapon_dir)
         for wisp_path in iter_muzzle_trail_wisp_vpcfs(root):
-            if "regular" not in wisp_path.parts:
+            try:
+                wisp_path.relative_to(variant_root)
+            except ValueError:
                 continue
             wisp_res = wisp_path.relative_to(root).as_posix()
-            if common._add_child_once(common.resource_path(root, PVRH_REGULAR_BARREL_SMOKE), wisp_res):
-                changed.append(PVRH_REGULAR_BARREL_SMOKE)
+            if common._add_child_once(common.resource_path(root, barrel_smoke), wisp_res):
+                changed.append(barrel_smoke)
+
+    write_less_muzzle_smoke_variant(root, changed)
 
     for res, distort in POVAREHOK_DISTORT_CHILDREN.items():
         if common._add_child_once(common.resource_path(root, res), distort):
@@ -483,11 +646,12 @@ def main() -> int:
 
     if args.runtime_impact_fixes_only:
         collision = common.force_per_particle_collision(root)
-        debris_files, debris_constraints = settle_impact_debris(root)
+        debris_files, debris_constraints, debris_spin = settle_impact_debris(root)
         smoke_files, smoke_renderers = fix_impact_smoke_blending(root)
         print(
             f"Runtime impact fixes: {collision} files forced to per-particle collision, "
-            f"{debris_files} debris files / {debris_constraints} constraints settled, "
+            f"{debris_files} debris files / {debris_constraints} constraints / "
+            f"{debris_spin} spin operators settled, "
             f"{smoke_files} smoke files / {smoke_renderers} renderers neutralized."
         )
         return 0
@@ -527,7 +691,8 @@ def main() -> int:
     # Must run AFTER fix_lit_renderers so the final ADD/translucent state is known.
     premul = common.premultiply_white_additive_textures(root)
     blend = common.add_sheet_frame_blending(root)
-    debris_files, debris_constraints = settle_impact_debris(root)
+    debris_files, debris_constraints, debris_spin = settle_impact_debris(root)
+    less_debris_files, less_debris_emitters = halve_less_impact_debris(root)
     smoke_files, smoke_renderers = fix_impact_smoke_blending(root)
     warm_smoke = fix_warm_impact_smoke_tints(root)
     # Must run AFTER fix_textureless_renderers: it fully rewrites the heatwave
@@ -542,7 +707,9 @@ def main() -> int:
         f"{unlit} renderers made unlit / {additive} made additive "
         f"({wrong_add} wrongly-additive fixed), "
         f"{len(premul)} additive textures premultiplied, {blend} files frame-blended, "
-        f"{debris_files} impact-debris files settled ({debris_constraints} constraints), "
+        f"{debris_files} impact-debris files settled ({debris_constraints} constraints, "
+        f"{debris_spin} spin operators), "
+        f"{less_debris_files} Less debris files halved ({less_debris_emitters} emitters), "
         f"{smoke_files} impact-smoke files neutralized ({smoke_renderers} renderers), "
         f"{warm_smoke} warm impact-smoke tints fixed, "
         f"{len(composites)} gameplay-composite files."

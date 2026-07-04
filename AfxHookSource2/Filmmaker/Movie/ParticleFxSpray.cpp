@@ -20,11 +20,11 @@ namespace {
 
 #define MODSPRAY(name) { "particles/filmmaker/modern/arc9_fas_muzzleflashes/" name ".vpcf", \
 	"particles/filmmaker/modern/arc9_fas_muzzleflashes/mvm_spray_" name ".vpcf" }
-// Less-mode weapon targets live under less/smoke, but the mod's weapon files are
-// byte-identical across variants, so both point at the regular wrappers.
+// Each Povarehok variant owns its wrapper so Less can use its 10%-reduced smoke
+// without changing the flash child or borrowing Regular's full-strength plume.
 #define BPSPRAY(variant, name) { \
 	"particles/filmmaker/povarehok/" variant "/weapons/cs_weapon_fx/" name ".vpcf", \
-	"particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx/mvm_spray_" name ".vpcf" }
+	"particles/filmmaker/povarehok/" variant "/weapons/cs_weapon_fx/mvm_spray_" name ".vpcf" }
 const SprayPair kSprayPairs[] = {
 	MODSPRAY("muzzleflash_ar"), MODSPRAY("muzzleflash_smg"), MODSPRAY("muzzleflash_shotgun"),
 	MODSPRAY("muzzleflash_pistol"), MODSPRAY("muzzleflash_pistol_deagle"),

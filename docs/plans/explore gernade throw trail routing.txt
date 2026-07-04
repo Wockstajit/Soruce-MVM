@@ -1,0 +1,189 @@
+I'll systematically explore this repository to understand the grenade flight smoke trail implementation. Let me start by mapping the structure and then diving into each requirement.
+
+Ran
+a command
+Good, I can see the working directory. Now let me search for the key files mentioned in your requirements.
+
+
+Found files
+Perfect. Now let me search for the key terms in ParticleFxRules.cpp to find grenade-related rules:
+
+
+Searched code, read a file
+Good start. Let me read more of this file to see the FXRULE macros and get the full context:
+
+Read
+ParticleFxRules.cpp
+Now let me search for smoke-related particles to check requirement 3:
+
+Searched
+smokegrenade|smoke_emit|smoke_cloud|particle_smokegrenade|explosion_smokegrenade
+Good. Now let me check the postprocess_modern.py file to understand the trail system composition:
+
+Read
+postprocess_modern.py
+Excellent! Now let me check for texture files and examine the MW2019 mapping reference:
+
+
+Found files, read a file
+Perfect. Let me continue reading the MW2019 mapping reference to see if there's more on grenade trails:
+
+Read
+mw2019-fx-mapping-reference.md
+Interesting - it mentions grenade trails in mw2019_effects.pcf but not detailed. Let me search for any additional documentation on grenade trails and check if there's reference to a smoke cloud system in CS2:
+
+
+Searched code, ran a command
+Let me search in the actual codebase for any CS2 smoke grenade particle system names:
+
+Searched
+smoke_grenade|smokegrenade_pop|particle_smoke_grenade|smoke_emit_grenade
+Now let me search for the texture file information and check if there are frame counts available:
+
+Ran
+a command
+Let me search for any mentions of spectator_utility_trail or smoke cloud systems in comments or documentation:
+
+Searched
+spectator_utility_trail|smoke.*emit|smoke.*volume|smoke.*pop
+Perfect. Now let me check the header file to see the smoke grenade note:
+
+Read
+ParticleFx.h
+Excellent! Let me now search for the actual CS2 smoke grenade particle system names to be thorough:
+
+Ran
+a command
+Perfect. Now let me check for any additional context about texture properties by examining one of the grenade trail files if they exist in the build output:
+
+Searched
+**/mvm_grenade_smoke_trail*.vpcf
+Good! Now let me read one to confirm the parameters match the postprocess_modern.py specs:
+
+Read
+mvm_grenade_smoke_trail.vpcf
+Perfect. Let me do a final check to confirm what particles/entity/spectator_utility_trail.vpcf is in CS2 and verify there's nothing swapping smoke grenades:
+
+Ran
+a command
+Perfect. Now let me look at the end of the ParticleFxRules.cpp to ensure I see the complete VariantRule structure and confirm the rule shows On/Less passing through:
+
+Read
+ParticleFxRules.cpp
+Perfect. Now let me compile my final report. Let me just double-check the texture names in the modern pack source to finalize texture info:
+
+Ran
+a command
+Perfect. Now I have all the information needed for a comprehensive report. Let me create the final summary.
+
+Terrain Mapping: CS2 Grenade Flight Smoke Trail Implementation
+1. Grenade Utility Trail Rule (ParticleFxRules.cpp)
+File: AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp
+
+Classification (lines 42–46):
+
+// The per-grenade spectator/X-ray utility trail: CS2 creates one per thrown grenade
+// during demo playback with its control point following the projectile, which makes it
+// the swap anchor for the GMod-style flight smoke trail (Modern mode). Routed to the
+// weaponfx category; its variant row is Modern-only (On/Less pass the stock line through).
+if (0 == std::strcmp(n, "particles/entity/spectator_utility_trail.vpcf")) return kFxWeaponFx;
+VariantRule Row (lines 315–316):
+
+{ "particles/entity/spectator_utility_trail.vpcf", nullptr, nullptr, nullptr,
+  "particles/filmmaker/modern/arc9_fas_muzzleflashes/mvm_grenade_trail.vpcf" },
+Swap Mapping:
+
+CS2 Source: particles/entity/spectator_utility_trail.vpcf (the demo-playback utility trail anchor)
+On/Less modes: nullptr → passes through vanilla CS2 (stock line, no swap)
+Modern mode: swaps to particles/filmmaker/modern/arc9_fas_muzzleflashes/mvm_grenade_trail.vpcf
+Category: kFxWeaponFx (weaponfx)
+This is NOT a macro-based rule (no FXRULE / FXRULE_MODERN) — it's a hardcoded VariantRule struct because Modern-only swaps that pass through vanilla in On/Less modes don't fit the macro pattern.
+
+2. Modern Grenade Trail System Composition (postprocess_modern.py)
+File: fx/tools/postprocess_modern.py
+
+Composition Structure (lines 59–75):
+The mvm_grenade_trail.vpcf is a parent-only composition that wraps two child trail systems:
+
+MVM_COMPOSITIONS = {
+    ...
+    f"{MODERN_MUZZLE_DIR}/mvm_grenade_trail.vpcf": (
+        f"{MODERN_MUZZLE_DIR}/mvm_grenade_smoke_trail.vpcf",
+        f"{MODERN_MUZZLE_DIR}/mvm_grenade_smoke_trail_b.vpcf",
+    ),
+}
+Authored Trail Systems (lines 97–109):
+
+MVM_GRENADE_TRAILS = {
+    f"{MODERN_MUZZLE_DIR}/mvm_grenade_smoke_trail.vpcf": dict(
+        texture="materials/effects/fas_dust_a.vtex", rate=16.0,
+        radius_min=3.0, radius_max=6.0, grey=150, alpha=0.45),
+    f"{MODERN_MUZZLE_DIR}/mvm_grenade_smoke_trail_b.vpcf": dict(
+        texture="materials/effects/fas_dust_b.vtex", rate=10.0,
+        radius_min=4.0, radius_max=8.0, grey=120, alpha=0.35),
+}
+Trail System Details (from _trail_system_text, lines 291–434):
+
+Parameter	Trail A	Trail B	Significance
+Texture	fas_dust_a.vtex	fas_dust_b.vtex	Dual-layer dust sprites for visual variety
+Emit Rate	16.0 puff/sec	10.0 puff/sec	CP0 speed gated: remaps CP velocity [30–500 u/s] → [0–rate] puffs/sec, so resting grenades emit 0, flying grenades emit proportionally
+Radius	3–6 units	4–8 units	Particle spawn variation; Trail B slightly larger
+Grey scale	150/255 (0.588)	120/255 (0.471)	Additive color; Trail A lighter, Trail B darker
+Alpha	0.45	0.35	Trail B more transparent (fade-layering)
+Renderer	C_OP_RenderSprites	C_OP_RenderSprites	Discrete sprites (NOT ropes — ropes stretch incorrectly in CS2) with frame blending
+Lifetime	1.5–2.5s (field 1)	1.5–2.5s (field 1)	Particle lifespan after spawn
+Gravity	[0, 0, 10]	[0, 0, 10]	Downward gravity for puff settling
+Drag	0.05	0.05	Air resistance; smoke dissipates gently
+Max Particles	128	128	Per system cap
+Fade Out	0.8s, linear	0.8s, linear	Non-eased fade; spritesheet frame blending enabled
+Scale Ramp	1.0 → 2.5x end scale	1.0 → 2.5x end scale	Puffs grow as they age
+Key Mechanism: The emitter's C_OP_ContinuousEmitter uses C_OP_ContinuousEmitter with m_flEmitRate gated on PF_TYPE_CONTROL_POINT_SPEED (CP0, the projectile). The remap curve is [30.0, 500.0] → [0.0, rate] — grenades below 30 u/s emit nothing, grenades at 500+ u/s hit max rate, and resting grenades stay silent.
+
+3. Smoke Cloud Verification — Untouched
+File: AfxHookSource2/Filmmaker/Movie/ParticleFx.h (lines 31–32)
+
+// SMOKE GRENADES ARE DELIBERATELY NOT TOUCHED: CS2 smoke is a gameplay-coupled volumetric
+// voxel system, not a swappable particle system.
+Search Results for smoke-grenade particles in ParticleFxRules.cpp:
+
+grep -E "smokegrenade|smoke_emit|smoke_cloud|particle_smokegrenade|explosion_smokegrenade" → No matches
+The smoke grenade's volumetric effect is NOT routed through the particle hook; it's handled by CS2's native volumetric voxel system
+Confirmed: The deployed smoke cloud is 100% vanilla, untouched by the Modern pack
+4. Available Textures for Grenade-Trail Look
+Path: build/fx/povarehok-source1import/source2/content/source_mvm_fx/materials/effects/
+
+Current Used in Grenade Trails:
+
+fas_dust_a.vtex — 806 bytes (Trail A primary texture)
+fas_dust_b.vtex — 806 bytes (Trail B primary texture)
+Additional Available Dust/Smoke Textures (potential alternates):
+
+fas_dust_thick.vtex — 806 bytes (denser variant)
+fas_smoke_trail.vtex — 811 bytes (labeled "trail" but not currently used)
+fas_smoke_beam.vtex — 811 bytes (beam-style variant)
+fas_debris_add_b.vtex — 806 bytes (debris variant)
+fas_glow_debris.vtex — 806 bytes (glow variant for incandescent look)
+fas_flamering.vtex — texture asset (pyro effect, non-smoke)
+fas_muzzle_break_test.vtex, fas_muzzleflash_test_b.vtex — test assets
+Frame Data: The .vtex binary format (converted from Source 1) doesn't expose frame-count metadata in the file headers in a human-readable way; frame counts are baked into the texture resource itself and exposed only to the runtime particle system. The m_bBlendFramesSeq0 = true flag in the renderers indicates the textures support frame-sequence animation with interpolation.
+
+5. MW2019 Grenade Trail Reference (from docs/mw2019-fx-mapping-reference.md)
+Section 7 (Particle Source Files, line 212):
+
+mw2019_effects.pcf | Misc COD-specific effects (grenade trails, molotov, etc.)
+The source reference confirms MW2019 has grenade trails defined in mw2019_effects.pcf, but the actual PCF asset is not currently in the converted Modern pack — instead, the CS2 port synthesizes the trails dynamically via postprocess_modern._trail_system_text (lines 291–434), authoring from scratch with CP-speed gating (a CS2-specific refinement not found in the original GMod conversion).
+
+Relevant Background from §6b (Barrel Rope Wisps, lines 144–174):
+The reference documents that GMod's barrel_smoke_trail(_b) systems use C_OP_RenderRopes with ~5s lifetime, which causes rope-ribbon stretching artifacts in CS2. The Modern grenade trails intentionally use discrete sprites instead, matching the documented CS2-port gotcha mitigation strategy.
+
+Summary State Map
+Aspect	Current Status
+Grenade Flight Smoke Anchor	particles/entity/spectator_utility_trail.vpcf swapped in Modern mode only
+Modern Trail Target	mvm_grenade_trail.vpcf (composition of two sprite-based puff layers)
+On/Less Trail Behavior	Vanilla CS2 spectator_utility_trail.vpcf (stock thin trail)
+Trail Emission Gating	CP0 (projectile) speed-based: 0 puffs at rest, full rate in flight
+Renderer Type	C_OP_RenderSprites (discrete puffs, NOT ropes)
+Smoke Cloud (Detonation)	Untouched; native CS2 volumetric voxel system
+Available Alternate Textures	fas_dust_a/b/thick, fas_smoke_trail, fas_smoke_beam, fas_debris_add_b, fas_glow_debris
+Composition Structure	Parent mvm_grenade_trail.vpcf → 2 child sprite systems (rate 16 + 10, radius 3–6 + 4–8, alpha 0.45 + 0.35)
+The grenade trail is Modern-only; On and Less modes pass vanilla through. The smoke cloud (grenade pop visual) is permanently untouched and remains 100% CS2 native.
