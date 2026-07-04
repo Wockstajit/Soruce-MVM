@@ -29,7 +29,15 @@ $hlae    = Join-Path $bin 'HLAE.exe'
 $dll     = Join-Path $bin 'x64\AfxHookSource2.dll'
 $cs2exe  = Join-Path $Cs2Dir 'game\bin\win64\cs2.exe'
 if ([string]::IsNullOrWhiteSpace($FxAssetsGameDir)) {
-    $FxAssetsGameDir = Join-Path $root 'automation\output\effects\betterparticles-source1import\source2\game\source_mvm_fx'
+    # Prefer the pack staged into the shipped build (build\staging-release\fx\...) so a
+    # released/copied build works standalone; fall back to the converter's working output
+    # (build\fx\...) for a dev machine that built the pack but hasn't staged it yet.
+    $fxCandidates = @(
+        (Join-Path $root 'build\staging-release\fx\source_mvm_fx'),
+        (Join-Path $root 'build\fx\povarehok-source1import\source2\game\source_mvm_fx')
+    )
+    $FxAssetsGameDir = $fxCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $FxAssetsGameDir) { $FxAssetsGameDir = $fxCandidates[0] }
 }
 $fxAssetsAvailable = Test-Path -LiteralPath $FxAssetsGameDir
 
@@ -69,7 +77,7 @@ if ($fxAssetsAvailable) {
     $argList += @('-addEnv', ('USRLOCALCSGO=' + (Resolve-Path -LiteralPath $FxAssetsGameDir).Path))
     Write-Host "Mounting converted FX assets via USRLOCALCSGO: $FxAssetsGameDir" -ForegroundColor Green
 } else {
-    Write-Host "Converted FX asset dir not found; Better Particles swaps will fail open: $FxAssetsGameDir" -ForegroundColor Yellow
+    Write-Host "Converted FX asset dir not found; Povarehok swaps will fail open: $FxAssetsGameDir" -ForegroundColor Yellow
 }
 
 Write-Host "Launching CS2 (hook + netconport $Port, ${Width}x${Height} windowed)..."

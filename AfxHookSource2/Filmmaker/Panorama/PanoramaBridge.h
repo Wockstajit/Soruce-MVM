@@ -25,6 +25,7 @@ namespace Filmmaker {
 // values live in each *Js.h root-creation line; if you change one, update it here too.
 //
 //   50  MovieHud root          (MovieHudJs.h)            - director help/status cards
+//   51  FxDebugHud root        (FxDebugHudJs.h)          - FX wisp-swap debug squares (opt-in)
 //   53  CameraEditor root      (CameraEditorJs.h)        - editor chrome/backdrop (below timeline)
 //   55  CameraTimeline root    (CameraTimelineJs.h)      - timeline bar (sits on the editor backdrop)
 //   60  MarkerHud root         (MarkerHudJs.h)           - BO2-style marker-edit menu

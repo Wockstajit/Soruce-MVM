@@ -4,10 +4,10 @@ Scope: offline CS2 demo / movie-making UI only.
 
 Reviewed local references from:
 
-- `panorama ref/coding help/panorama-player-preview/612714-panorama-ui-editing.md`
-- `panorama ref/coding help/panorama-player-preview/728536-externally-hud-elements.md`
-- `panorama ref/coding help/panorama-player-preview/744463-preview-models-menu.md`
-- `panorama ref/coding help/panorama-player-preview/750805-panorama-model.md`
+- `reference/coding help/panorama-player-preview/612714-panorama-ui-editing.md`
+- `reference/coding help/panorama-player-preview/728536-externally-hud-elements.md`
+- `reference/coding help/panorama-player-preview/744463-preview-models-menu.md`
+- `reference/coding help/panorama-player-preview/750805-panorama-model.md`
 
 ## Useful findings
 

@@ -368,9 +368,9 @@ in-game before trusting them:
 
 This pass reviewed the three local folders the user supplied:
 
-- `panorama ref/skin changer help/Andromeda-CS2-Base-master`
-- `panorama ref/skin changer help/nerv`
-- `panorama ref/skin changer help/real-time-internal-overlay-research-main`
+- `reference/skin changer help/Andromeda-CS2-Base-master`
+- `reference/skin changer help/nerv`
+- `reference/skin changer help/real-time-internal-overlay-research-main`
 
 The practical lesson is that the normal live/offline skin-changer assumption is wrong for demo
 playback. Those projects start from the local player's inventory and then copy a selected loadout item

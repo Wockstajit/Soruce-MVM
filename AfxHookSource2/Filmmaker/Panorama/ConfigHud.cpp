@@ -5,6 +5,7 @@
 #include "MovieHud.h" // hidden while Config is open (F8 director card must not sit in the preview)
 #include "../Movie/ViewFx.h" // MODIFIERS: strafe roll + weapon sway levels
 #include "../Movie/BodyCam.h" // MODIFIERS: chest-cam preset state
+#include "../Movie/ActionCam.h" // MODIFIERS: head-cam preset + fisheye lens state
 #include "../Movie/ParticleFx.h" // EFFECTS: per-category particle toggles
 #include "../Filmmaker.h" // CameraEditor_Active/Set (mutual exclusion), CameraEditor_HudViewName
 
@@ -155,6 +156,8 @@ std::string ConfigHud::BuildStateJson() {
 	o << ",\"swayPct\":" << ViewFxRef().SwayIntensity();
 	o << ",\"deadzonePct\":" << ViewFxRef().DeadzoneIntensity();
 	o << ",\"bodyCam\":" << (BodyCam_Active() ? "true" : "false");
+	o << ",\"actionCam\":" << (ActionCam_Active() ? "true" : "false");
+	o << ",\"acFisheye\":" << (ActionCam_FisheyeEnabled() ? "true" : "false");
 	// EFFECTS section: particle-effect toggles owned by ParticleFx.h -- read-only mirror here,
 	// same contract as the MODIFIERS block above (JS writes back via console commands).
 	{

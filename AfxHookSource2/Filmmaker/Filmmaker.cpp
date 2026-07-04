@@ -5,6 +5,7 @@
 #include "Panorama/FilmmakerMenu.h"
 #include "Panorama/MovieHud.h"
 #include "Panorama/MarkerHud.h"
+#include "Panorama/FxDebugHud.h"
 #include "Panorama/CameraTimelineHud.h"
 #include "Panorama/CameraEditorHud.h"
 #include "Panorama/ConfigHud.h"
@@ -13,9 +14,11 @@
 #include "Movie/MovieMode.h"
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
+#include "Movie/ActionCam.h"
 #include "Movie/BodyCam.h"
 #include "Movie/ViewFxVm.h"
 #include "Movie/ParticleFx.h"
+#include "Movie/DemoEndHold.h"
 #include "Cosmetics/CosmeticOverrideSystem.h"
 #include "Platform/FolderPicker.h"
 #include "Platform/TextEncoding.h"
@@ -230,6 +233,11 @@ void RunMainThreadFrame() {
 	// Panorama work (RunScript + panel IO) must run on the main/UI thread.
 	g_menu.RunFrame(g_library);
 
+	// End-of-demo hold: pause on the last tick instead of letting the engine disconnect to the
+	// main menu; a play press while held restarts the demo from the beginning. Runs early so
+	// the pause lands the same frame the tick crosses the hold point.
+	DemoEndHold_RunFrame();
+
 	// Movie director: apply queued input actions (engine commands / free-cam
 	// toggle) on this thread, then refresh the in-game help/status HUD panel.
 	MovieModeRef().FlushActions();
@@ -239,14 +247,15 @@ void RunMainThreadFrame() {
 	// the BO2-style marker-edit menu. Both run on this (main/UI) thread.
 	CameraPathRef().RunFrame();
 	// Camera Editor being open is the normal reason FollowCamera should solve/apply its pose
-	// each frame; Body Cam is the other -- it drives the SAME FollowCamera state (Attach mode,
-	// "chest" attachment) but is meant to work from the lightweight Config panel too, where the
-	// editor is closed. Without this OR, RunFrame's own editor-closed guard would immediately
-	// StopPreview() whatever Body Cam just started.
-	FollowCameraRef().RunFrame(CameraEditorHudRef().Enabled() || BodyCam_Active());
-	// After RunFrame, so a Body Cam preview that FollowCamera just stopped on its own (target
-	// death / demo end) is restored this same frame instead of leaving free-cam latched.
+	// each frame; Body Cam and Action Cam are the others -- they drive the SAME FollowCamera
+	// state (Attach mode, "chest" / "head" attachment) but are meant to work from the
+	// lightweight Config panel too, where the editor is closed. Without this OR, RunFrame's own
+	// editor-closed guard would immediately StopPreview() whatever they just started.
+	FollowCameraRef().RunFrame(CameraEditorHudRef().Enabled() || BodyCam_Active() || ActionCam_Active());
+	// After RunFrame, so a Body/Action Cam preview that FollowCamera just stopped on its own
+	// (target death / demo end) is restored this same frame instead of leaving free-cam latched.
 	BodyCam_RunFrame();
+	ActionCam_RunFrame();
 	// ViewFxVm write-site 2 (main-thread pump; viewmodel-rotation experiment).
 	ViewFxVm_MainPump();
 	MarkerHudRef().RunFrame();
@@ -279,6 +288,9 @@ void RunMainThreadFrame() {
 	// Particle-effect modifiers: lazy hook-arm retry only (rate-limited; no-op once installed
 	// or while every category is On). The detour itself needs no per-frame driving.
 	ParticleFxRef().PumpMainThread();
+	// Debug squares proving the barrel-smoke wisp's parent swap actually fires, distinctly for
+	// Modern vs On/Povarehok (opt-in; 'mirv_filmmaker fx debughud on|off'). No-op when off.
+	FxDebugHudRef().RunFrame();
 }
 
 void Shutdown() {

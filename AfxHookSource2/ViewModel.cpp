@@ -72,19 +72,25 @@ void __fastcall setViewmodel(void* param_1, float* pViewmodelOffsets, float* pFo
 
     // ViewFx viewmodel modifiers: ADD on top of whichever offset is already in the buffer --
     // the engine's own default, or the static override just above -- so they compose with
-    // mirv_viewmodel instead of fighting it. Both are no-ops (all-zero) while Off.
+    // mirv_viewmodel instead of fighting it. All are no-ops (all-zero) while Off.
     //   * sway: movement-scaled walk bob/drift.
     //   * deadzone: shifts the weapon toward the TRUE aim while the camera lags it (the
     //     "weapon moves first inside an aim deadzone" decoupled-viewmodel effect; the camera
     //     half lives in main.cpp's view-setup trampoline).
+    //   * bob follow: the view bob's camera half (also main.cpp) raises the world-render
+    //     origin, but the engine anchors the viewmodel to the pawn's unmodified eye pos --
+    //     without this the gun visually bobs INVERSELY while the world reads as still.
+    //     Follows GoldSrc V_CalcNormalRefdef: gun up by bob, forward by 0.4*bob.
     if (pViewmodelOffsets != nullptr) {
         float swayX = 0.0f, swayY = 0.0f, swayZ = 0.0f;
         Filmmaker::ViewFxRef().SwayOffset(WallClockSeconds(), swayX, swayY, swayZ);
         float dzX = 0.0f, dzY = 0.0f, dzZ = 0.0f;
         Filmmaker::ViewFxRef().DeadzoneViewmodelShift(dzX, dzY, dzZ);
+        float bobFwd = 0.0f, bobUp = 0.0f;
+        Filmmaker::ViewFxRef().BobViewmodelFollow(bobFwd, bobUp);
         pViewmodelOffsets[0] += swayX + dzX;
-        pViewmodelOffsets[1] += swayY + dzY;
-        pViewmodelOffsets[2] += swayZ + dzZ;
+        pViewmodelOffsets[1] += swayY + dzY + bobFwd;
+        pViewmodelOffsets[2] += swayZ + dzZ + bobUp;
     }
 
     // ViewFxVm write-site 1 (helper-post): we are INSIDE CS2's viewmodel calc right now.

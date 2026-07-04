@@ -383,6 +383,16 @@ void ViewFx::SwayOffset(float nowSeconds, float& outX, float& outY, float& outZ)
 	outZ = (float)bobZ;
 }
 
+void ViewFx::BobViewmodelFollow(float& outForward, float& outUp) const {
+	outForward = outUp = 0.0f;
+	if (!BobEnabled()) return;
+	// m_lastBobDelta is written on the view-setup (render) thread and read here inside the
+	// engine's viewmodel calc -- same benign single-writer race SwayOffset already runs on
+	// m_speed. Held values between demo ticks match the camera side's same-tick hold.
+	outUp = (float)m_lastBobDelta;                 // gun tracks the camera's bob exactly
+	outForward = (float)(m_lastBobDelta * 0.4);    // V_CalcNormalRefdef's bob*0.4*forward push
+}
+
 void ViewFx::DeadzoneViewmodelShift(float& outX, float& outY, float& outZ) {
 	outX = outY = outZ = 0.0f;
 	if (!DeadzoneEnabled()) return;

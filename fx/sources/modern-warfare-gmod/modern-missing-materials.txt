@@ -1,0 +1,10 @@
+materials/effects/fas_heavy_smoke.vmt
+materials/effects/fas_light_glare.vmt
+materials/effects/fas_muzzle_break_test_b.vmt
+materials/effects/fas_snow_sheet.vmt
+materials/effects/fas_water_splashes.vmt
+materials/effects/flash.vmt
+materials/effects/smoke_a.vmt
+materials/effects/sparkler.vmt
+materials/particle/fastsidesprite_trail_add.vmt
+materials/particle/particle_spark.vmt

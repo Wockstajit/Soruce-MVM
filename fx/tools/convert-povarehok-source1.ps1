@@ -1,18 +1,18 @@
 #requires -Version 5
 <#
-Converts the local CS:GO Better Particles mod variants for the CS2 runtime effect system.
+Converts the local CS:GO Povarehok mod variants for the CS2 runtime effect system.
 
 Requires a checkout of https://github.com/long0900/source1import with its Python
 dependencies installed, plus `pip install srctools vtf2img` for lossless VTF export.
 The script stages the Source 1 PCFs into the Source 2 resource
 namespaces used by AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp:
 
-  On   -> particles/filmmaker/betterparticles/classic/...
-  More -> particles/filmmaker/betterparticles/classic_updated/...
-  Less -> particles/filmmaker/betterparticles/less_impacts/... and less_smoke/...
+  On   -> particles/filmmaker/povarehok/regular/...
+  Less -> particles/filmmaker/povarehok/less/impacts/... and less/smoke/...
+         (combined per file: impacts from less/impacts, the rest from less/smoke)
 
 Usage:
-  powershell -ExecutionPolicy Bypass -File automation/tools/convert-better-particles-source1.ps1 `
+  powershell -ExecutionPolicy Bypass -File fx/tools/convert-povarehok-source1.ps1 `
     -Source1ImportDir C:\path\to\source1import -Compile
 #>
 [CmdletBinding()]
@@ -27,6 +27,16 @@ param(
     [string]$OutputRoot,
     [string]$Cs2Dir = 'F:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive',
     [string]$ResourceCompiler = 'F:\SteamLibrary\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\resourcecompiler.exe',
+    # MW2019 "modern" pack sources. These are now COMMITTED to the repo under
+    # fx\sources\modern-warfare-gmod\ (the ~44 MB extracted Source 1 tree), so a normal
+    # build never touches a GMod install. The GMod paths below are only used when the
+    # committed tree is absent, or when -RefreshModernFromGmod is passed to re-extract it
+    # from an updated GMod (writes straight back into the committed folder).
+    [string]$ModernSourceDir = '',
+    [string]$GmodWorkshopRoot = 'G:\SteamLibrary\steamapps\workshop\content\4000',
+    [string]$GmodRoot = 'G:\SteamLibrary\steamapps\common\GarrysMod',
+    [switch]$RefreshModernFromGmod,
+    [switch]$SkipModern,
     [switch]$Compile
 )
 
@@ -69,11 +79,15 @@ function Copy-TreeContents([string]$Source, [string]$Destination) {
 function Copy-EffectPcf([string]$VariantSource, [string]$VariantKey, [string]$RelativePath, [string]$StageRoot) {
     $src = Join-Path $VariantSource $RelativePath
     if (-not (Test-Path -LiteralPath $src)) {
-        Write-Warning "Missing optional PCF for ${VariantKey}: $RelativePath"
+        # Expected for some variant/PCF combos -- the mod author did not ship every PCF in every
+        # variant (e.g. polished_weapons_fx.pcf exists only in the two classic variants, not in
+        # lessimpacts/lesssmoke). The variant is still complete; nothing is being skipped that
+        # exists on disk.
+        Write-Host "Note: $VariantKey does not ship $RelativePath (normal for this variant); skipping." -ForegroundColor DarkGray
         return
     }
     $insideParticles = $RelativePath -replace '^particles\\', ''
-    $dst = Join-Path (Join-Path $StageRoot "particles\filmmaker\betterparticles\$VariantKey") $insideParticles
+    $dst = Join-Path (Join-Path $StageRoot "particles\filmmaker\povarehok\$VariantKey") $insideParticles
     Ensure-Directory (Split-Path -Parent $dst) | Out-Null
     Copy-Item -LiteralPath $src -Destination $dst -Force
 }
@@ -116,7 +130,12 @@ function Remove-GeneratedJunction([string]$Path) {
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
         throw "Refusing to remove non-junction generated dependency path: $Path"
     }
-    Remove-Item -LiteralPath $Path -Force
+    # Delete ONLY the reparse point. Remove-Item (without -Recurse) sees the junction's target
+    # children and blocks on an interactive "has children ... Are you sure?" confirmation --
+    # which hangs/kills the build.bat pipeline run; -Recurse is NOT a safe fix (on some
+    # PowerShell versions it follows the junction and deletes the REAL CS2 game files it points
+    # at). Directory.Delete(non-recursive) is the junction-safe, prompt-free way.
+    [System.IO.Directory]::Delete($item.FullName, $false)
 }
 
 function Ensure-GeneratedJunction([string]$Path, [string]$Target) {
@@ -139,13 +158,20 @@ if ([string]::IsNullOrWhiteSpace($Source2ConverterDir)) {
     $Source2ConverterDir = if ($env:SOURCE2CONVERTER_DIR) { $env:SOURCE2CONVERTER_DIR } else { Join-Path $repoRoot 'misc\Source2Converter' }
 }
 if ([string]::IsNullOrWhiteSpace($LegacyCsgoDir)) {
-    $LegacyCsgoDir = if ($env:LEGACY_CSGO_DIR) { $env:LEGACY_CSGO_DIR } else { Join-Path $repoRoot 'panorama ref\csgo effect mod\legacy_csgo_deps' }
+    $LegacyCsgoDir = if ($env:LEGACY_CSGO_DIR) { $env:LEGACY_CSGO_DIR } else { Join-Path $repoRoot 'reference\csgo effect mod\legacy_csgo_deps' }
+}
+# The MW2019 "modern" pack Source 1 tree lives in-repo so builds don't need a GMod install.
+if ([string]::IsNullOrWhiteSpace($ModernSourceDir)) {
+    $ModernSourceDir = if ($env:MODERN_SOURCE_DIR) { $env:MODERN_SOURCE_DIR } else { Join-Path $repoRoot 'fx\sources\modern-warfare-gmod' }
 }
 
-$modRoot = Resolve-ExistingPath (Join-Path $repoRoot 'panorama ref\csgo effect mod') 'Better Particles mod root'
-$safeOutputRoot = Ensure-Directory (Join-Path $repoRoot 'automation\output\effects')
+$modRoot = Resolve-ExistingPath (Join-Path $repoRoot 'reference\csgo effect mod') 'Povarehok mod root'
+# The ~1 GB compiled pack is a generated build artifact, so it lives under build\ (git-ignored),
+# NOT under automation\ (which is test-only). build.bat stages the finished game dir into
+# build\staging-release\fx\source_mvm_fx so a shipped build carries it.
+$safeOutputRoot = Ensure-Directory (Join-Path $repoRoot 'build\fx')
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
-    $OutputRoot = Join-Path $safeOutputRoot 'betterparticles-source1import'
+    $OutputRoot = Join-Path $safeOutputRoot 'povarehok-source1import'
 }
 $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 Assert-Under $OutputRoot $safeOutputRoot 'OutputRoot'
@@ -155,7 +181,7 @@ $source1ImportUtils = Resolve-ExistingPath (Join-Path $source1ImportRoot 'utils'
 $materialsImport = Resolve-ExistingPath (Join-Path $source1ImportUtils 'materials_import.py') 'materials_import.py'
 $particlesImport = Resolve-ExistingPath (Join-Path $source1ImportUtils 'particles_import.py') 'particles_import.py'
 $textureExporter = Resolve-ExistingPath (Join-Path $PSScriptRoot 'export-source1-vtf.py') 'VTF texture exporter'
-$particlePostprocess = Resolve-ExistingPath (Join-Path $PSScriptRoot 'postprocess-better-particles.py') 'Better Particles post-process tool'
+$particlePostprocess = Resolve-ExistingPath (Join-Path $PSScriptRoot 'postprocess_povarehok.py') 'Povarehok post-process tool'
 $source2ConverterRoot = Resolve-ExistingPath $Source2ConverterDir 'Source2ConverterDir'
 $modelConverter = Resolve-ExistingPath (Join-Path $source2ConverterRoot 'convert_model.py') 'Source2Converter convert_model.py'
 
@@ -185,11 +211,15 @@ Ensure-GeneratedJunction $csgoImportedJunction $csgoImportedGameDir
 Ensure-GeneratedJunction $csgoCoreJunction $csgoCoreGameDir
 Ensure-GeneratedJunction $coreJunction $coreGameDir
 
+# NOTE: the plain-classic folder (p_betterparticlesmod_classic_c057b) was removed 2026-07-02:
+# it was byte-identical to "classic updated" (md5 over every file), so converting it doubled
+# the particle-compile time for a mode nobody could tell apart. Runtime mapping (ParticleFx.cpp)
+# now points On at regular; Less remains the per-file combination of the two folders
+# below (their only real deltas vs regular are impact_fx.pcf and explosions_fx.pcf).
 $variantSpecs = @(
-    @{ Key = 'classic';         Dir = Join-Path $modRoot 'p_betterparticlesmod_classic_c057b\p_betterparticlesmod_classic' },
-    @{ Key = 'classic_updated'; Dir = Join-Path $modRoot 'p_betterparticlesmod_classic updated_c057b\p_betterparticlesmod_classic' },
-    @{ Key = 'less_impacts';    Dir = Join-Path $modRoot 'p_betterparticlesmod_lessimpacts\p_betterparticlesmod_lessimpacts' },
-    @{ Key = 'less_smoke';      Dir = Join-Path $modRoot 'p_betterparticlesmod_lesssmoke_22ac2\p_betterparticlesmod_lesssmoke' }
+    @{ Key = 'regular';      Dir = Join-Path $modRoot 'p_betterparticlesmod_classic updated_c057b\p_betterparticlesmod_classic' },
+    @{ Key = 'less\impacts'; Dir = Join-Path $modRoot 'p_betterparticlesmod_lessimpacts\p_betterparticlesmod_lessimpacts' },
+    @{ Key = 'less\smoke';   Dir = Join-Path $modRoot 'p_betterparticlesmod_lesssmoke_22ac2\p_betterparticlesmod_lesssmoke' }
 )
 
 $effectPcfs = @(
@@ -212,6 +242,54 @@ foreach ($variant in $variantSpecs) {
     Copy-TreeContents (Join-Path $variantDir 'models') (Join-Path $src1Root 'models')
     foreach ($pcf in $effectPcfs) {
         Copy-EffectPcf $variantDir $variant.Key $pcf $src1Root
+    }
+}
+
+# ---- MW2019 "modern" pack staging (particles/filmmaker/modern/...) ----
+# The Modern pack's Source 1 tree (3 ARC9/MW2019 PCFs + their material closure) is
+# COMMITTED in-repo under fx\sources\modern-warfare-gmod\, so a normal build reads it
+# directly with no GMod install required. It gets merged into the same source1 conversion
+# root so one materials/particles import pass covers both packs; Povarehok materials win
+# any same-path collision (their converted look is already validated in-game).
+#
+# -RefreshModernFromGmod re-extracts that committed tree from a local GMod install first
+# (for pulling in an updated addon); otherwise the GMod paths are never touched.
+$modernAvailable = $false
+if (-not $SkipModern) {
+    if ($RefreshModernFromGmod) {
+        $modernExtractor = Join-Path $PSScriptRoot 'extract-modern-particles-gmod.py'
+        if ((Test-Path -LiteralPath $GmodWorkshopRoot) -and (Test-Path -LiteralPath $GmodRoot)) {
+            Write-Host "Refreshing committed Modern source tree from GMod: $ModernSourceDir" -ForegroundColor Cyan
+            & $Python $modernExtractor --workshop-root $GmodWorkshopRoot --gmod-root $GmodRoot --output $ModernSourceDir
+            if ($LASTEXITCODE -ne 0) {
+                throw "Modern pack re-extraction from GMod failed with exit code $LASTEXITCODE"
+            }
+        } else {
+            throw "-RefreshModernFromGmod requires a GMod install; not found at $GmodWorkshopRoot / $GmodRoot"
+        }
+    }
+
+    $modernPcfSrc = Join-Path $ModernSourceDir 'particles\filmmaker\modern'
+    if (Test-Path -LiteralPath $modernPcfSrc) {
+        Write-Host "Staging committed MW2019 modern particle sources from: $ModernSourceDir" -ForegroundColor Cyan
+        $modernMaterials = Join-Path $ModernSourceDir 'materials'
+        if (Test-Path -LiteralPath $modernMaterials) {
+            Get-ChildItem -LiteralPath $modernMaterials -Recurse -File | ForEach-Object {
+                $rel = $_.FullName.Substring($ModernSourceDir.Length + 1)
+                $dst = Join-Path $src1Root $rel
+                if (-not (Test-Path -LiteralPath $dst)) {
+                    Ensure-Directory (Split-Path -Parent $dst) | Out-Null
+                    Copy-Item -LiteralPath $_.FullName -Destination $dst
+                }
+            }
+        }
+        $modernPcfDst = Ensure-Directory (Join-Path $src1Root 'particles\filmmaker\modern')
+        Get-ChildItem -LiteralPath $modernPcfSrc -Filter '*.pcf' | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $modernPcfDst -Force
+        }
+        $modernAvailable = $true
+    } else {
+        Write-Warning "Committed Modern source tree not found at $ModernSourceDir; skipping the MW2019 modern pack. (Run with -RefreshModernFromGmod, or restore fx\sources\modern-warfare-gmod\.)"
     }
 }
 
@@ -248,7 +326,7 @@ if ($legacyCsgoGameRoot) {
 @'
 "GameInfo"
 {
-    game "SOURCE:MVM Better Particles Import"
+    game "SOURCE:MVM Povarehok Import"
     FileSystem
     {
         SearchPaths
@@ -282,7 +360,7 @@ if ($legacyCsgoGameRoot) {
 }
 "@ | Set-Content -LiteralPath (Join-Path $gameDir 'gameinfo.gi') -Encoding ASCII
 
-Write-Host "Staged Better Particles variants under: $src1Root" -ForegroundColor Green
+Write-Host "Staged Povarehok variants under: $src1Root" -ForegroundColor Green
 Write-Host "Exporting original VTF textures for source1import..." -ForegroundColor Cyan
 $textureManifest = Join-Path $OutputRoot 'texture-export.json'
 & $Python $textureExporter --input (Join-Path $src1Root 'materials') --output (Join-Path $contentDir 'materials') --manifest $textureManifest
@@ -311,9 +389,9 @@ try {
     Pop-Location
 }
 
-Write-Host "Applying CS2-specific Better Particles VPCF post-process..." -ForegroundColor Cyan
+Write-Host "Applying CS2-specific Povarehok VPCF post-process..." -ForegroundColor Cyan
 & $Python $particlePostprocess --content-root $contentDir
-if ($LASTEXITCODE -ne 0) { throw "Better Particles post-process failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "Povarehok post-process failed with exit code $LASTEXITCODE" }
 
 # Current CS2 rejects source1import's legacy m_sMDLFilename wrapper. Convert the
 # mod-bundled MDL/VVD/VTX files to ModelDoc 28 with REDxEYE/Source2Converter.
@@ -341,12 +419,60 @@ foreach ($alias in $modelAliases.GetEnumerator()) {
 if ($Compile) {
     $resourceCompilerPath = Resolve-ExistingPath $ResourceCompiler 'ResourceCompiler'
     Resolve-ExistingPath (Join-Path $gameDir 'gameinfo.gi') 'generated gameinfo.gi' | Out-Null
+
+    # ---- Prune the content tree to the runtime closure BEFORE compiling ----
+    # The mod ships far more than the DLL's swap tables ever reference (measured
+    # 2026-07-03: 969 MB / 8,743 compiled files, of which only ~143 MB / ~930 files
+    # are reachable from ParticleFx.cpp -- the rest is bundled third-party material
+    # packs and unswapped particle systems). The validator derives the exact keep-set
+    # from ParticleFx.cpp itself (so a new FXRULE automatically keeps its assets);
+    # everything else is deleted from this generated tree so resourcecompiler never
+    # sees it. Cuts the shipped pack ~85% and the compile time by minutes.
+    $validator = Resolve-ExistingPath (Join-Path $PSScriptRoot 'validate-povarehok-assets.py') 'Povarehok asset validator'
+    $particleFxCpp = Resolve-ExistingPath (Join-Path $repoRoot 'AfxHookSource2\Filmmaker\Movie\ParticleFx.cpp') 'ParticleFx.cpp'
+    $validationReport = Join-Path $OutputRoot 'validation.json'
+    $runtimeRoots = Join-Path $OutputRoot 'runtime-roots.txt'
+    $closureKeepList = Join-Path $OutputRoot 'closure-keep.txt'
+    Write-Host "Computing runtime resource closure for pruning..." -ForegroundColor Cyan
+    $closureArgs = @('--particle-fx-cpp', $particleFxCpp, '--content-root', $contentDir,
+        '--game-root', $gameDir, '--file-list', $runtimeRoots, '--report', $validationReport,
+        '--emit-closure', $closureKeepList)
+    if ($modernAvailable) { $closureArgs += '--require-modern' }
+    & $Python $validator @closureArgs
+    if ($LASTEXITCODE -ne 0) { throw "Runtime closure computation failed (see $validationReport); refusing to prune/compile." }
+
+    $keepSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($line in Get-Content -LiteralPath $closureKeepList) {
+        if (-not [string]::IsNullOrWhiteSpace($line)) { [void]$keepSet.Add($line.Trim().Replace('\', '/')) }
+    }
+    if ($keepSet.Count -lt 100) { throw "Closure keep-set suspiciously small ($($keepSet.Count) entries); refusing to prune." }
+    $contentPrefix = (Resolve-Path -LiteralPath $contentDir).Path
+    $pruned = 0; $kept = 0
+    # Only compile-group inputs are pruned (.vpcf/.vmat/.vtex); tga/mks/dmx inputs are
+    # pulled on demand by whatever kept file references them, so they can stay.
+    # materials\default\ holds the compiler's own fallback textures -- never prune it.
+    foreach ($sub in @('materials', 'particles\filmmaker')) {
+        $dir = Join-Path $contentDir $sub
+        if (-not (Test-Path -LiteralPath $dir)) { continue }
+        Get-ChildItem -LiteralPath $dir -Recurse -File | Where-Object {
+            $_.Extension -in @('.vpcf', '.vmat', '.vtex')
+        } | ForEach-Object {
+            $rel = $_.FullName.Substring($contentPrefix.Length + 1).Replace('\', '/')
+            if ($rel.StartsWith('materials/default/', [StringComparison]::OrdinalIgnoreCase)) { $kept++; return }
+            if ($keepSet.Contains($rel)) { $kept++ } else { Remove-Item -LiteralPath $_.FullName -Force; $pruned++ }
+        }
+    }
+    Write-Host ("Pruned content tree to runtime closure: kept {0}, removed {1} unreferenced vpcf/vmat/vtex sources." -f $kept, $pruned) -ForegroundColor Green
+
     $compileGroups = @(
         @{ Label = 'materials'; Input = Join-Path $contentDir 'materials\*.vmat'; AllowPartial = $true },
         @{ Label = 'direct particle textures'; Input = Join-Path $contentDir 'materials\*.vtex'; AllowPartial = $false },
         @{ Label = 'models'; Input = Join-Path $contentDir 'models\*.vmdl'; AllowPartial = $false },
-        @{ Label = 'particle systems'; Input = Join-Path $contentDir 'particles\filmmaker\betterparticles\*.vpcf'; AllowPartial = $false }
+        @{ Label = 'particle systems'; Input = Join-Path $contentDir 'particles\filmmaker\povarehok\*.vpcf'; AllowPartial = $false }
     )
+    if ($modernAvailable) {
+        $compileGroups += @{ Label = 'modern particle systems'; Input = Join-Path $contentDir 'particles\filmmaker\modern\*.vpcf'; AllowPartial = $false }
+    }
     foreach ($group in $compileGroups) {
         if (-not (Get-ChildItem (Split-Path -Parent $group.Input) -Recurse -File -ErrorAction SilentlyContinue)) {
             Write-Host "No converted $($group.Label) found; skipping." -ForegroundColor Yellow
@@ -377,18 +503,21 @@ if ($Compile) {
     Write-Host ("Compiled assets: {0} particles, {1} materials, {2} textures, {3} models" -f `
         $compiledCounts.Particles, $compiledCounts.Materials, $compiledCounts.Textures, $compiledCounts.Models) -ForegroundColor Green
 
-    $validator = Resolve-ExistingPath (Join-Path $PSScriptRoot 'validate-better-particles-assets.py') 'Better Particles asset validator'
-    $particleFxCpp = Resolve-ExistingPath (Join-Path $repoRoot 'AfxHookSource2\Filmmaker\Movie\ParticleFx.cpp') 'ParticleFx.cpp'
-    $validationReport = Join-Path $OutputRoot 'validation.json'
-    $runtimeRoots = Join-Path $OutputRoot 'runtime-roots.txt'
-    Write-Host "Validating runtime Better Particles resource closure..." -ForegroundColor Cyan
-    & $Python $validator --particle-fx-cpp $particleFxCpp --content-root $contentDir --game-root $gameDir --file-list $runtimeRoots --report $validationReport --validate-compiled
+    Write-Host "Validating runtime Povarehok resource closure..." -ForegroundColor Cyan
+    $validatorArgs = @('--particle-fx-cpp', $particleFxCpp, '--content-root', $contentDir,
+        '--game-root', $gameDir, '--file-list', $runtimeRoots, '--report', $validationReport,
+        '--validate-compiled')
+    if ($modernAvailable) { $validatorArgs += '--require-modern' }
+    & $Python $validator @validatorArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Better Particles runtime validation failed. See $validationReport"
+        throw "Povarehok runtime validation failed. See $validationReport"
     }
 }
 
 Write-Host ""
 Write-Host "Converted content: $contentDir" -ForegroundColor Green
 Write-Host "Compiled game dir: $gameDir" -ForegroundColor Green
-Write-Host "Runtime resource namespace: particles/filmmaker/betterparticles/{classic,classic_updated,less_impacts,less_smoke}/..."
+Write-Host "Runtime resource namespaces: particles/filmmaker/povarehok/{regular,less/impacts,less/smoke}/..."
+if ($modernAvailable) {
+    Write-Host "                             particles/filmmaker/modern/{arc9_fas_muzzleflashes,arc9_fas_explosions,mw2019_tracer}/..."
+}

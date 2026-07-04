@@ -703,7 +703,7 @@ In order of confidence/cost, smallest first:
 
 The practical implementation guidance now lives in `docs/cosmetics-cs2-methodology-notes.md`,
 section 9, after reviewing all three local reference repos in
-`panorama ref/skin changer help/`. The newer takeaway is:
+`reference/skin changer help/`. The newer takeaway is:
 
 - The direct composite path remains necessary for weapon skins, but it is only one part of the visible
   update. The references also update item identity/cache flags, mesh group masks, viewmodels, HUD icon

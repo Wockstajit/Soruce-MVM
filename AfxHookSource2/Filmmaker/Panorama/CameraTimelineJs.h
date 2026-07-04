@@ -121,6 +121,7 @@ inline const char* kCameraTimelineJs = R"TLJS(
       rescaleMarkers('RoundMarkers', true, true);
       rescaleMarkers('HighlightMarkers', true, false);
       rescaleMarkers('HighlightIcons', false, false);
+      markersDocked = true; // docked geometry is now written on the native marker children
     }
     function nativeUndock() {
       if (!ensureNative()) return;
@@ -135,12 +136,31 @@ inline const char* kCameraTimelineJs = R"TLJS(
         if (nativeRoot && nativeRoot.style) nativeRoot.style.backgroundColor = 'rgba(0,0,0,0)';
         nativeBgOn = false;
       }
-      // Refresh the round/highlight marker basis geometry while we're at the bar's TRUE native
-      // width (see rescaleMarkers below) -- cheap, and self-heals if the native script recreates
-      // the markers (round data changed, spectated player switched) while undocked.
-      captureMarkerBasis('RoundMarkers');
-      captureMarkerBasis('HighlightMarkers');
-      captureMarkerBasis('HighlightIcons');
+      // Marker restore/capture state machine (see rescaleMarkers below). The docked geometry we
+      // wrote onto the marker children does NOT go away when the container returns to 100% --
+      // the native script never re-lays them out -- so we must actively write the basis back.
+      // While our docked styles are still applied, keep REAPPLYING the basis scaled to the live
+      // container width (which is animating back to the full native width); once the container
+      // reads its basis width again the children are pixel-identical to their native geometry.
+      // Only AFTER that (plus a couple frames of style->actual-layout lag) resume capturing the
+      // basis from live reads. Capturing while our docked styles were still on the children was
+      // the compounding-shrink bug: every open/close cycle baked the shrunken left/width in as
+      // the new "basis", so the kill/round icons kept compressing and never lined up again.
+      if (markersDocked) {
+        rescaleMarkers('RoundMarkers', true, true);
+        rescaleMarkers('HighlightMarkers', true, false);
+        rescaleMarkers('HighlightIcons', false, false);
+        if (markersAtBasisWidth()) { markersDocked = false; markerCaptureHold = 2; }
+      } else if (markerCaptureHold > 0) {
+        markerCaptureHold--;
+      } else {
+        // Fully restored: refresh the basis every frame while undocked -- cheap, and self-heals
+        // if the native script recreates the markers (round data changed, spectated player
+        // switched) while undocked.
+        captureMarkerBasis('RoundMarkers');
+        captureMarkerBasis('HighlightMarkers');
+        captureMarkerBasis('HighlightIcons');
+      }
     }
     // ---- Round/kill marker rescale -----------------------------------------------------------
     // CS2's own huddemocontroller.js positions the round-shade bars (#RoundMarkers), the
@@ -160,6 +180,21 @@ inline const char* kCameraTimelineJs = R"TLJS(
     // it (not from the live value) -- rescaling from an already-rescaled live read would compound
     // the scale factor every frame.
     var markerBasis = {}; // id -> { w: container width at capture (device px), items: [{left,width}] }
+    var markersDocked = false;  // docked geometry is currently written on the native marker children
+    var markerCaptureHold = 0;  // undocked frames to wait after a restore before trusting live reads
+    // True once every marker container with a captured basis is laid out at its basis width
+    // again (i.e. the undock has visually settled and a scale-1 rescale restored the children).
+    function markersAtBasisWidth() {
+      for (var id in markerBasis) {
+        var b = markerBasis[id]; if (!b || !b.w) continue;
+        var p = findNative(id); if (!p) continue;
+        // Child count changed = the native script rebuilt this set with fresh geometry while we
+        // were docked; none of our styles are on the new children, so it can't block settling.
+        if (p.GetChildCount && p.GetChildCount() !== b.items.length) continue;
+        if (Math.abs((p.actuallayoutwidth || 0) - b.w) > 1.5) return false;
+      }
+      return true;
+    }
     function captureMarkerBasis(id) {
       var p = findNative(id);
       if (!p || !p.GetChildCount) return;

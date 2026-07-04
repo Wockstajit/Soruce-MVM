@@ -15,10 +15,12 @@
 #include "Platform/TextEncoding.h"
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
+#include "Movie/ActionCam.h"
 #include "Movie/BodyCam.h"
 #include "Movie/ViewFx.h"
 #include "Movie/ParticleFx.h"
 #include "Movie/MovieMode.h"
+#include "Movie/DemoEndHold.h"
 #include "Cosmetics/CosmeticOverrideSystem.h"
 
 #include "../ClientEntitySystem.h"
@@ -163,7 +165,8 @@ void PrintHelp(const char* cmd) {
 		"   X = X-ray (when not in free cam); Shift+Scroll = cam speed;\n"
 		"   Space = pause/resume; Left/Right = skip -/+15s.\n"
 		"%s speedbar [on|off|toggle] - inline demo-bar speed buttons (off = native dropdown).\n"
-		, cmd, cmd
+		"%s endhold [on|off|toggle] - hold on the demo's last tick instead of exiting to menu (play again = restart).\n"
+		, cmd, cmd, cmd
 	);
 	advancedfx::Message(
 		"Camera markers / dolly path (in free cam):\n"
@@ -179,8 +182,9 @@ void PrintHelp(const char* cmd) {
 		"%s viewfx roll|bob|sway|deadzone [<0-150>|off] - camera-feel modifiers (strafe roll, camera walk-bob, weapon sway, decoupled-viewmodel aim deadzone), as an intensity percent.\n"
 		"%s fx [...] - particle-effect toggles: impacts/tracers/muzzle/blood/explosions/molotov per-category On|Less|Off (run for sub-help; also in the Config panel).\n"
 		"%s bodycam [on|off|toggle] - one-click chest-cam preset on the spectated player (uses the Follow system).\n"
+		"%s actioncam [on|off|toggle] - one-click head-mounted GoPro-style preset on the spectated player; 'actioncam fisheye on|off' toggles the lens distortion.\n"
 		"%s follow [...] - place and control a Follow / Lock-On camera.\n"
-		, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd
+		, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd
 	);
 }
 
@@ -328,6 +332,14 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "0")) Filmmaker::DemoSpeedBar_Set(false);
 		else Filmmaker::DemoSpeedBar_Toggle();
 		advancedfx::Message("mirv_filmmaker: demo speed buttons %s.\n", Filmmaker::DemoSpeedBar_Enabled() ? "on" : "off");
+	} else if (0 == _stricmp(sub, "endhold")) {
+		// End-of-demo hold: pause on the last tick instead of exiting to the main menu;
+		// pressing play while held restarts the demo from the beginning. Default: on.
+		const char* arg = (argc >= 3) ? args->ArgV(2) : "toggle";
+		if (0 == _stricmp(arg, "on") || 0 == _stricmp(arg, "1")) Filmmaker::DemoEndHold_SetEnabled(true);
+		else if (0 == _stricmp(arg, "off") || 0 == _stricmp(arg, "0")) Filmmaker::DemoEndHold_SetEnabled(false);
+		else Filmmaker::DemoEndHold_SetEnabled(!Filmmaker::DemoEndHold_Enabled());
+		advancedfx::Message("mirv_filmmaker: end-of-demo hold %s.\n", Filmmaker::DemoEndHold_Enabled() ? "on" : "off");
 	} else if (0 == _stricmp(sub, "marker")) {
 		Filmmaker::Marker_RunCommand(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "camtl")) {
@@ -355,6 +367,9 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 	} else if (0 == _stricmp(sub, "bodycam")) {
 		// One-click chest-cam preset over the existing Follow/Attach system.
 		Filmmaker::BodyCam_RunCommand(argc, args, cmd);
+	} else if (0 == _stricmp(sub, "actioncam")) {
+		// One-click head-mounted "GoPro" preset (Follow/Attach) + optional fisheye lens pass.
+		Filmmaker::ActionCam_RunCommand(argc, args, cmd);
 	} else {
 		PrintHelp(cmd);
 	}

@@ -6,7 +6,7 @@ Repository automation, verification harnesses, launchers, configs, screenshots, 
 - `launch/` — CS2 launchers and the live dashboard. `launch/launch-cs2-netcon.ps1` consistently launches CS2 windowed at 1600x1200, and `launch/live.bat` starts CS2 plus the dashboard.
 - `capture/` — screenshot helpers. Prefer `capture/capture-game-window.ps1` for UI detail and use `capture/capture-main-monitor.ps1` only when desktop context matters.
 - `netcon/` — low-level netcon command helpers.
-- `verify/` — live and static verification harnesses.
+- `verify/` — live and static verification harnesses. `verify/fx-weapons-go/` is a Go netcon harness (build with `go build`, no external deps) that buckets `mirv_filmmaker fx names`/`fx recent` output by weapon class and takes event-triggered screenshots; the PowerShell `verify/verify-fx-allweapons.ps1` covers the same ground at coarser (effect-group, not per-weapon) granularity.
 - `tools/` — generators and one-off reusable maintenance scripts, such as `tools/generate_cosmetics_catalog.py`.
 - `tests/` — automation-only test drivers built by CMake.
 - `config/` — config files copied into CS2 for automation runs.

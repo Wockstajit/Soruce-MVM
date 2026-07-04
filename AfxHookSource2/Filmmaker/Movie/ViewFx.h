@@ -77,6 +77,17 @@ public:
 	// All-zero while the deadzone is off.
 	void DeadzoneViewmodelShift(float& outX, float& outY, float& outZ);
 
+	// View-bob viewmodel FOLLOW for this frame. The camera half of the bob (zOffset above)
+	// raises the world-render origin, but CS2 anchors the viewmodel to the pawn's own
+	// unmodified eye position -- without this the gun visually slides opposite the camera by
+	// the full bob amount (magnified at lens distance) while the world's shift reads as
+	// nothing, i.e. "only the gun bobs". GoldSrc's V_CalcNormalRefdef moves BOTH: vieworg[2]
+	// += bob AND view->origin[2] += bob (+ bob*0.4 along forward). This returns that
+	// viewmodel-side pair -- outUp = bob (track the camera), outForward = 0.4*bob (the SDK's
+	// forward push) -- in the same viewmodel-local axes SwayOffset uses (y = forward, z = up).
+	// All-zero while bob is off.
+	void BobViewmodelFollow(float& outForward, float& outUp) const;
+
 	// Smoothed planar speed (units/sec) most recently tracked via TrackAndPoseDeltas.
 	double PlanarSpeed() const { return m_speed; }
 

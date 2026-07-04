@@ -4,6 +4,7 @@
 
 #include "CampathDrawer.h"
 #include "ViewportScaler.h"
+#include "FisheyePass.h"
 #include "RenderServiceHooks.h"
 #include "ReShadeAdvancedfx.h"
 #include "WrpConsole.h"
@@ -68,6 +69,10 @@ CRenderCommands g_RenderCommands;
 // Camera-editor scaled-preview viewport. Created/released with the device alongside
 // g_CampathDrawer; driven through the AfxViewportScaler bridge at the bottom of this file.
 CViewportScaler g_ViewportScaler;
+
+// Action Cam barrel-distortion post-process. Same lifecycle as g_ViewportScaler; driven
+// through the AfxFisheye bridge at the bottom of this file.
+CFisheyePass g_FisheyePass;
 
 bool g_bEnableReShade = true;
 bool g_bReShadeCompositeSmoke = true;
@@ -1410,6 +1415,7 @@ HRESULT STDMETHODCALLTYPE New_CreateRenderTargetView(  ID3D11Device * This,
                     //CAfxShaderResourceViews::Clear();
                     g_CampathDrawer.EndDevice();
                     g_ViewportScaler.EndDevice();
+                    g_FisheyePass.EndDevice();
                     g_pDevice->Release();
                     g_pDevice = nullptr;
                 }
@@ -1419,6 +1425,7 @@ HRESULT STDMETHODCALLTYPE New_CreateRenderTargetView(  ID3D11Device * This,
                 g_pDevice->AddRef();
                 g_CampathDrawer.BeginDevice(This);
                 g_ViewportScaler.BeginDevice(This);
+                g_FisheyePass.BeginDevice(This);
             }
             pTexture->Release();
         }
@@ -4300,6 +4307,45 @@ namespace AfxViewportScaler {
     }
 
 } // namespace AfxViewportScaler
+
+// --- Action Cam fisheye bridge ---------------------------------------------------------------
+// Same request/push contract as AfxViewportScaler above: the Action Cam host (Filmmaker
+// module, main/UI thread) only publishes a request; the BeforeUi2 push happens on the engine
+// thread. Runs BEFORE the viewport-scaler push (see RenderSystemDX11_EngineThread_Prepare) so
+// a scaled Config/editor preview shows the distortion inside the preview rect. Unlike the
+// scaler, this pass is NOT gated on recording: the fisheye is a look effect that should bake
+// into captures, matching the GMod Action Cam it is modeled on.
+namespace AfxFisheye {
+
+    static std::mutex s_RequestMutex;
+    static bool s_Active = false;
+    static float s_Strength = 1.0f;
+
+    void SetRequest(bool active, float strength) {
+        std::unique_lock<std::mutex> lock(s_RequestMutex);
+        s_Active = active;
+        s_Strength = strength;
+    }
+
+    void EngineThread_RunFrame() {
+        bool active; float strength;
+        {
+            std::unique_lock<std::mutex> lock(s_RequestMutex);
+            active = s_Active;
+            strength = s_Strength;
+        }
+
+        if (!active || !g_FisheyePass.Ready())
+            return;
+
+        CFisheyePass* pass = &g_FisheyePass;
+        g_RenderCommands.EngineThread_GetCommands().BeforeUi2.Push(
+            [pass, strength](ID3D11DeviceContext* pDeviceContext, ID3D11RenderTargetView* pTarget) {
+                pass->Apply(pDeviceContext, pTarget, strength);
+            });
+    }
+
+} // namespace AfxFisheye
 const wchar_t * AfxStreams_GetTakeDir() {
     return g_AfxStreams.GetTakeDir();
 }
@@ -4314,6 +4360,10 @@ void RenderSystemDX11_EngineThread_Prepare() {
     }
 
     g_AfxStreams.EngineThread_Prepare();
+
+    // Queue this frame's Action Cam fisheye pass FIRST (BeforeUi2 is FIFO), so a scaled
+    // Config/editor preview blit below snapshots the already-distorted frame.
+    AfxFisheye::EngineThread_RunFrame();
 
     // Queue this frame's camera-editor scaled-preview blit (if requested + not recording).
     AfxViewportScaler::EngineThread_RunFrame();

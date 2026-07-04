@@ -49,8 +49,11 @@ std::string ParseMapFromFileHeader(const uint8_t* data, size_t len) {
 	return std::string();
 }
 
-// Extracts playback_time (field 1, float) from a CDemoFileInfo payload.
-int ParseDurationFromFileInfo(const uint8_t* data, size_t len) {
+// Extracts playback_time (field 1, float) and playback_ticks (field 2, varint)
+// from a CDemoFileInfo payload.
+void ParseFileInfo(const uint8_t* data, size_t len, int& outDurationSeconds, int& outPlaybackTicks) {
+	outDurationSeconds = 0;
+	outPlaybackTicks = 0;
 	ProtobufReader r(data, len);
 	uint32_t field; PbWire wire;
 	while (r.ReadTag(field, wire)) {
@@ -58,13 +61,18 @@ int ParseDurationFromFileInfo(const uint8_t* data, size_t len) {
 			uint32_t bits = r.ReadFixed32();
 			float seconds;
 			std::memcpy(&seconds, &bits, sizeof(seconds));
-			if (seconds < 0.0f || seconds > 1.0e7f)
-				return 0;
-			return (int)seconds;
+			if (seconds >= 0.0f && seconds <= 1.0e7f)
+				outDurationSeconds = (int)seconds;
+			continue;
+		}
+		if (field == 2 && wire == PbWire::Varint) {
+			uint64_t ticks = r.ReadVarint();
+			if (ticks <= 0x7fffffffull)
+				outPlaybackTicks = (int)ticks;
+			continue;
 		}
 		r.SkipField(wire);
 	}
-	return 0;
 }
 
 } // namespace
@@ -116,7 +124,7 @@ DemoHeaderInfo ReadDemoHeader(const std::wstring& path) {
 			if (ReadPacketFraming(r, cmd, payload, payloadLen)
 				&& (cmd & ~k_DemCompressedFlag) == k_DemFileInfo
 				&& 0 == (cmd & k_DemCompressedFlag)) {
-				info.durationSeconds = ParseDurationFromFileInfo(payload, payloadLen);
+				ParseFileInfo(payload, payloadLen, info.durationSeconds, info.playbackTicks);
 			}
 		}
 	}

@@ -97,18 +97,61 @@ if errorlevel 1 (
 )
 
 echo.
-echo === Rebuilding converted Better Particles FX asset pack ===
-REM Recompiles the Source 1 "Better Particles" mod into fresh CS2 particle/material/
-REM model assets every build, so the mounted pack never goes stale. launch-cs2-netcon.ps1
-REM auto-mounts automation\output\effects\betterparticles-source1import via USRLOCALCSGO
-REM if it exists; non-fatal here so a machine missing the converter checkouts (misc\
-REM source1import, misc\Source2Converter) still gets a working DLL/game build.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0automation\tools\convert-better-particles-source1.ps1" -Compile
-if errorlevel 1 (
-    echo.
-    echo WARNING: Better Particles FX asset conversion failed; CS2 will launch with
-    echo whatever pack ^(if any^) is already on disk, or fail open to vanilla particles.
-    echo See the messages above for the failing step.
+echo === FX asset packs (Povarehok + Modern) ===
+REM One converter run (fx\tools\convert-povarehok-source1.ps1 -Compile) builds BOTH packs:
+REM   - Povarehok  (On/Less modes)   from reference\csgo effect mod\
+REM   - Modern     (MW2019 modes)    from the committed fx\sources\modern-warfare-gmod\ tree
+REM No GMod install is needed anymore -- the Modern source tree lives in the repo.
+REM The conversion takes several minutes and the SOURCE files almost never change, so it is
+REM opt-in per build: a 3-second Y/N prompt that defaults to NO keeps day-to-day builds fast.
+REM EXCEPTION: if no compiled pack exists on disk at all (fresh checkout, or a previous
+REM conversion was cancelled mid-run, which wipes the pack before rebuilding it), the rebuild
+REM is forced -- otherwise CS2 would silently launch with the effect system failing open to
+REM vanilla. The finished pack is a generated artifact (~150 MB after the converter prunes
+REM to the runtime closure derived from ParticleFx.cpp; not committed to git). It is staged
+REM into build\staging-release\fx\source_mvm_fx below so a shipped build carries it, and
+REM launch-cs2-netcon.ps1 mounts it via USRLOCALCSGO.
+set "FM_FX_PACK_DIR=%~dp0build\fx\povarehok-source1import\source2\game\source_mvm_fx"
+set "FM_FX_REBUILD=0"
+if not exist "%FM_FX_PACK_DIR%\particles" (
+    echo No compiled FX pack found on disk - rebuilding it now ^(required, ~a few minutes^).
+    set "FM_FX_REBUILD=1"
+) else (
+    choice /c YN /t 3 /d N /m "Rebuild the particle FX packs (auto-No in 3s)"
+    if not errorlevel 2 set "FM_FX_REBUILD=1"
+)
+if "!FM_FX_REBUILD!"=="1" (
+    echo Rebuilding converted FX asset packs ^(Povarehok + Modern^)...
+    REM -NonInteractive: any unexpected confirmation prompt fails the step (caught by the
+    REM WARNING branch below) instead of blocking the whole build waiting for keyboard input.
+    powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0fx\tools\convert-povarehok-source1.ps1" -Compile
+    if errorlevel 1 (
+        echo.
+        echo ============================================================
+        echo WARNING: FX asset conversion FAILED; CS2 will launch with
+        echo whatever pack ^(if any^) is already on disk, or fail open to
+        echo vanilla particles. Scroll up for the failing step.
+        echo ============================================================
+        echo Continuing to launch in 8 seconds ^(Ctrl+C to stop and read^)...
+        timeout /t 8 >nul
+    )
+) else (
+    echo Keeping the existing FX pack ^(skipped; answer Y within 3s to rebuild^).
+)
+
+REM --- Stage the compiled pack into the shipped build so a release is self-contained ---
+REM Mirror the generated game dir next to HLAE.exe. robocopy exit codes 0-7 are success;
+REM only >=8 is a real failure, so guard on errorlevel 8 (a bare errorlevel 1 would false-fail).
+set "FM_FX_STAGE_DIR=%~dp0build\staging-release\fx\source_mvm_fx"
+if exist "%FM_FX_PACK_DIR%\particles" (
+    echo Staging compiled FX pack into the release folder: %FM_FX_STAGE_DIR%
+    robocopy "%FM_FX_PACK_DIR%" "%FM_FX_STAGE_DIR%" /MIR /NFL /NDL /NJH /NJS /NP /R:1 /W:1 >nul
+    if errorlevel 8 (
+        echo WARNING: failed to stage the FX pack into build\staging-release; the shipped
+        echo build may launch without custom particles. Scroll up for robocopy errors.
+    )
+) else (
+    echo No compiled FX pack on disk to stage into the release folder ^(skipped^).
 )
 
 echo.

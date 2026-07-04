@@ -49,7 +49,7 @@
   `pause` on errors), so it hangs a non-interactive run. A compile-only batch was used during this
   work (mirrors build.bat minus the live.bat tail). The user normally runs `build.bat` themselves.
   Per the `user-runs-builds` memory, build after edits.
-- **Reference files:** extracted native CS2 Panorama is at `panorama ref/` (read-only). Key ones:
+- **Reference files:** extracted native CS2 Panorama is at `reference/` (read-only). Key ones:
   `layout/hud/huddemocontroller.xml` + `scripts/hud/huddemocontroller.js` (native demo settings),
   `styles/csgostyles.css` (rarity colors, lines ~51-79), `layout/vanity-loadout.xml` /
   `layout/inspect.xml` (`MapPlayerPreviewPanel` 3D preview), `layout/itemtile.xml`,
@@ -77,13 +77,13 @@ shown only in cam-editor mode. The cosmetic-application layer is the only part n
 work (AfxHookSource2 had no econ/model hooks, only viewmodel offset/FOV/hand + glow).
 
 ### Key facts established during research
-- **Native demo settings → cvars** (from `panorama ref/scripts/hud/huddemocontroller.js`). The
+- **Native demo settings → cvars** (from `reference/scripts/hud/huddemocontroller.js`). The
   gear menu just issues these — **no C++ needed**:
   - X-Ray → `spec_show_xray 0|1`
   - True View → `cl_demo_predict 0|1` (use `2` when "allow wrong version" is also on)
   - Include DOA actions → `cl_trueview_show_doa_predictions 0|1` (only when `cl_demo_predict > 0`)
   - Allow demo mismatch versions → `cl_demo_predict 1 ↔ 2`
-- **The "End" button** = native `#EndPlayback` (`panorama ref/layout/hud/huddemocontroller.xml:82`).
+- **The "End" button** = native `#EndPlayback` (`reference/layout/hud/huddemocontroller.xml:82`).
   Our own timeline has no End button. Hide via JS `ctx.FindChildTraverse('EndPlayback')` (or the
   existing `mirv_panorama panelStyle panelId=EndPlayback` command in `DeathMsg.cpp:1950`).
 - **Spectator state** readable in C++: `CEntityInstance::GetObserverMode()` / `GetObserverTarget()`

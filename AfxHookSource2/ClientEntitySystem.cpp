@@ -824,6 +824,25 @@ int AfxGetSpectatedPawnIndex() {
         if (absd(absd((double)a[2]) - absd(camA[2])) > 0.2) continue;
         return i;
     }
+
+    // Last fallback: POSITION-only render-eye match. Recoil view punch skews the camera
+    // ANGLES away from the pawn's stored render-eye angles while firing, which made the
+    // full match above fail during exactly the frames weapon FX spawn (observed live
+    // 2026-07-04: FxAlign resolved a pawn on only 4 of ~950 shot samples, and the
+    // watched-player uid flickered to -1 mid-burst for the same reason). Punch never
+    // moves the camera ORIGIN off the eye, and a 0.2-unit position coincidence in
+    // third-person / free cam is not realistically reachable, so position alone still
+    // means first person in practice.
+    for (int i = 0; i <= highest; ++i) {
+        CEntityInstance* ent = (CEntityInstance*)g_GetEntityFromIndex(*g_pEntityList, i);
+        if (!ent || !ent->IsPlayerPawn())
+            continue;
+        float o[3] = {}; ent->GetRenderEyeOrigin(o);
+        if (absd(absd((double)o[0]) - absd(camO[0])) > 0.2) continue;
+        if (absd(absd((double)o[1]) - absd(camO[1])) > 0.2) continue;
+        if (absd(absd((double)o[2]) - absd(camO[2])) > 0.2) continue;
+        return i;
+    }
     return -1;
 }
 

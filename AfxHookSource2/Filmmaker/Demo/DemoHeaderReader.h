@@ -15,6 +15,7 @@ struct DemoHeaderInfo {
 	bool ok = false;
 	std::string map;
 	int durationSeconds = 0;
+	int playbackTicks = 0; // CDemoFileInfo playback_ticks (0 when the packet is missing/unparsable)
 };
 
 DemoHeaderInfo ReadDemoHeader(const std::wstring& path);

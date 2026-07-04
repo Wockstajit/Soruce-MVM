@@ -8,6 +8,7 @@
 AfxCppCli/build/
 ShaderBuilder/obj/
 FilmmakerDemoInfoGo/FilmmakerDemoInfo.exe
+automation/verify/fx-weapons-go/fx-weapons-go.exe
 build-*.bat.log
 *.pdb
 *.ilk
@@ -47,7 +48,7 @@ pnpm-debug.log*
 # Vendored SDK dumps (do not commit)
 ultralight-free-sdk-*/
 
-# External conversion-tool checkouts (cloned via automation/tools/convert-better-particles-source1.ps1 setup)
+# External conversion-tool checkouts (cloned via fx/tools/convert-povarehok-source1.ps1 setup)
 misc/source1import/
 misc/Source2Converter/
 
@@ -96,8 +97,8 @@ automation/_*.png
 automation/mirv_filmmaker ui
 mirv_filmmaker ui
 
-# Local Panorama layout reference dump (not part of the build)
-panorama ref/
+# Local dev reference dumps (Panorama layout, third-party mod/source references — not part of the build)
+reference/
 
 # OS cruft
 Thumbs.db
@@ -109,8 +110,16 @@ Thumbs.db
 
 # Cursor / agent debug session logs (NDJSON mirrors from CosmeticDebugLog / Cursor Debug panel).
 # Canonical mvm logs live in %APPDATA%\HLAE\debuglogs\ — never commit copies here.
-/debug-af2ef9.log
 /debug-*.log
 /.cursor/debug-*.log
 /.cursor/*.log
 mvm_debug_*.log
+
+# Accidental root-level artifacts seen before: some tool run from the repo cwd instead of
+# the real Windows profile writes here, and raw netcon/console output has landed as files
+# named after the command itself (`demo_pause`, `mirv_filmmaker follow status`, etc.).
+# Build/launch/install scripts also redirect stdout to *.log here when run from repo root.
+/*.log
+/AppData/
+/demo_pause
+/mirv_filmmaker*

@@ -15,6 +15,8 @@ set(AFXHOOKSOURCE2_SHADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_ps_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0.acs"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_fisheye_ps_5_0.acs"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_fisheye_ps_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0.acs"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_ps_5_0.acs"
@@ -27,6 +29,7 @@ set(AFXHOOKSOURCE2_SHADERS_SOURCES
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_vs_5_0.fxc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_ps_5_0.fxc"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_blit_ps_5_0.fxc"
+	"${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_fisheye_ps_5_0.fxc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_vs_5_0.fxc"
     "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_ps_5_0.fxc"
 )
@@ -40,6 +43,7 @@ add_custom_command(
     COMMAND ShaderBuilder.exe --profile vs_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_vs_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_vs_5_0"
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_drawtexture_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_drawtexture_ps_5_0"
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_blit_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_blit_ps_5_0"
+	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_fisheye_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_fisheye_ps_5_0"
 	COMMAND ShaderBuilder.exe --profile vs_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_vs_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_vs_5_0"
 	COMMAND ShaderBuilder.exe --profile ps_5_0 --in "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/afx_depth_ps_5_0.fxc" --outPrefix "${CMAKE_CURRENT_SOURCE_DIR}/../shaders/build/afx_depth_ps_5_0"
 )
@@ -266,6 +270,8 @@ target_sources(${PROJECT_NAME} PRIVATE
 
     ViewportScaler.cpp
     ViewportScaler.h
+    FisheyePass.cpp
+    FisheyePass.h
 
     ReShadeAdvancedfx.cpp
     ReShadeAdvancedfx.h
@@ -321,6 +327,9 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/MarkerHud.cpp
     Filmmaker/Panorama/MarkerHud.h
     Filmmaker/Panorama/MarkerHudJs.h
+    Filmmaker/Panorama/FxDebugHud.cpp
+    Filmmaker/Panorama/FxDebugHud.h
+    Filmmaker/Panorama/FxDebugHudJs.h
     Filmmaker/Panorama/CameraTimelineHud.cpp
     Filmmaker/Panorama/CameraTimelineHud.h
     Filmmaker/Panorama/CameraTimelineJs.h
@@ -366,6 +375,10 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/FollowEventIndex.cpp
     Filmmaker/Movie/FollowEventIndex.h
     Filmmaker/Movie/FollowCameraStateJson.cpp
+    Filmmaker/Movie/ActionCam.cpp
+    Filmmaker/Movie/ActionCam.h
+    Filmmaker/Movie/DemoEndHold.cpp
+    Filmmaker/Movie/DemoEndHold.h
     Filmmaker/Movie/BodyCam.cpp
     Filmmaker/Movie/BodyCam.h
     Filmmaker/Movie/ViewFx.cpp
@@ -374,6 +387,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/ViewFxVm.h
     Filmmaker/Movie/ParticleFx.cpp
     Filmmaker/Movie/ParticleFx.h
+    Filmmaker/Movie/FxAlign.cpp
+    Filmmaker/Movie/FxAlign.h
     Filmmaker/Movie/MovieMode.cpp
     Filmmaker/Movie/MovieMode.h
 

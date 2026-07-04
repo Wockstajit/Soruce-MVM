@@ -122,7 +122,7 @@ R"EDJS(
     // it gave the field's pre-scroll offset, so a popup opened after scrolling the Customize modal's
     // right-hand column rendered detached from the field. GetPositionWithinWindow() is CS2's own
     // native API for exactly this (native scripts use it to follow a scrolled/moving element, e.g.
-    // panorama ref scripts/common/add_major_tokens_anim.js, scripts/operation/operation_main.js) --
+    // reference/ scripts/common/add_major_tokens_anim.js, scripts/operation/operation_main.js) --
     // it resolves screen position correctly regardless of ancestor scrolling. Same physical-px /
     // uiscale convention as dbgAbs. The popup is a child of root (full-screen at 0,0), so
     // window-relative coords == root-relative.

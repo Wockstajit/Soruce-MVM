@@ -450,7 +450,7 @@ R"EDJS(
     // panel use (MapPlayerPreviewPanel) -- and the win panel proves it renders inside the in-game
     // HUD context. It needs the FULL creation attribute set (a `map` scene + camera + composition
     // layer + character mode); the earlier empty black box was a panel created without a `map`
-    // scene, so it had nothing to render. Config mirrors panorama ref vanity-loadout.xml /
+    // scene, so it had nothing to render. Config mirrors reference/ vanity-loadout.xml /
     // inspect.js. Created lazily on first open (the scene load is heavy); 2D card if it can't load.
     var prevWrap = mk('Panel', custBody); prevWrap.style.width = '46%'; prevWrap.style.height = '100%'; prevWrap.style.marginRight = '22px';
     prevWrap.style.backgroundColor = '#080a0e'; prevWrap.style.borderRadius = '6px'; prevWrap.style.border = '1px solid #ffffff14';
@@ -1009,7 +1009,7 @@ R"EDJS(
         previewMetaId(glovesMeta)
       ].join('|');
     }
-    // Mirrors the native vanity-loadout recipe (panorama ref scripts/common/characteranims.js
+    // Mirrors the native vanity-loadout recipe (reference/ scripts/common/characteranims.js
     // PlayAnimsOnPanel): SetPlayerCharacterItemID + SetPlayerModel together give the composited
     // agent its real material (skin tone, team paint job); SetPlayerModel alone -- what this used to
     // do -- leaves the model on the flat, uncomposited fallback material (the washed-out grey/white

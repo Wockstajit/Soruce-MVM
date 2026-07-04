@@ -385,15 +385,27 @@ R"CFJS(
     bodyCamBtn.__lbl.style.horizontalAlign = 'center';
     var bodyCamHint = lbl(modSec, 'Chest-mounted camera on the spectated player (Attach + Follow system). Needs a player POV to engage.', S.dim, 10);
     bodyCamHint.style.whiteSpace = 'normal'; bodyCamHint.style.marginTop = '4px';
+    var actionCamBtn = btn(modSec, 'Action Cam: Off', function () { cmd('mirv_filmmaker actioncam toggle'); }, S.value);
+    actionCamBtn.style.width = '100%'; actionCamBtn.style.marginRight = '0px'; actionCamBtn.style.marginTop = '8px';
+    actionCamBtn.__lbl.style.horizontalAlign = 'center';
+    var acFisheyeBtn = btn(modSec, 'Fisheye Lens: On', function () { cmd('mirv_filmmaker actioncam fisheye toggle'); }, S.label);
+    acFisheyeBtn.style.width = '100%'; acFisheyeBtn.style.marginRight = '0px'; acFisheyeBtn.style.marginTop = '4px';
+    acFisheyeBtn.__lbl.style.horizontalAlign = 'center';
+    var actionCamHint = lbl(modSec, 'Head-mounted GoPro-style camera on the spectated player (wide FOV, smoothed handheld angles). The fisheye lens applies while it is on.', S.dim, 10);
+    actionCamHint.style.whiteSpace = 'normal'; actionCamHint.style.marginTop = '4px';
 )CFJS"
 R"CFJS(
     // ===================== EFFECTS ======================================
     // Particle-effect toggles (ParticleFx.h): each category is a segmented mode control
-    // (On / More / Less / Off subset per category) driving 'mirv_filmmaker fx set <cat>
-    // <mode>'; state mirrors back through the fx_* fields each render (console changes show
-    // up here too). On = classic Better Particles, More = classic updated, Less = combined
-    // less-impacts/less-smoke, Off = default CS2 pass-through. Smoke GRENADES are never
-    // affected (CS2 volumetric smoke is not a particle swap).
+    // driving 'mirv_filmmaker fx set <cat> <mode>'; state mirrors back through the fx_*
+    // fields each render (console changes show up here too). On = Povarehok
+    // (regular), Less = the mod's reduced variants (offered ONLY where its less
+    // folders really differ: impacts, HE, bomb -- verified 2026-07-03), Modern = the
+    // converted MW2019 ARC9 pack (offered where it ships assets: tracers, weapon fx, HE),
+    // Off = default CS2 pass-through. HE grenade and the bomb blast are separate rows so
+    // they can mix (e.g. Povarehok bomb + Modern HE). ('More' was dropped
+    // 2026-07-02 -- byte-identical to On.) Smoke GRENADES are never affected (CS2
+    // volumetric smoke is not a particle swap).
     var fxSec = section(inspector, 'EFFECTS');
     var fxMaster;
     (function () {
@@ -416,7 +428,7 @@ R"CFJS(
       var nl = lbl(head, label, S.value, 13);
       nl.style.width = 'fill-parent-flow(1.0)'; nl.style.verticalAlign = 'center';
       var group = mk('Panel', head); group.style.flowChildren = 'right'; group.style.verticalAlign = 'center';
-      var caps = { on: 'On', more: 'More', less: 'Less', off: 'Off' };
+      var caps = { on: 'On', more: 'More', less: 'Less', modern: 'Modern', off: 'Off' };
       var btns = {};
       for (var i = 0; i < modes.length; i++) (function (mode, isLast) {
         var b = btn(group, caps[mode], function () {
@@ -437,16 +449,19 @@ R"CFJS(
         }
       } };
     }
+    // Per-row mode subsets mirror ParticleFx's ModeSupported() -- offering a mode with no
+    // distinct assets just confuses (it would snap back to On on the C++ side anyway).
     var fxCtls = [
-      ['fx_impacts',    fxSeg('Bullet Impacts', 'impacts', ['on', 'more', 'less', 'off'])],
-      ['fx_tracers',    fxSeg('Bullet Tracers', 'tracers', ['on', 'more', 'less', 'off'])],
-      ['fx_weaponfx',   fxSeg('Muzzle Flash & Shells', 'weaponfx', ['on', 'more', 'less', 'off'])],
-      ['fx_blood',      fxSeg('Blood', 'blood', ['on', 'more', 'less', 'off'])],
-      ['fx_explosions', fxSeg('Explosions (HE / C4)', 'explosions', ['on', 'more', 'less', 'off'])],
-      ['fx_molotov',    fxSeg('Molotov Fire', 'molotov', ['on', 'more', 'less', 'off'])],
+      ['fx_impacts',    fxSeg('Bullet Impacts', 'impacts', ['on', 'less', 'off'])],
+      ['fx_tracers',    fxSeg('Bullet Tracers', 'tracers', ['on', 'modern', 'off'])],
+      ['fx_weaponfx',   fxSeg('Muzzle Flash & Shells', 'weaponfx', ['on', 'modern', 'off'])],
+      ['fx_blood',      fxSeg('Blood', 'blood', ['on', 'off'])],
+      ['fx_explosions', fxSeg('HE Grenade', 'explosions', ['on', 'less', 'modern', 'off'])],
+      ['fx_bombfx',     fxSeg('Bomb (C4)', 'bombfx', ['on', 'less', 'off'])],
+      ['fx_molotov',    fxSeg('Molotov Fire', 'molotov', ['on', 'off'])],
       ['fx_mapfx',      fxSeg('Map Ambience', 'mapfx', ['on', 'off'])]
     ];
-    // Money-on-headshot: event-gated toggle (independent of the Blood mode).
+    // Money-on-headshot: swaps the headshot-only particles (independent of the Blood mode).
     var moneyBtn;
     (function () {
       var r = row(fxSec); r.style.marginTop = '6px';
@@ -459,7 +474,7 @@ R"CFJS(
       moneyBtn.style.paddingLeft = '9px'; moneyBtn.style.paddingRight = '9px';
       moneyBtn.__lbl.style.fontSize = '12px';
     })();
-    var fxNote = lbl(fxSec, "On uses the converted Classic Better Particles pack. More uses Classic Updated. Less combines Less Impacts for impact systems with Less Smoke for smoke/muzzle/blood/fire/explosion systems. Off uses default CS2. Missing converted assets fail open to the original CS2 effect. Money on Headshot only arms from confirmed hit/headshot game events. Smoke grenades are never affected.", S.dim, 10);
+    var fxNote = lbl(fxSec, "On uses the converted Povarehok pack (Regular). Less uses the mod's reduced variants (only offered where they actually differ). Modern uses the converted MW2019 pack: class muzzle flashes, per-shot barrel smoke, MW tracers, and the MW frag explosion for HE. HE Grenade and Bomb are separate so you can mix packs. Off uses default CS2. Missing converted assets fail open to the original CS2 effect. Money on Headshot replaces the headshot-only blood/helmet particles, so it fires exactly on real headshot hits. Smoke grenades are never affected.", S.dim, 10);
     fxNote.style.whiteSpace = 'normal'; fxNote.style.marginTop = '7px';
     var fxStatus = lbl(fxSec, 'Hook not armed yet - effects play unmodified until it arms (auto-retries).', '#e8b339ff', 10);
     fxStatus.style.whiteSpace = 'normal'; fxStatus.style.marginTop = '3px'; fxStatus.visible = false;
@@ -587,6 +602,14 @@ R"CFJS(
       bodyCamBtn.__lbl.text = 'Body Cam: ' + (bcOn ? 'On' : 'Off');
       bodyCamBtn.style.backgroundColor = bcOn ? S.btnOn : S.btnBg;
       bodyCamBtn.__lbl.style.color = bcOn ? S.accent : S.value;
+      var acOn = !!st.actionCam;
+      actionCamBtn.__lbl.text = 'Action Cam: ' + (acOn ? 'On' : 'Off');
+      actionCamBtn.style.backgroundColor = acOn ? S.btnOn : S.btnBg;
+      actionCamBtn.__lbl.style.color = acOn ? S.accent : S.value;
+      var feOn = !!st.acFisheye;
+      acFisheyeBtn.__lbl.text = 'Fisheye Lens: ' + (feOn ? 'On' : 'Off');
+      acFisheyeBtn.style.backgroundColor = feOn ? S.btnOn : S.btnBg;
+      acFisheyeBtn.__lbl.style.color = feOn ? S.accent : S.value;
 
       // EFFECTS: mirror ParticleFx state (master pill + per-category segments). On is an
       // active classic-mod swap mode, so the hook-ready hint depends on the master switch.

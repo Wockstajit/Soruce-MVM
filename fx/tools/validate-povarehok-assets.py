@@ -1,4 +1,4 @@
-"""Prepare and validate the runtime-selected Better Particles resource closure."""
+"""Prepare and validate the runtime-selected Povarehok resource closure."""
 
 from __future__ import annotations
 
@@ -13,9 +13,28 @@ ARRAY_RE = re.compile(
     r"const\s+VariantRule\s+kVariant(?P<category>\w+)\[\]\s*=\s*\{(?P<body>.*?)\n\};",
     re.DOTALL,
 )
-RULE_RE = re.compile(r'FXRULE\(\s*"[^"]+"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)')
+# FXRULE, FXRULE_MODERN, and FXRULE_MODERN_BP share the first three args (match, pack,
+# name -> the Povarehok variant targets); FXRULE_MODERN adds a modern-relative
+# fourth, FXRULE_MODERN_BP reuses the Povarehok target as its Modern target.
+RULE_RE = re.compile(r'FXRULE(?:_MODERN(?:_BP)?)?\(\s*"[^"]+"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"')
+MODERN_RULE_RE = re.compile(
+    r'FXRULE_MODERN\(\s*"[^"]+"\s*,\s*"[^"]+"\s*,\s*"[^"]+"\s*,\s*"([^"]+)"\s*\)'
+)
+# Raw table entries (non-macro) that name a modern target directly.
+MODERN_PATH_RE = re.compile(r'"(particles/filmmaker/modern/[^"]+\.vpcf)"')
 MONEY_RE = re.compile(r'kMoneyBurst\s*=\s*"([^"]+\.vpcf)"')
 RESOURCE_RE = re.compile(r'resource:"([^"]+)"')
+# Spray-gated barrel-smoke wrappers (kSprayPairs in ParticleFx.cpp): these swap
+# TARGETS are only ever assembled at runtime via string concatenation inside the
+# MODSPRAY/BPSPRAY macros (a literal + a macro-arg identifier + a literal), so
+# RULE_RE's whole-string match never sees them and they were silently pruned as
+# "unreferenced" before compilation (bug 2026-07-03: "mvm_spray_*.vpcf was not
+# precached correctly" in-game, despite postprocess_povarehok.py/postprocess_modern.py
+# having just generated them). Seed them explicitly from the macro invocations instead.
+MODSPRAY_RE = re.compile(r'MODSPRAY\("([^"]+)"\)')
+BPSPRAY_RE = re.compile(r'BPSPRAY\("[^"]+"\s*,\s*"([^"]+)"\)')
+MODERN_MUZZLE_DIR = "particles/filmmaker/modern/arc9_fas_muzzleflashes"
+PVRH_WEAPON_DIR = "particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx"
 COMPILED_EXTENSIONS = {".vpcf", ".vmat", ".vtex", ".vmdl", ".vsnap"}
 
 
@@ -27,20 +46,42 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--file-list", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--validate-compiled", action="store_true")
+    parser.add_argument("--require-modern", action="store_true",
+                        help="also validate the MW2019 modern-pack targets (pass when the "
+                             "GMod sources were available to the converter)")
+    parser.add_argument("--emit-closure", type=Path, default=None,
+                        help="write the full keep-set of content-relative source files the "
+                             "runtime needs (particle closure + referenced vmat/vtex/vmdl, "
+                             "expanded through model/material resource refs). The converter "
+                             "uses this pre-compile to prune everything else, so only ~15%% "
+                             "of the mod's assets get compiled/shipped.")
     return parser.parse_args()
 
 
-def runtime_targets(cpp_path: Path) -> list[str]:
+def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
     text = cpp_path.read_text(encoding="utf-8")
     targets: set[str] = set()
     for table in ARRAY_RE.finditer(text):
         category = table.group("category")
-        less_variant = "less_impacts" if category == "Impacts" else "less_smoke"
+        less_variant = "less/impacts" if category == "Impacts" else "less/smoke"
         for pack, name in RULE_RE.findall(table.group("body")):
-            for variant in ("classic", "classic_updated", less_variant):
+            # "classic" was dropped 2026-07-02 (byte-identical to regular; source
+            # folder deleted); On now targets regular directly.
+            for variant in ("regular", less_variant):
                 targets.add(
-                    f"particles/filmmaker/betterparticles/{variant}/{pack}/{name}.vpcf"
+                    f"particles/filmmaker/povarehok/{variant}/{pack}/{name}.vpcf"
                 )
+    if require_modern:
+        for rel in MODERN_RULE_RE.findall(text):
+            targets.add(f"particles/filmmaker/modern/{rel}.vpcf")
+        for path in MODERN_PATH_RE.findall(text):
+            targets.add(path)
+        for name in MODSPRAY_RE.findall(text):
+            targets.add(f"{MODERN_MUZZLE_DIR}/mvm_spray_{name}.vpcf")
+    # BPSPRAY wrappers always resolve under povarehok/regular (see the macro in
+    # ParticleFx.cpp), regardless of which On variant table invokes them.
+    for name in BPSPRAY_RE.findall(text):
+        targets.add(f"{PVRH_WEAPON_DIR}/mvm_spray_{name}.vpcf")
     money = MONEY_RE.search(text)
     if money:
         targets.add(money.group(1))
@@ -79,7 +120,7 @@ def inspect_closure(content_root: Path, targets: list[str]) -> tuple[set[str], s
         for reference in RESOURCE_RE.findall(path.read_text(encoding="utf-8")):
             normalized = reference.replace("\\", "/")
             references.add(normalized)
-            if normalized.startswith("particles/filmmaker/betterparticles/") and normalized.endswith(".vpcf"):
+            if normalized.startswith("particles/filmmaker/") and normalized.endswith(".vpcf"):
                 pending.append((normalized, False))
     return particle_closure, references, missing_root_targets, missing_child_references
 
@@ -88,7 +129,7 @@ def main() -> int:
     args = parse_args()
     content_root = args.content_root.resolve()
     game_root = args.game_root.resolve()
-    targets = runtime_targets(args.particle_fx_cpp.resolve())
+    targets = runtime_targets(args.particle_fx_cpp.resolve(), args.require_modern)
     closure, references, missing_root_targets, missing_child_references = inspect_closure(content_root, targets)
 
     local_resources: set[str] = set()
@@ -108,6 +149,30 @@ def main() -> int:
         resource for resource in external_resources
         if Path(resource).suffix.lower() == ".vmdl"
     )
+
+    if args.emit_closure is not None:
+        # Expand the keep-set through refs the vpcf walk does not chase: converted
+        # models (ModelDoc kv3) and materials carry their own resource:"..." refs
+        # (a model's materials, a material's textures). Without this, pruning
+        # would delete e.g. the gib models' vmats and they'd compile textureless.
+        keep = set(local_resources)
+        pending = deque(keep)
+        while pending:
+            resource = pending.popleft()
+            path = source_path(content_root, resource)
+            if not path.is_file() or path.suffix.lower() not in {".vmdl", ".vmat", ".vpcf"}:
+                continue
+            for reference in RESOURCE_RE.findall(
+                    path.read_text(encoding="utf-8", errors="replace")):
+                normalized = reference.replace("\\", "/")
+                if normalized in keep:
+                    continue
+                if source_path(content_root, normalized).is_file():
+                    keep.add(normalized)
+                    pending.append(normalized)
+        args.emit_closure.parent.mkdir(parents=True, exist_ok=True)
+        args.emit_closure.write_text("\n".join(sorted(keep)) + "\n", encoding="utf-8")
+        print(f"Closure keep-set: {len(keep)} content files -> {args.emit_closure}")
 
     missing_compiled: list[str] = []
     if args.validate_compiled:
@@ -139,7 +204,7 @@ def main() -> int:
     args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print(
-        f"Better Particles closure: {len(targets)} roots, {len(closure)} particles, "
+        f"Povarehok closure: {len(targets)} roots, {len(closure)} particles, "
         f"{len(local_resources)} local resources, {len(external_resources)} external references."
     )
     if missing_root_targets:
