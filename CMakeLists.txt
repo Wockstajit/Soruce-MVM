@@ -2,6 +2,11 @@ cmake_minimum_required (VERSION 3.24)
 
 project ("advancedfx")
 
+# Register CTest tests declared in subdirectories (AfxHookSource2's
+# FollowCameraMathTests); without this, `ctest -R FollowCameraMathTests`
+# silently finds zero tests.
+enable_testing()
+
 # Define CMAKE_CXX_STANDARD otherwise e.g. libprotobuf will have linking problems against ABSL when compiling protobuf:
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED On)

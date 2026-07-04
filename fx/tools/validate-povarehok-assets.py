@@ -24,7 +24,7 @@ MODERN_RULE_RE = re.compile(
 MODERN_PATH_RE = re.compile(r'"(particles/filmmaker/modern/[^"]+\.vpcf)"')
 MONEY_RE = re.compile(r'kMoneyBurst\s*=\s*"([^"]+\.vpcf)"')
 RESOURCE_RE = re.compile(r'resource:"([^"]+)"')
-# Spray-gated barrel-smoke wrappers (kSprayPairs in ParticleFx.cpp): these swap
+# Spray-gated barrel-smoke wrappers (kSprayPairs in ParticleFxSpray.cpp): these swap
 # TARGETS are only ever assembled at runtime via string concatenation inside the
 # MODSPRAY/BPSPRAY macros (a literal + a macro-arg identifier + a literal), so
 # RULE_RE's whole-string match never sees them and they were silently pruned as
@@ -59,7 +59,16 @@ def parse_args() -> argparse.Namespace:
 
 
 def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
-    text = cpp_path.read_text(encoding="utf-8")
+    # The ParticleFx subsystem is split across focused translation units (2026-07-04):
+    # the FXRULE variant tables live in ParticleFxRules.cpp, MODSPRAY/BPSPRAY in
+    # ParticleFxSpray.cpp, kMoneyBurst in ParticleFxInternal.h. The converter still
+    # passes ParticleFx.cpp; scan every sibling ParticleFx* source so the closure
+    # covers the whole subsystem no matter which file a table lives in.
+    siblings = sorted(cpp_path.parent.glob("ParticleFx*.cpp")) + sorted(
+        cpp_path.parent.glob("ParticleFx*.h")
+    )
+    files = siblings if siblings else [cpp_path]
+    text = "\n".join(f.read_text(encoding="utf-8") for f in files)
     targets: set[str] = set()
     for table in ARRAY_RE.finditer(text):
         category = table.group("category")
@@ -78,8 +87,8 @@ def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
             targets.add(path)
         for name in MODSPRAY_RE.findall(text):
             targets.add(f"{MODERN_MUZZLE_DIR}/mvm_spray_{name}.vpcf")
-    # BPSPRAY wrappers always resolve under povarehok/regular (see the macro in
-    # ParticleFx.cpp), regardless of which On variant table invokes them.
+    # BPSPRAY wrappers always resolve under povarehok/regular (see the BPSPRAY macro
+    # in ParticleFxSpray.cpp), regardless of which On variant table invokes them.
     for name in BPSPRAY_RE.findall(text):
         targets.add(f"{PVRH_WEAPON_DIR}/mvm_spray_{name}.vpcf")
     money = MONEY_RE.search(text)

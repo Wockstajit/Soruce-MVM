@@ -4,7 +4,21 @@ Status: original methodology extracted from two local CS2 client-DLL inventory c
 the third local overlay/inventory reference reviewed in section 9. The older two-source notes below remain
 useful for function names and call order, but section 9 is the current demo-playback comparison.
 
-> **Headline finding that overturns prior research.** `docs/cosmetics-model-override-research.md` §4
+> **Current implementation file map (2026-07-04 refactor).** The Cosmetics code was split into
+> one-responsibility translation units; references below to `CosmeticOverrideSystem.cpp` /
+> `CosmeticModelSwap.cpp` may now live in a focused TU (see
+> [cosmetics-overview.md](cosmetics-overview.md) for the full map):
+> - AOB/vtable resolution + the SEH wrappers (`SafePostDataUpdate`, `SafePrecacheModel`, `GetStaticData`
+>   lookups) → `CosmeticFnResolver.cpp` (shared `Fns` table in `CosmeticModelSwapInternal.h`)
+> - knife-type swap (`ApplyKnifeModelSwap`, the `knife.swap`/`knife.vm` breadcrumbs) → `CosmeticKnifeSwap.cpp`
+> - gloves (`SafeApplyGloves`) → `CosmeticGloveSwap.cpp`
+> - seek detection + tick nudge (`MaybeFireTickNudge`, `OnDemoSeekDetected`) → `CosmeticDemoSync.cpp`
+> - `cl_paintkit_override` bridge → `CosmeticPaintKitBridge.cpp`
+> - direct composite (`ResolveDirectCompositeFns`, `FireDirectCompositeRefresh`) → `CosmeticDirectComposite.cpp`
+> - `CosmeticModelSwap.cpp` keeps the HUD-arms/viewmodel machinery + weapon mesh-mask + agent swap;
+>   `CosmeticOverrideSystem.cpp` keeps the profile match + apply loop.
+
+> **Headline finding that overturns prior research.** `docs/archive/cosmetics-model-override-research.md` §4
 > concluded "**`SetModel` is a server.dll function — the binding constraint**" and that "there is no
 > confirmed public technique for swapping a rendered model purely from client.dll in CS2." **That is
 > wrong.** Both supplied cheats resolve **`C_BaseModelEntity::SetModel(const char*)` as a normal
@@ -251,7 +265,7 @@ Schema fields used (resolved via the repo's existing schema system, not hardcode
 
 ## 6. How this maps onto THIS repo
 
-What the repo **already has** (per `cosmetics-recompose-research.md`): the composite trio
+What the repo **already has** (per `archive/cosmetics-recompose-research.md`): the composite trio
 (`UpdateCompositeMaterial` / `UpdateCompositeMaterialSet` / `UpdateSkin`) resolved and confirmed
 rendering weapon **skins** on a spectated weapon via `cosmetics composite once` (the 2026-06-29
 breakthrough). So §2 step 5 is done. What these two source bases **add**:
@@ -264,7 +278,7 @@ breakthrough). So §2 step 5 is done. What these two source bases **add**:
    murmur2 from `c_cs_player_pawn.hpp:11-53`.
 3. **`C_CSPlayerPawn::SetBodyGroup` + `C_BaseEntity::UpdateBodyGroupChoice` + the `m_EconGloves` write +
    `m_bNeedToReApplyGloves` + the multi-frame apply.** This is the entire gloves path, which the repo's
-   apply loop currently skips (`cosmetics-recompose-research.md` table: "Gloves … Does NOT work yet").
+   apply loop currently skips (`archive/cosmetics-recompose-research.md` table: "Gloves … Does NOT work yet").
 4. **The agent `SetModel` one-liner** (§4) for the agent row.
 
 Concrete suggested wiring (mirrors the repo's existing `CosmeticOverrideSystem` style):
@@ -333,7 +347,7 @@ in-game before trusting them:
    resource system. During live play the model is precached; during demo playback a knife/agent model
    the demo never referenced may not be loaded. **Test whether `SetModel` to an unreferenced `.vmdl`
    renders or silently no-ops / T-poses.** This is the same open question flagged in
-   `cosmetics-model-override-research.md` §5 — these sources don't answer it because their target models
+   `archive/cosmetics-model-override-research.md` §5 — these sources don't answer it because their target models
    are always precached for the local player. If it fails, precaching the model first (resource-system
    call) is the next step.
 3. **Viewmodel vs. world model entities.** The knife swap must hit both the weapon's world entity and the
@@ -346,13 +360,13 @@ in-game before trusting them:
 
 ## 8. Reconciliation with the existing two research docs
 
-- `docs/cosmetics-model-override-research.md`: §1 "writing `m_iItemDefinitionIndex` alone does not change
+- `docs/archive/cosmetics-model-override-research.md`: §1 "writing `m_iItemDefinitionIndex` alone does not change
   the model" — **still true**; the model only changes because of the separate `SetModel` call. §4
   "`SetModel` is a server.dll function — the binding constraint" / "no client-only technique exists" —
   **overturned**: `C_BaseModelEntity::SetModel` is a client.dll function, AOB above, called every frame
   by both working tools for knife and agent swaps. The nSkinz Source-1 `IVModelInfoClient`/model-index
   analysis in §2 is moot — CS2 uses a string-path `SetModel`, not an integer model index.
-- `docs/cosmetics-recompose-research.md`: the composite trio findings stand and are reused. The recompose
+- `docs/archive/cosmetics-recompose-research.md`: the composite trio findings stand and are reused. The recompose
   doc's "Gloves: not a scanned weapon entity, lives on the pawn `m_EconGloves`" diagnosis is **correct**
   and §3 here is the apply path for it. The "Knife — change knife TYPE: does NOT work" and "Agents: does
   NOT work" rows are addressed by §2 (`SetModel`+`UpdateSubclass`+mesh mask) and §4 (`SetModel`)

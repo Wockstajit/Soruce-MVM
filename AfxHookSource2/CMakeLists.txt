@@ -338,8 +338,12 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/ConfigHud.cpp
     Filmmaker/Panorama/ConfigHud.h
     Filmmaker/Panorama/ConfigHudJs.h
-    Filmmaker/Panorama/CameraEditorCustomizeState.cpp
-    Filmmaker/Panorama/CameraEditorCustomizeState.h
+    Filmmaker/Cosmetics/CosmeticUiQueries.cpp
+    Filmmaker/Cosmetics/CosmeticUiQueries.h
+    Filmmaker/FilmmakerDebugCommand.cpp
+    Filmmaker/FilmmakerDebugCommand.h
+    Filmmaker/Panorama/PanoramaFindPanel.cpp
+    Filmmaker/Panorama/PanoramaFindPanel.h
     Filmmaker/Panorama/CameraEditorJs.h
     Filmmaker/Panorama/CameraEditorWidgetsJs.h
     Filmmaker/Panorama/CameraEditorCustomizeJs.h
@@ -387,6 +391,13 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/ViewFxVm.h
     Filmmaker/Movie/ParticleFx.cpp
     Filmmaker/Movie/ParticleFx.h
+    Filmmaker/Movie/ParticleFxInternal.h
+    Filmmaker/Movie/ParticleFxRules.cpp
+    Filmmaker/Movie/ParticleFxHook.cpp
+    Filmmaker/Movie/ParticleFxSpray.cpp
+    Filmmaker/Movie/ParticleFxMoney.cpp
+    Filmmaker/Movie/ParticleFxSettings.cpp
+    Filmmaker/Movie/ParticleFxDiagnostics.cpp
     Filmmaker/Movie/FxAlign.cpp
     Filmmaker/Movie/FxAlign.h
     Filmmaker/Movie/MovieMode.cpp
@@ -397,6 +408,12 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Cosmetics/CosmeticCatalog.cpp
     Filmmaker/Cosmetics/CosmeticCatalog.h
     Filmmaker/Cosmetics/CosmeticOverrideSystem.cpp
+    Filmmaker/Cosmetics/CosmeticDemoSync.cpp
+    Filmmaker/Cosmetics/CosmeticPaintKitBridge.cpp
+    Filmmaker/Cosmetics/CosmeticModelSwapInternal.h
+    Filmmaker/Cosmetics/CosmeticFnResolver.cpp
+    Filmmaker/Cosmetics/CosmeticKnifeSwap.cpp
+    Filmmaker/Cosmetics/CosmeticGloveSwap.cpp
     Filmmaker/Cosmetics/CosmeticOverrideSystem.h
     Filmmaker/Cosmetics/CosmeticModelSwap.cpp
     Filmmaker/Cosmetics/CosmeticModelSwap.h

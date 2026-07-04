@@ -164,7 +164,7 @@ $profileModes = @{
 
 # Expected effect groups: (label, fx-names filter, name substrings that count, requireActed).
 # seen>0 proves the demo exercised the effect; acted>0 proves the hook swapped it.
-# Substrings chosen from the variant tables in AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp.
+# Substrings chosen from the variant tables in AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp.
 $expectedGroups = @(
     @{ label = 'Muzzle flash (any weapon class)'; filter = 'muz';        match = @('uweapon_muzflsh', 'uweapon_muzzleflash', 'weapon_muzzleflash'); requireActed = $true },
     @{ label = 'Silenced muzzle flash';           filter = 'muzsilenced'; match = @('uweapon_muzsilenced'); requireActed = $true },

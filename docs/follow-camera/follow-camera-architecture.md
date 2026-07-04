@@ -7,7 +7,7 @@
 | State + logic | `FollowCamera` singleton | Owns `FollowCameraState`, runs the per-frame solve, picks targets, drives Preview-Tick seeks, builds the state JSON. |
 | Math | `FollowCameraMath.{h,cpp}` | Pure functions: look-at, smoothing, quat→angles, local-offset rotation. No engine deps (also compiled standalone by the test target). |
 | Target providers | `FollowCamera.cpp` | Adapt a player / entity / attachment / held-weapon into a position (+ optional orientation) each frame. |
-| Commands | `FilmmakerCommand.cpp` `DoFollow` | The `mirv_filmmaker follow ...` console surface (the automation API). |
+| Commands | `FollowCommand.cpp` `Follow_RunCommand` | The `mirv_filmmaker follow ...` console surface (the automation API; routed from the `FilmmakerCommand.cpp` dispatcher). |
 | UI | `CameraEditorJs.h` (Panorama JS) | The editor's Follow inspector. Reads the pushed state JSON, issues console commands back. |
 | State bridge | `CameraEditorHud.cpp` | Embeds the follow state JSON into the editor's `state` attribute each frame and calls `render()`. |
 | Pose application | `CameraBridge.h` | `CameraBridge_SetCameraPose` pushes an absolute pose; `CameraBridge_GetCurrentCamera` reads the free cam. |
@@ -74,7 +74,7 @@ Both paths push the final pose through `CameraBridge_SetCameraPose` and cache it
                               │
    mirv_filmmaker follow …    ▼
         ┌──────────────────────────────────┐
-        │ FilmmakerCommand.cpp  DoFollow()  │  (FollowCamera.cpp:442 in FilmmakerCommand.cpp)
+        │ FollowCommand.cpp  Follow_RunCommand() │  (routed from FilmmakerCommand.cpp)
         └──────────────────────────────────┘
                               │ setters / actions
                               ▼
@@ -109,7 +109,7 @@ the state JSON only for the Weapon type, nearest-the-playhead first
 | [FollowCamera.h](../../AfxHookSource2/Filmmaker/Movie/FollowCamera.h) | 17/26/33 enums · 69 `FollowEventRecord` · 77 `FollowCameraState` · 106 provider iface · 124 class | model, state, interface, instrumentation decls |
 | [FollowCamera.cpp](../../AfxHookSource2/Filmmaker/Movie/FollowCamera.cpp) | 177/222/253/290 providers · 493 `SetMode` · 499 `SetWeaponSource` · 553 `Candidates` · 804 `MakeProvider` · 846 `RunFrame` · 987 attach path · 1074 lock-on trim · 1106 `SetOffsetAxis` · 1112 `SetRotationOffset` · 1149 `BuildStateJson` · 1278 `PrintCamPose` · 1290 `EnsureEventsLoaded` · 1333 `SelectEvent` · 1346 `PreviewTick` | all logic |
 | [FollowCameraMath.h](../../AfxHookSource2/Filmmaker/Movie/FollowCameraMath.h) / [.cpp](../../AfxHookSource2/Filmmaker/Movie/FollowCameraMath.cpp) | `FollowQuatToAngles` (.cpp:39), `FollowRotateVector` (.cpp:54) | new math helpers |
-| [FilmmakerCommand.cpp](../../AfxHookSource2/Filmmaker/FilmmakerCommand.cpp) | `DoFollow` 442, dispatch 464–531 | command surface |
+| [FollowCommand.cpp](../../AfxHookSource2/Filmmaker/FollowCommand.cpp) | `Follow_RunCommand` (whole file; routed from `FilmmakerCommand.cpp`) | command surface |
 | [CameraEditorJs.h](../../AfxHookSource2/Filmmaker/Panorama/CameraEditorJs.h) | follow section 259–487 · mode toggle 284 · `FOLLOW_TYPES` 298 · attach-pt 395 · events/Preview-Tick 425 · advanced 496 · `render()` follow block 711–790 | UI |
 | [CameraEditorHud.cpp](../../AfxHookSource2/Filmmaker/Panorama/CameraEditorHud.cpp) | `BuildStateJson` 159, embeds follow 196, push 266 | state bridge |
 | [DemoEntry.h](../../AfxHookSource2/Filmmaker/Demo/DemoEntry.h) | `DemoEvent` 38 | event record |

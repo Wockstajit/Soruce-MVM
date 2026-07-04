@@ -3,7 +3,7 @@
 // automation/verify/verify-fx-allweapons.ps1 (which asserts coarse effect-group coverage);
 // this tool additionally buckets every observed particle system by WEAPON CLASS (assault
 // rifle, awp, autosniper, pistol, ...) using the exact match strings from
-// AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp's kVariantWeaponFx/kVariantTracers tables,
+// AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp's kVariantWeaponFx/kVariantTracers tables,
 // and takes an event-triggered screenshot the first time each (mode, class, effect) combo
 // is confirmed swapped, instead of blind timer-based captures.
 //
@@ -36,7 +36,7 @@ import (
 
 // ---------------------------------------------------------------------------------------
 // Weapon/effect classification -- mirrors kVariantWeaponFx / kVariantTracers in
-// AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp (transcribed 2026-07-03). Keyed by the
+// AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp (transcribed 2026-07-03). Keyed by the
 // exact lowercase resource path CS2 passes into the create hook, i.e. exactly what
 // `mirv_filmmaker fx names`/`fx recent` print. Any weapon-path name NOT in this table is
 // surfaced separately as "unmapped" -- that is the ground-truth audit for bug 2 (tracer
@@ -146,7 +146,7 @@ var sniperCompositionHint = map[string]string{
 	"arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_auto": "autosniper",
 }
 
-// Modern sustained-fire spray wrappers (mvm_spray_muzzleflash_* in ParticleFx.cpp kSprayPairs).
+// Modern sustained-fire spray wrappers (mvm_spray_muzzleflash_* in ParticleFxSpray.cpp kSprayPairs).
 var sprayTargetClass = map[string]string{
 	"mvm_spray_muzzleflash_ar":            "assaultrifle",
 	"mvm_spray_muzzleflash_smg":           "smg",

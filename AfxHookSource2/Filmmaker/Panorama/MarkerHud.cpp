@@ -1,5 +1,7 @@
 #include "MarkerHud.h"
 
+#include "PanoramaFindPanel.h"
+
 #include "MarkerHudJs.h"
 #include "../Movie/CameraPath.h"
 
@@ -17,30 +19,6 @@ namespace Filmmaker {
 
 namespace {
 
-// Bounded recursive id search (same approach as MovieHud's).
-void* FindChildById(void* panel, const char* id, int depth = 0) {
-	if (!panel || depth > 64)
-		return nullptr;
-	unsigned char* childrenField = (unsigned char*)panel + CS2::PanoramaUIPanel::children;
-	const int count = *(int*)childrenField;
-	void** arr = *(void***)(childrenField + 8);
-	if (!arr || count <= 0 || count > 100000)
-		return nullptr;
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		char* cid = *(char**)((unsigned char*)child + CS2::PanoramaUIPanel::panelId);
-		if (cid && 0 == std::strcmp(cid, id))
-			return child;
-	}
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		if (void* found = FindChildById(child, id, depth + 1))
-			return found;
-	}
-	return nullptr;
-}
 
 double r2(double v) { double s = (v < 0) ? -1.0 : 1.0; return s * (long long)(v * s * 100.0 + 0.5) / 100.0; }
 

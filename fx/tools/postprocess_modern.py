@@ -42,7 +42,7 @@ MODERN_EXPLOSION_DIR = "particles/filmmaker/modern/arc9_fas_explosions"
 # per-flash `mvm_spray_*` composition wrappers (flash + smoke) are written
 # instead. The C++ hook counts recent creations of each muzzle-flash name and
 # upgrades the swap target to the spray wrapper only once a spray is detected
-# (kSprayPairs in ParticleFx.cpp). Snipers keep their per-shot plume via the
+# (kSprayPairs in ParticleFxSpray.cpp). Snipers keep their per-shot plume via the
 # mvm_muzzleflash_sniper_* compositions -- authentic .50-cal behavior.
 MODERN_SPRAY_SMOKE = {
     "muzzleflash_ar.vpcf": "barrel_smoke.vpcf",
@@ -432,7 +432,7 @@ MODERN_BARREL_TRAIL_FILES = (
 # own weapon_muzzle_smoke/weapon_muzzle_smoke_long, and the smoke half of every
 # MODERN_SPRAY_SMOKE composition below). Bug (2026-07-03, "Modern's muzzle attach doesn't
 # follow Povarehok's"): only the *_trail files above ever received the CS2 muzzle
-# alignment patch, but nothing in ParticleFx.cpp ever swaps to them -- they are dead
+# alignment patch, but nothing in the ParticleFx swap tables (ParticleFxRules.cpp) ever swaps to them -- they are dead
 # output. These two are the ones that actually spawn on screen; route them through the
 # identical alignment recipe Povarehok's own weapon_muzzle_smoke_long already gets.
 MODERN_LIVE_BARREL_SMOKE_FILES = (

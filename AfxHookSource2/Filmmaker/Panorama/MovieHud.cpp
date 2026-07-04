@@ -1,5 +1,7 @@
 #include "MovieHud.h"
 
+#include "PanoramaFindPanel.h"
+
 #include "MovieHudJs.h"
 #include "../Filmmaker.h"            // CameraPath_PreviewHudHidden()
 #include "../Movie/MovieMode.h"
@@ -21,30 +23,6 @@ namespace Filmmaker {
 
 namespace {
 
-// Full recursive id search (same approach as FilmmakerMenu's), bounded by depth.
-void* FindChildById(void* panel, const char* id, int depth = 0) {
-	if (!panel || depth > 64)
-		return nullptr;
-	unsigned char* childrenField = (unsigned char*)panel + CS2::PanoramaUIPanel::children;
-	const int count = *(int*)childrenField;
-	void** arr = *(void***)(childrenField + 8);
-	if (!arr || count <= 0 || count > 100000)
-		return nullptr;
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		char* cid = *(char**)((unsigned char*)child + CS2::PanoramaUIPanel::panelId);
-		if (cid && 0 == std::strcmp(cid, id))
-			return child;
-	}
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		if (void* found = FindChildById(child, id, depth + 1))
-			return found;
-	}
-	return nullptr;
-}
 
 // 1-decimal rounding so tiny float jitter doesn't spam panel updates.
 double r1(double v) { return std::floor(v * 10.0 + 0.5) / 10.0; }

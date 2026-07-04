@@ -1,5 +1,6 @@
 #include "FilmmakerMenu.h"
 
+#include "PanoramaFindPanel.h"
 #include "FilmmakerGuiJs.h"
 #include "../Filmmaker.h"
 #include "../Demo/DemoLibrary.h"
@@ -11,39 +12,6 @@
 #include <sstream>
 
 namespace Filmmaker {
-
-namespace {
-
-// Finds a descendant panel by id with a FULL recursive traversal. Our page is
-// uniquely id'd ("FilmmakerMenuTab") and is now parented deep under
-// #JsMainMenuContent (which itself owns a layout file), so unlike DeathMsg's
-// layout-file-bounded search this must descend into every child to reach it.
-void* FindChildById(void* panel, const char* id, int depth = 0) {
-	if (!panel || depth > 64)
-		return nullptr;
-	unsigned char* childrenField = (unsigned char*)panel + CS2::PanoramaUIPanel::children;
-	const int count = *(int*)childrenField;
-	void** arr = *(void***)(childrenField + 8);
-	if (!arr || count <= 0 || count > 100000)
-		return nullptr;
-
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		char* cid = *(char**)((unsigned char*)child + CS2::PanoramaUIPanel::panelId);
-		if (cid && 0 == std::strcmp(cid, id))
-			return child;
-	}
-	for (int i = 0; i < count; ++i) {
-		void* child = arr[i];
-		if (!child) continue;
-		if (void* found = FindChildById(child, id, depth + 1))
-			return found;
-	}
-	return nullptr;
-}
-
-} // namespace
 
 void* FilmmakerMenu::FindRootPanel() {
 	void* ctx = m_bridge.ContextPanel();

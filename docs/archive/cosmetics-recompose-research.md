@@ -1,5 +1,14 @@
 # Cosmetics recompose research — making the written skin actually render
 
+> **ARCHIVED (2026-07-04) — HISTORICAL INVESTIGATION LOG.** The 2026-06-29 breakthrough
+> documented below is implemented and shipped: per-player demo weapon skins render via the
+> Andromeda direct-composite call (held defIndex + fallback writes + `composite once`).
+> The current implementation lives in `AfxHookSource2/Filmmaker/Cosmetics/`
+> (`CosmeticOverrideSystem.cpp` apply loop, `CosmeticDirectComposite.cpp`,
+> `CosmeticPaintKitBridge.cpp`); the distilled recipes live in
+> `../cosmetics-cs2-methodology-notes.md` and the architecture in `../cosmetics-overview.md`.
+> Line numbers below refer to pre-refactor file layouts and no longer match.
+
 Status: research plus follow-up experiments. The repo now resolves and clears
 `C_EconEntity::m_bAttributesInitialized`, and the apply loop can overwrite existing
 `m_NetworkedDynamicAttributes` paint/wear/seed values. The remaining gap is a reliable visual
@@ -9,7 +18,7 @@ material rebuild trigger. Targets the gap documented at
 `m_iItemIDHigh=-1`, `m_nFallbackPaintKit/m_flFallbackWear/m_nFallbackSeed` updated, `patched=2
 reverted=0` every frame) but the weapon keeps rendering its original skin. This doc is about the
 missing visual-rebuild step only — it does not touch the separate, already-researched
-knife/agent **model**-swap problem (`docs/cosmetics-model-override-research.md`).
+knife/agent **model**-swap problem (`docs/archive/cosmetics-model-override-research.md`).
 
 Update after this pass: the code now exposes an explicit experimental bridge for the only visual
 path verified to work in CS2: `mirv_filmmaker cosmetics paintkitbridge ...`. It writes the global
@@ -87,9 +96,9 @@ Verified live (cropped, paused, noise-floor-controlled), replaying *exactly* the
 | **Primary** (e.g. SSG08 def 40) | **WORKS** | autocomposite OFF→mean 0.24 (no render), ON→mean 6.36 (full weapon repaint). |
 | **Secondary** (e.g. USP-S def 61) | **WORKS** | UI command path mean 2.97 vs noise 0.17. |
 | **Knife — paint, player already has a custom knife** | **Expected to work** (same composite path) — NOT verified live; the test demo's spectated players carry default knives. |
-| **Knife — default knife / change knife TYPE** | **Does NOT work** | Default knife has `networkedAttrs count=0` (no attrs to overwrite) and is not a paintable composite target (engine logs `vCompMat ... did not affect any target materials on knife_default_ct`); writing `m_iItemDefinitionIndex=507` does NOT swap the renderable model (worldModel stays `knife_default_ct`). This is the deferred model-swap path (`docs/cosmetics-model-override-research.md`). |
+| **Knife — default knife / change knife TYPE** | **Does NOT work** | Default knife has `networkedAttrs count=0` (no attrs to overwrite) and is not a paintable composite target (engine logs `vCompMat ... did not affect any target materials on knife_default_ct`); writing `m_iItemDefinitionIndex=507` does NOT swap the renderable model (worldModel stays `knife_default_ct`). This is the deferred model-swap path (`docs/archive/cosmetics-model-override-research.md`). |
 | **Gloves** | **Does NOT work yet** | Gloves are not a scanned weapon entity — they live on the pawn (`C_CSPlayerPawn::m_EconGloves`, an embedded `C_EconItemView`). The apply loop never touches them and the glove composite-owner pointer is unknown. Needs its own pass. |
-| **Agents** | **Does NOT work** | Full player-model swap, not a weapon composite. Separate mechanism (`docs/cosmetics-model-override-research.md`). |
+| **Agents** | **Does NOT work** | Full player-model swap, not a weapon composite. Separate mechanism (`docs/archive/cosmetics-model-override-research.md`). |
 
 Bottom line: **weapon (primary/secondary) skins auto-apply and render through the UI**; knife paint
 should work for players who already own a custom knife; **gloves, agents, and knife TYPE swaps remain
@@ -561,7 +570,7 @@ not a finding.
 Confirmed from the CS:GO architecture (the same `C_EconEntity`/`m_AttributeManager.m_Item`
 relationship CS2 inherited): a weapon's first-person viewmodel and its third-person world model
 are typically driven by **two different client entities** that both reference the same underlying
-econ item data (this repo's earlier model-override research, `docs/cosmetics-model-override-research.md`
+econ item data (this repo's earlier model-override research, `docs/archive/cosmetics-model-override-research.md`
 §3, independently confirms CS2 has `C_BaseViewModel::m_hWeapon`/`m_hWeaponModel` as separate
 handles, and that nSkinz on CS:GO explicitly set the model index on **both** `view_model` and
 `world_model` as two separate writes — see that doc's §2). The practical implication for the
@@ -695,7 +704,7 @@ In order of confidence/cost, smallest first:
     the schema-system interface itself — the existing precedent for how a new sigscan would be
     wired in)
   - `misc/sigscan.py` (the repo's existing pattern-validation tool)
-  - `docs/cosmetics-model-override-research.md` (the separate, previously-researched model-swap
+  - `docs/archive/cosmetics-model-override-research.md` (the separate, previously-researched model-swap
     problem; cross-referenced for the viewmodel/world-model entity split and the
     `C_EconEntity`/`C_EconItemView` field-name continuity argument)
 

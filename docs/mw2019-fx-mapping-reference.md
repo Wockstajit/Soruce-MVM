@@ -3,7 +3,7 @@
 Source-of-truth notes on how the GMod addon **ARC9 Modern Warfare 2019** maps muzzle
 flashes, barrel smoke, tracers, and explosions onto its weapons, extracted by reading
 the addon's own Lua. Written to hand to an LLM (or a human) porting these effects onto
-CS2 native weapons in `AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp`. See also
+CS2 native weapons in `AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp` (the variant tables). See also
 [memory: modern-pack-mw2019-mapping] and `docs/filmmaker_effects_modifiers.md`
 (FxMode::Modern) for how this feeds the actual DLL implementation.
 

@@ -1,10 +1,12 @@
 # Legacy vs CS2 weapon model variants — how CS2 picks a model per skin
 
-Status: investigation + implemented support (the `mirv_filmmaker cosmetics mesh ...` knob and the
-auto econ-schema legacy read in `CosmeticModelSwap.cpp`). Live-verified that the apply path executes
+Status: investigation + implemented support (the `mirv_filmmaker cosmetics mesh ...` knob; the
+auto econ-schema legacy read `PaintKitLegacyModel` now lives in `CosmeticFnResolver.cpp`, the
+mesh-mask apply in `CosmeticModelSwap.cpp` — see `docs/cosmetics-overview.md` for the file map).
+Live-verified that the apply path executes
 and resolves on the current build; the *visual* mesh switch is subject to the demo-playback caveats in
 §6. Companion to `docs/cosmetics-cs2-methodology-notes.md` (the source-derived recipes) and
-`docs/cosmetics-recompose-research.md` (the skin composite path).
+`docs/archive/cosmetics-recompose-research.md` (the skin composite path).
 
 ## 1. The mechanism — one model, two (or more) mesh groups
 
@@ -80,7 +82,8 @@ mirv_filmmaker cosmetics mesh masks <modernBits> <legacyBits>   # tune the bit v
 
 ## 4. How the player customizer chooses the model (implementation)
 
-`CosmeticModelSwap.cpp`:
+The model-swap subsystem (`PaintKitLegacyModel` in `CosmeticFnResolver.cpp`; the rest in
+`CosmeticModelSwap.cpp`):
 - `PaintKitLegacyModel(paintKitId)` does the econ-schema lookup above (SEH-guarded) and returns
   `1`=legacy / `0`=modern / `-1`=unknown.
 - `ResolveMeshMask(paintKit, knife, mode, maskModern, maskLegacy)` maps that to a mask:
@@ -133,13 +136,13 @@ contains this controlled same-paint toggle.
 **not** produce a visible weapon-crop change while the demo was **paused** (~0.16 mean, noise-floor).
 The mask write executes (the `weaponMesh` apply counter increments, no crash, the function resolves),
 but the rendered mesh group was not observed to switch on a paused spectated demo weapon. The most
-likely reasons (consistent with the skin-composite findings in `docs/cosmetics-recompose-research.md`):
+likely reasons (consistent with the skin-composite findings in `docs/archive/cosmetics-recompose-research.md`):
 the engine re-derives the renderable mesh from the networked snapshot, and/or the switch needs a
 renderable refresh (`PostDataUpdate` on the scene node) or live (un-paused) sim frames to take effect.
 
 **RESOLVED (2026-06-29):** both of those are now done. `CGameSceneNode::PostDataUpdate` (vtable
 index 22, from Andromeda) is wired after `SetMeshGroupMask` (and every model swap) in
-`CosmeticModelSwap.cpp`, and `CosmeticOverrideSystem::MaybeFireTickNudge` auto-plays ~10 ticks after a
+`CosmeticModelSwap.cpp`, and `MaybeFireTickNudge` (`CosmeticDemoSync.cpp`) auto-plays ~10 ticks after a
 change (briefly resume + re-pause) so the mesh group is re-evaluated on live frames without a manual
 scrub. See `docs/cosmetics-cs2-methodology-notes.md` §6b. The mesh switch is geometry/UV-subtle, so
 verify it on a weapon that has both variants in third person during the play-out, not by a paused
@@ -152,5 +155,5 @@ same-tick crop diff.
 - nerv `i_econ_item_system.hpp` (`c_paint_kit::uses_old_model` @ 0xAE), `skin_changer.cpp`
   (knife mesh polarity inverted vs weapons)
 - Local: `AfxHookSource2/Filmmaker/Cosmetics/CosmeticModelSwap.cpp`
-  (`PaintKitLegacyModel`/`ResolveMeshMask`/`ApplyWeaponMeshMask`),
+  (`ResolveMeshMask`/`ApplyWeaponMeshMask`) + `CosmeticFnResolver.cpp` (`PaintKitLegacyModel`),
   `automation/verify/verify-cosmetics-customizer.ps1`

@@ -1,8 +1,8 @@
-#include "CameraEditorCustomizeState.h"
+#include "CosmeticUiQueries.h"
 
 #include "../../ClientEntitySystem.h"
 #include "../../SchemaSystem.h"
-#include "../Cosmetics/CosmeticDebugLog.h" // mvm_debug lines for flash suppression + pickup state
+#include "CosmeticDebugLog.h" // mvm_debug lines for flash suppression + pickup state
 
 #include "../../../deps/release/prop/AfxHookSource/SourceSdkShared.h"
 #include "../../../deps/release/prop/cs2/sdk_src/public/cdll_int.h"

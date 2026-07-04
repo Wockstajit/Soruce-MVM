@@ -1,5 +1,14 @@
 # Cosmetics model-override research (knife/agent model swap)
 
+> **ARCHIVED (2026-07-04).** This document's core conclusion — "a true model swap is not
+> available from client.dll alone in CS2" — was **overturned**: knife-type, glove, and agent
+> model swaps now work client-side via `C_BaseModelEntity::SetModel` (see
+> `../cosmetics-cs2-methodology-notes.md` for the working recipes and
+> `../cosmetics-overview.md` for the current architecture; the implementation lives in
+> `AfxHookSource2/Filmmaker/Cosmetics/CosmeticKnifeSwap.cpp`, `CosmeticGloveSwap.cpp`, and
+> `CosmeticModelSwap.cpp`). Kept for the still-valid `CModelState`/schema layout research
+> and the nSkinz/Source-1 comparison below.
+
 Status: research only, no code changed. Gates `AfxHookSource2/Filmmaker/Cosmetics/CosmeticOverrideSystem.cpp`
 milestones 12-13 (gloves apply, agent apply) — see the comment at
 `AfxHookSource2/Filmmaker/Cosmetics/CosmeticOverrideSystem.cpp:374-384`, which explicitly defers to this

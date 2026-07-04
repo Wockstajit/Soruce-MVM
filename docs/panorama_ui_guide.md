@@ -1,6 +1,40 @@
-# CS2 Panorama UI Guide for a Filmmaker Tool
+# Panorama UI architecture guide (CS2 filmmaker)
 
-This file explains the Panorama UI approach only. It is based on the public structure found in Osiris and the older AdvancedFX/HLAE Panorama work, but it is written for an offline/demo filmmaking tool, not for live gameplay.
+This is the general guide to how the filmmaker's Panorama UI works: first how it is
+**actually implemented** in this repo, then the original design research (based on the
+public structure found in Osiris and older AdvancedFX/HLAE Panorama work) that the
+implementation follows. Offline/demo filmmaking only, not for live gameplay.
+
+## As implemented in this repo (`AfxHookSource2/Filmmaker/Panorama/`)
+
+The concepts below all shipped; the concrete shape is:
+
+- **`PanoramaBridge.cpp`** — the small engine wrapper (`CUIEngine::RunScript`, attribute
+  get/set, context-panel pinning). Engine access is resolved by byte-pattern scanning in
+  `DeathMsg.cpp` (`getPanoramaAddrs*`), the single fragile file a CS2 update can break.
+- **One panel per file pair:** each UI surface is a C++ bridge (`*Hud.cpp` / `FilmmakerMenu.cpp`)
+  plus its embedded Panorama JS in an adjacent `*Js.h` header — `FilmmakerGuiJs.h` (the
+  main-menu Demos page), `MovieHudJs.h`, `MarkerHudJs.h`, `CameraTimelineJs.h`,
+  `CameraEditorJs.h` (+ per-section fragment headers `CameraEditor*Js.h`), `ConfigHudJs.h`,
+  `GraphEditorJs.h`, `DemoBarButtonsJs.h`. The bridge builds the panel once, pushes a state
+  JSON attribute per frame, and reads a command attribute back (JS emits
+  `mirv_filmmaker ...` console commands or attribute writes).
+- **`PanoramaFindPanel.{h,cpp}`** — the shared `Filmmaker::FindChildById` panel lookup
+  (bounded recursive child search by id over the live engine panel tree). It used to be
+  copy-pasted into every bridge file; new bridges must include this header instead of
+  redefining it.
+- **Threading rule (critical):** all Panorama work runs on the game's MAIN thread via
+  `Filmmaker::RunMainThreadFrame`. Calling `RunScript` from the render thread crashes V8
+  (`v8::Context::Exit() - Cannot exit non-entered context`).
+- **Hard-won constraints:** no mouse-move event in HUD JS (build dragging from `Slider`
+  panels); never set `style = ''` (clear colors with `rgba(0,0,0,0)`); MSVC's ~16 KB
+  string-literal cap forces `)FMJS" R"FMJS(`-style splits in the `*Js.h` headers; netcon
+  `ui_eval` truncates at 256 bytes, so drive the UI through predefined `$.Filmmaker.*`
+  helpers.
+- Native-UI reference material: the decompiled CS2 Panorama files live in `reference/`
+  (check there before live-probing native panels over netcon).
+
+Everything below is the original approach guide.
 
 ## Goal
 

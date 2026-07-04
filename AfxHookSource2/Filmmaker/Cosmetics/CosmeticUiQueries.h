@@ -4,10 +4,12 @@
 
 namespace Filmmaker {
 
-// Per-player state for the Camera Editor's CUSTOMIZE (LOADOUT) modal: live weapon/glove/agent
-// econ reads for the spectated pawn, surfaced to Panorama as JSON. Split out of CameraEditorHud
-// (which stays focused on Panorama build/teardown + per-frame state push) since these are pure
-// entity/econ reads with no HUD/bridge involvement.
+// Cosmetics-side queries for the Camera Editor's CUSTOMIZE (LOADOUT) modal: live
+// weapon/glove/agent econ reads for the spectated pawn, surfaced to Panorama as JSON.
+// Lives in Cosmetics/ (moved from Panorama/CameraEditorCustomizeState) because these are
+// pure entity/econ reads with no HUD/bridge involvement -- the Panorama side (see
+// CameraEditorHud.cpp, which stays focused on Panorama build/teardown + per-frame state
+// push) only calls them and pushes the JSON into the modal.
 
 // pawnIndex -> full loadout JSON (weapons/gloves/agent model + active-weapon pickup info) for the
 // CUSTOMIZE modal. Returns the literal string "null" if pawnIndex isn't a valid player pawn.

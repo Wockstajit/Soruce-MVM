@@ -625,7 +625,7 @@ void DoVtArg(int argc, advancedfx::ICommandArgs* args, const char* cmd) {
 
 // One-shot probe of a single candidate vtable index, for bisecting which slot is the weapon's
 // OnDataChanged (the real client-side skin-rebuild trigger -- see the 2026-06-28 binary-analysis
-// section of docs/cosmetics-recompose-research.md). Static analysis of the live client.dll narrowed
+// section of docs/archive/cosmetics-recompose-research.md). Static analysis of the live client.dll narrowed
 // OnDataChanged to a small set of DataUpdateType_t-taking virtuals on the C_CSWeaponBase vtable
 // (candidates: 4, 11, 15, 18, 70, 108, 110, 124, 126); this command tries one of them per call so a
 // screenshot can attribute any visual rebuild to a specific index. It sets the visuals-stale marks

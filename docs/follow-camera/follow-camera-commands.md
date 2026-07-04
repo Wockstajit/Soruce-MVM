@@ -2,7 +2,8 @@
 
 Every Follow-camera control is a console command. This is the **automation surface** — a
 human keybind, the Panorama UI, and a netconsole bot all drive the feature through these.
-Dispatch lives in [`DoFollow`](../../AfxHookSource2/Filmmaker/FilmmakerCommand.cpp:442).
+Dispatch lives in [`Follow_RunCommand`](../../AfxHookSource2/Filmmaker/FollowCommand.cpp)
+(routed from the `mirv_filmmaker` dispatcher in `FilmmakerCommand.cpp`).
 
 Prefix everything with `mirv_filmmaker`. Run `mirv_filmmaker follow` with no args for the
 in-game help text.

@@ -5,7 +5,7 @@ Converts the local CS:GO Povarehok mod variants for the CS2 runtime effect syste
 Requires a checkout of https://github.com/long0900/source1import with its Python
 dependencies installed, plus `pip install srctools vtf2img` for lossless VTF export.
 The script stages the Source 1 PCFs into the Source 2 resource
-namespaces used by AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp:
+namespaces used by AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp:
 
   On   -> particles/filmmaker/povarehok/regular/...
   Less -> particles/filmmaker/povarehok/less/impacts/... and less/smoke/...
@@ -213,7 +213,7 @@ Ensure-GeneratedJunction $coreJunction $coreGameDir
 
 # NOTE: the plain-classic folder (p_betterparticlesmod_classic_c057b) was removed 2026-07-02:
 # it was byte-identical to "classic updated" (md5 over every file), so converting it doubled
-# the particle-compile time for a mode nobody could tell apart. Runtime mapping (ParticleFx.cpp)
+# the particle-compile time for a mode nobody could tell apart. Runtime mapping (ParticleFxRules.cpp)
 # now points On at regular; Less remains the per-file combination of the two folders
 # below (their only real deltas vs regular are impact_fx.pcf and explosions_fx.pcf).
 $variantSpecs = @(
@@ -423,9 +423,11 @@ if ($Compile) {
     # ---- Prune the content tree to the runtime closure BEFORE compiling ----
     # The mod ships far more than the DLL's swap tables ever reference (measured
     # 2026-07-03: 969 MB / 8,743 compiled files, of which only ~143 MB / ~930 files
-    # are reachable from ParticleFx.cpp -- the rest is bundled third-party material
+    # are reachable from the DLL's swap tables -- the rest is bundled third-party material
     # packs and unswapped particle systems). The validator derives the exact keep-set
-    # from ParticleFx.cpp itself (so a new FXRULE automatically keeps its assets);
+    # from the ParticleFx sources themselves (we pass ParticleFx.cpp; the validator scans
+    # every sibling ParticleFx* file, since the FXRULE tables live in ParticleFxRules.cpp
+    # after the 2026-07-04 split -- so a new FXRULE automatically keeps its assets);
     # everything else is deleted from this generated tree so resourcecompiler never
     # sees it. Cuts the shipped pack ~85% and the compile time by minutes.
     $validator = Resolve-ExistingPath (Join-Path $PSScriptRoot 'validate-povarehok-assets.py') 'Povarehok asset validator'

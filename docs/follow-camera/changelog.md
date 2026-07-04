@@ -29,7 +29,7 @@ Running log of what the rebuild added/changed, with file:line references for rev
 - `RunFrame` split into lock-on (turret + aim-trim) and attach (local-offset ride) paths
   ([FollowCamera.cpp:846](../../AfxHookSource2/Filmmaker/Movie/FollowCamera.cpp:846), attach :987, lock-on trim :1074).
 
-### Commands ([FilmmakerCommand.cpp DoFollow:442](../../AfxHookSource2/Filmmaker/FilmmakerCommand.cpp:442))
+### Commands ([FollowCommand.cpp Follow_RunCommand](../../AfxHookSource2/Filmmaker/FollowCommand.cpp))
 - Added `follow mode`, `weaponsource`, `rotation` / `rotpitch|rotyaw|rotroll`,
   `offsetx|offsety|offsetz`, `fov`, `bone`, `eventselect`, `previewtick`, and the
   `campose` instrumentation dump. All prior commands + `state` / `state64` retained.

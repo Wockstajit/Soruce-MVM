@@ -177,8 +177,8 @@ struct ClientDllOffsets_t {
 	} C_CSPlayerPawn;
 
 	// READ-ONLY model-state chain for showing which agent/player-model a spectated player wears
-	// (this is a READ for the modal display; it is NOT a model swap -- see
-	// docs/cosmetics-model-override-research.md for why writing the model is server-side-only).
+	// (this is a READ for the modal display; it is NOT a model swap -- the actual client-side
+	// swap goes through C_BaseModelEntity::SetModel in Filmmaker/Cosmetics/, not these fields).
 	// Chain: pawn + m_CBodyComponent(ptr) -> + m_skeletonInstance -> + m_modelState -> + m_ModelName.
 	struct ModelChain {
 		ptrdiff_t m_CBodyComponent = 0;   // C_BaseEntity::m_CBodyComponent (CBodyComponent*, a POINTER)

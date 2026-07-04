@@ -114,7 +114,7 @@ particles/filmmaker/modern/arc9_fas_explosions/...
 particles/filmmaker/modern/mw2019_tracer/...
 ```
 
-Those namespaces are what `ParticleFx.cpp` uses in its variant tables. The launcher mounts
+Those namespaces are what `ParticleFxRules.cpp` uses in its variant tables. The launcher mounts
 the compiled output automatically via `USRLOCALCSGO`: it prefers the pack staged into the
 shipped build (`build/staging-release/fx/source_mvm_fx`) and falls back to the converter's
 working output (`build/fx/povarehok-source1import/source2/game/source_mvm_fx`). If the converted pack is not compiled and mounted into CS2's resource search path,
@@ -167,7 +167,7 @@ Modes (unsupported ones snap to On on the C++ side; the panel only offers the re
     `barrel_smoke(_plume)`) are written by the postprocess, and the hook upgrades a
     muzzle-flash swap to the wrapper only during sustained fire -- it counts creations of
     each vanilla flash name on the demo-tick clock (`kSprayPairs` / `SprayHotLocked` in
-    ParticleFx.cpp: consecutive shots <= 32 ticks apart, smoke from the 4th on). Povarehok
+    ParticleFxSpray.cpp: consecutive shots <= 32 ticks apart, smoke from the 4th on). Povarehok
     gets the same wrappers around its bundled
     `ac_muzzle_shotgun_alt_barrel_smoke` (the "trails missing in On" report); single-shot
     snipers keep per-shot smoke via composition children instead, since a spray gate can
@@ -233,6 +233,23 @@ the engine and bypass the hook. Verify what a demo actually creates with
 
 ## How it works
 
+### Code layout (`AfxHookSource2/Filmmaker/Movie/`)
+
+The runtime is split into focused translation units behind one public header
+(`ParticleFx.h`; shared internal surface in `ParticleFxInternal.h`):
+
+| File | Responsibility |
+|---|---|
+| `ParticleFx.cpp` | Core: engine binding + demo state, the apply-now reseek, the public class methods, the main-thread pump, and the `fx` command dispatch. |
+| `ParticleFxRules.cpp` | Name classification into categories, the FXRULE variant/swap tables (vanilla → pack assets), per-mode target selection, swap-target pre-queueing. |
+| `ParticleFxHook.cpp` | Vtable resolution + the create-collection detour + JIT-manifest target loading. The crash lessons from the 2026-07-02 dump sessions live in its comments. |
+| `ParticleFxSpray.cpp` | The spray-gated barrel-smoke state machine (`kSprayPairs`, demo-tick heat). |
+| `ParticleFxMoney.cpp` | Money-on-headshot candidates + game-event plumbing (`ParticleFx_OnGameEvent`). |
+| `ParticleFxSettings.cpp` | JSON persistence to `%APPDATA%\HLAE\filmmaker_fx.json`. |
+| `ParticleFxDiagnostics.cpp` | FxDebugHud state, the `fx recent`/`fx names` telemetry ring, agent-log writers. |
+
+### The hook
+
 One Detours hook on `particles.dll`'s `CParticleSystemMgr` create-collection body catches
 particle instantiation:
 
@@ -282,7 +299,7 @@ mirv_filmmaker fx align threshold <units>            per-sample pass distance (d
 ```
 
 Tuning workflow: `fx log on`, play the moment, inspect `fx names`, then adjust the variant
-tables in `ParticleFx.cpp`. Runtime events also mirror into the `mvm_debug` log
+tables in `ParticleFxRules.cpp`. Runtime events also mirror into the `mvm_debug` log
 (`fx.create`, `fx.install`, `fx.event`, `state.fx`).
 
 ## Automated coverage check

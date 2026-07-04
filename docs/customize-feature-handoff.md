@@ -25,6 +25,15 @@
 > Plan file (original): `C:\Users\ayden\.claude\plans\review-this-repo-as-polymorphic-treasure.md`
 > Related memory: `camera-customize-feature.md`, `camera-editor-mode-feature.md`,
 > `valveresourceformat-cli-tool.md`, `user-runs-builds.md`.
+>
+> **Current file layout (2026-07-04).** The cosmetics implementation described below has since
+> been split into one-responsibility files under `AfxHookSource2/Filmmaker/Cosmetics/` — see
+> [cosmetics-overview.md](cosmetics-overview.md) for the up-to-date map. Notable moves vs the
+> text below: the `cosmetics` console grammar lives in `Cosmetics/CosmeticCommands.cpp`
+> (`FilmmakerCommand.cpp` only forwards); the Customize modal's live econ reads
+> (`BuildCustomizeTargetJson`) live in `Cosmetics/CosmeticUiQueries.{h,cpp}` (moved from
+> `Panorama/CameraEditorCustomizeState`); model swaps are split across
+> `CosmeticKnifeSwap/CosmeticGloveSwap/CosmeticFnResolver/CosmeticModelSwap`.
 
 ---
 

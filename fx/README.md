@@ -10,7 +10,7 @@ from `automation/` (which is test-only).
 | **Modern** (MW2019) | Modern | [`sources/modern-warfare-gmod/`](sources/modern-warfare-gmod/) (committed, ~44 MB) | `particles/filmmaker/modern/...` |
 
 Both packs are produced by **one converter run** and mounted at runtime by
-`AfxHookSource2/Filmmaker/Movie/ParticleFx.cpp`.
+`AfxHookSource2/Filmmaker/Movie/ParticleFx*.cpp` (swap tables: `ParticleFxRules.cpp`).
 
 ## Layout
 
@@ -38,7 +38,7 @@ powershell -File fx/tools/convert-povarehok-source1.ps1 -Compile
 - Add `-RefreshModernFromGmod` to re-pull the Modern inputs from a local GMod first.
 - Output lands under `build/fx/…` and is **not** committed.
 - Before compiling, the content tree is **pruned to the runtime closure** derived from
-  `ParticleFx.cpp`'s swap tables (the validator's `--emit-closure`). The mod ships far
+  `ParticleFxRules.cpp`'s swap tables (the validator's `--emit-closure`). The mod ships far
   more than the DLL ever references — unpruned the pack was ~969 MB / 8,700 files, of
   which only ~15% was reachable; pruned it's roughly ~150 MB. Adding a new `FXRULE`
   automatically keeps its assets — there is no manual exclude list.

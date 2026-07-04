@@ -58,7 +58,7 @@ struct CosmeticFrameStats {
 // now DEFAULTS OFF -- normal apply writes only the real skin data (networked attrs + fallback fields),
 // which is HUD-safe -- and each is independently toggleable ("cosmetics rebuildflags <name> 0|1") so
 // the harmful-vs-useful one can be bisected without writing all of them at once. POD (all bool), so it
-// is safe to pass by value into the SEH-guarded write. See docs/cosmetics-recompose-research.md.
+// is safe to pass by value into the SEH-guarded write. See docs/archive/cosmetics-recompose-research.md.
 struct CosmeticRebuildFlags {
 	bool visualsDataSet = false; // C_CSWeaponBase::m_bVisualsDataSet = false (most plausible gate)
 	bool clearUgc = false;       // C_CSWeaponBase::m_bClearWeaponIdentifyingUGC = true (HUD-vanish suspect)
@@ -157,7 +157,7 @@ public:
 	// --- visual-cache rebuild (the refresh path; "cosmetics rebuild ...") ---
 	// Writing the econ fields/attributes is confirmed to STICK but does not, by itself, make a demo
 	// weapon re-composite its skin material (the consuming step is entity-lifecycle driven, not a
-	// per-frame poll -- see docs/cosmetics-recompose-research.md). These give a manual, on-demand way
+	// per-frame poll -- see docs/archive/cosmetics-recompose-research.md). These give a manual, on-demand way
 	// to (re)assert the "visuals are stale" field writes (m_bVisualsDataSet=false,
 	// m_bClearWeaponIdentifyingUGC=true, bump m_nCustomEconReloadEventId, clear init flags, bump attr
 	// parity) on every matched weapon entity, decoupled from the per-frame change detection, plus fire
@@ -208,7 +208,7 @@ public:
 	// / weapon redeploy recreates the entity from the authoritative item (the engine rebuilds the
 	// composite from the real skin, we detect the delta and re-composite to the override). The call is
 	// change-gated, so it is a no-op once the skin is stable -- cheap to leave on. This is the default
-	// because the field-write path alone does NOT re-render (see docs/cosmetics-recompose-research.md,
+	// because the field-write path alone does NOT re-render (see docs/archive/cosmetics-recompose-research.md,
 	// BREAKTHROUGH 2026-06-29). Toggle for A/B via "cosmetics autocomposite 0|1".
 	void SetAutoComposite(bool e) { m_autoComposite = e; }
 	bool AutoComposite() const { return m_autoComposite; }

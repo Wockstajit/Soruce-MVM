@@ -3,7 +3,7 @@
 Bisects which C_CSWeaponBase vtable index is OnDataChanged (the client-side skin-rebuild
 trigger) by probing each candidate in-game and screenshotting the result.
 
-Static analysis of the live client.dll (docs/cosmetics-recompose-research.md, 2026-06-28
+Static analysis of the live client.dll (docs/archive/cosmetics-recompose-research.md, 2026-06-28
 section) narrowed OnDataChanged to a small set of DataUpdateType_t-taking virtuals. This driver:
   1. plays a demo, spectates a player holding a weapon,
   2. sets a distinctive skin override on that weapon (which "sticks" but does NOT render

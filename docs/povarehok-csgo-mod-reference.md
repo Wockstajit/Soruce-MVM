@@ -51,7 +51,7 @@ silently shadowing the stock files.
 CS2 has no such "first loose file with this name wins" precache resolution, and CS2 doesn't
 understand Source 1 `.pcf`/`.vmt`/`.vtf` at all. There's no shortcut — every asset has to be
 converted to Source 2 `.vpcf`/`.vmat`/`.vtex` (via `source1import`) and the DLL has to
-explicitly swap to the converted file's own distinct path at runtime (see `ParticleFx.cpp`'s
+explicitly swap to the converted file's own distinct path at runtime (see `ParticleFxRules.cpp`'s
 `FXVAR`/`FXRULE` macros). Nothing about "just copy the folder in" works, and every one of
 the texture problems in §10 traces back to some assumption in that conversion pipeline that
 held for stock CS:GO content but not for this specific mod's assets.
