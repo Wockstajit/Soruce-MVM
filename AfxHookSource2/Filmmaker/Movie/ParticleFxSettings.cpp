@@ -44,14 +44,14 @@ void ParticleFx::LoadSettings() {
 		return;
 	std::lock_guard<std::mutex> lock(g_mx);
 	if (const JsonValue* v = root.Find("enabled"))
-		g_enabled = v->AsBool(true);
+		g_enabled = v->AsBool(false);
 	if (const JsonValue* v = root.Find("moneyHeadshot"))
 		g_moneyHeadshot = v->AsBool(false);
 	if (const JsonValue* modes = root.Find("modes"); modes && modes->type == JsonValue::Type::Object) {
 		for (int i = 0; i < kFxCategoryCount; ++i) {
 			if (const JsonValue* m = modes->Find(kCategoryKeys[i])) {
-				const int mi = ModeFromName(m->AsString("on").c_str());
-				g_modes[i] = NormalizeMode(i, mi >= 0 ? (FxMode)mi : FxMode::On);
+				const int mi = ModeFromName(m->AsString("off").c_str());
+				g_modes[i] = NormalizeMode(i, mi >= 0 ? (FxMode)mi : FxMode::Off);
 			}
 		}
 	}
@@ -71,7 +71,7 @@ void ParticleFx::LoadSettings() {
 				g_customRules.push_back(std::move(cr));
 		}
 	}
-	QueueActiveSwapTargetsLocked();
+	RebuildActiveSwapTargetsLocked(false);
 }
 
 bool ParticleFx::SaveSettings() const {

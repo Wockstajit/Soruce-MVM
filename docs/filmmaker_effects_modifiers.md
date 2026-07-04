@@ -5,6 +5,17 @@ Off** (each category only offers the modes it has real assets for) over the demo
 effects, toggled live from the Config panel (`mirv_filmmaker config`) or the console
 (`mirv_filmmaker fx ...`), persisted to `%APPDATA%\HLAE\filmmaker_fx.json`.
 
+Fresh runtime defaults are fully opt-in: the master switch and all eight categories start
+**Off**, including Map Ambience. With no saved configuration, startup and demo entry do not
+arm the particle hook or load anything under `particles/filmmaker/`. Explicitly saved
+configurations still load exactly as stored.
+
+Selecting a non-Off category automatically turns the master on and queues only that
+category's selected pack. Money on Headshot and newly added custom block/swap rules do the
+same. Pending names are deduplicated and resolved at one resource per frame. Switching a
+category replaces obsolete jobs; turning the master Off cancels all pending work while
+retaining the configured modes and already-resolved handles until the next level change.
+
 Two converted asset packs feed the modes:
 
 - **On / Less** — the CS:GO-era **Povarehok** mod (reference copies in
@@ -264,6 +275,12 @@ Swap targets are resolved on the main thread only. Resolving inside the create h
 re-enter the resource system during particle creation, so the hook is cache-hit-only: an
 unresolved target fails open once and gets queued for later resolution.
 
+The pending queue is rebuilt from one authoritative desired-target set after settings or
+level changes. A disabled master always publishes an empty target set and queue, including
+when diagnostic logging explicitly installs the hook. Level changes invalidate all cached
+handles and rebuild only currently enabled targets; level changes while Off leave the
+queue empty.
+
 Non-precached targets are loaded through the engine's just-in-time manifest path instead
 of the plain single-resource blocking load. That keeps dependency handles fixed up and
 avoids the crash path seen when a previously unseen target was loaded mid-create.
@@ -306,7 +323,11 @@ tables in `ParticleFxRules.cpp`. Runtime events also mirror into the `mvm_debug`
 
 `automation/verify/verify-fx-allweapons.ps1` replays an every-weapon test demo (default:
 `all weapon test .dem` in game/csgo) once per mode profile (`-Profiles modern,less` by
-default), with `fx log on`. From the hook's own `fx names` counters it asserts each
+default), with `fx log on`. Before playback it also verifies lazy-precache state behavior:
+all-Off produces a zero queue, selecting one category/pack auto-enables the master without
+changing other modes, repeated/switch selections do not grow stale work, master Off
+cancels the queue, and Money/custom rules opt in automatically. From the hook's own
+`fx names` counters it then asserts each
 expected group — muzzle flashes (incl. silenced), tracers, sustained-fire muzzle smoke,
 impacts, HE, bomb, molotov — was both created by the demo (seen) and swapped (acted), and
 writes `unmapped-<profile>.txt` listing weapon-path systems nothing acted on (the feed for

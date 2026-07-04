@@ -35,8 +35,11 @@ namespace fx {
 // second at the wildest), so a plain mutex in the hook is fine; the engine call used for
 // swap resolution is made OUTSIDE the lock.
 std::mutex g_mx;
-bool g_enabled = true;
-FxMode g_modes[kFxCategoryCount] = {}; // default FxMode::On
+bool g_enabled = false;
+FxMode g_modes[kFxCategoryCount] = {
+	FxMode::Off, FxMode::Off, FxMode::Off, FxMode::Off,
+	FxMode::Off, FxMode::Off, FxMode::Off, FxMode::Off
+};
 std::vector<CustomRule> g_customRules;
 bool g_logging = false;
 bool g_moneyHeadshot = false; // guarded by g_mx
@@ -90,6 +93,13 @@ void ApplyReseekNow() {
 }
 
 void RequestApplyReseek() {
+	{
+		std::lock_guard<std::mutex> lock(g_mx);
+		if (!g_enabled) {
+			g_applyAtMs.store(0);
+			return;
+		}
+	}
 	if (!DemoIsPlaying())
 		return;
 	g_applyAtMs.store(GetTickCount64() + 400);
@@ -121,7 +131,7 @@ bool ParticleFx::WantsHook() const {
 	std::lock_guard<std::mutex> lock(g_mx);
 	if (g_logging)
 		return true;
-	return g_enabled;
+	return HasActiveFxLocked();
 }
 
 bool ParticleFx::MoneyHeadshot() const {
@@ -130,12 +140,18 @@ bool ParticleFx::MoneyHeadshot() const {
 }
 
 void ParticleFx::SetMoneyHeadshot(bool on) {
+	bool wantsHook = false;
 	{
 		std::lock_guard<std::mutex> lock(g_mx);
+		const bool changed = g_moneyHeadshot != on;
+		const bool enablingMaster = on && !g_enabled;
 		g_moneyHeadshot = on;
-		QueueActiveSwapTargetsLocked();
+		if (on)
+			g_enabled = true;
+		RebuildActiveSwapTargetsLocked(changed || enablingMaster);
+		wantsHook = HasActiveFxLocked();
 	}
-	if (on)
+	if (wantsHook)
 		EnsureInstalled();
 	SaveSettings();
 	RequestApplyReseek();
@@ -178,7 +194,7 @@ void ParticleFx::PumpMainThread() {
 			std::lock_guard<std::mutex> lock(g_mx);
 			g_handleCache.clear();
 			g_resolveQueue.clear();
-			QueueActiveSwapTargetsLocked();
+			RebuildActiveSwapTargetsLocked(false);
 			if (MvmDebugLog_Active())
 				MvmDebugLog_Linef("fx.resolve", "level change -> handle cache cleared, %zu target(s) requeued",
 					g_resolveQueue.size());
@@ -222,19 +238,26 @@ bool ParticleFx::Enabled() const {
 }
 
 void ParticleFx::SetEnabled(bool on) {
+	bool wantsHook = false;
 	{
 		std::lock_guard<std::mutex> lock(g_mx);
+		const bool changed = g_enabled != on;
 		g_enabled = on;
+		RebuildActiveSwapTargetsLocked(changed && on);
+		wantsHook = HasActiveFxLocked();
 	}
-	if (on)
+	if (!on)
+		g_applyAtMs.store(0);
+	if (wantsHook)
 		EnsureInstalled();
 	SaveSettings();
-	RequestApplyReseek();
+	if (on)
+		RequestApplyReseek();
 }
 
 FxMode ParticleFx::Mode(FxCategory cat) const {
 	if (cat < 0 || cat >= kFxCategoryCount)
-		return FxMode::On;
+		return FxMode::Off;
 	std::lock_guard<std::mutex> lock(g_mx);
 	return g_modes[cat];
 }
@@ -243,14 +266,18 @@ void ParticleFx::SetMode(FxCategory cat, FxMode mode) {
 	if (cat < 0 || cat >= kFxCategoryCount)
 		return;
 	mode = NormalizeMode(cat, mode); // More -> On; Less/Modern only where real variants exist
-	bool enabled = false;
+	bool wantsHook = false;
 	{
 		std::lock_guard<std::mutex> lock(g_mx);
+		const bool changed = g_modes[cat] != mode;
+		const bool enablingMaster = mode != FxMode::Off && !g_enabled;
 		g_modes[cat] = mode;
-		QueueActiveSwapTargetsLocked();
-		enabled = g_enabled;
+		if (mode != FxMode::Off)
+			g_enabled = true;
+		RebuildActiveSwapTargetsLocked(changed || enablingMaster);
+		wantsHook = HasActiveFxLocked();
 	}
-	if (enabled)
+	if (wantsHook)
 		EnsureInstalled();
 	SaveSettings();
 	RequestApplyReseek();
@@ -307,7 +334,7 @@ namespace {
 
 void PrintFxHelp(const char* cmd) {
 	advancedfx::Message(
-		"%s fx set <category> <on|less|modern|off> - control one effect category. Categories:\n"
+		"%s fx set <category> <on|less|modern|off> - control one effect category (non-Off enables the master). Categories:\n"
 		"    impacts    - bullet-surface impacts (on|less|off)\n"
 		"    tracers    - bullet tracers (on|modern|off)\n"
 		"    weaponfx   - muzzle flash, muzzle/shell smoke, brass (on|modern|off)\n"
@@ -322,7 +349,7 @@ void PrintFxHelp(const char* cmd) {
 		"   is accepted as a legacy alias of on. Unsupported modes snap to on.\n"
 		"   If the asset pack is not mounted, the original CS2 effect plays. Smoke GRENADES are never touched - CS2\n"
 		"   volumetric smoke is not a particle swap.)\n"
-		"%s fx on|off - master switch over all category modes + rules.\n"
+		"%s fx on|off - master switch over all category modes + rules (Off cancels pending precache).\n"
 		"%s fx state - status + counters.\n"
 		"%s fx log on|off - capture every particle creation (view with 'fx recent').\n"
 		"%s fx recent [n] - print the last n captured/acted creations (default 30).\n"
@@ -485,7 +512,8 @@ void ParticleFx_RunCommand(int argc, advancedfx::ICommandArgs* args, const char*
 		{
 			std::lock_guard<std::mutex> lock(g_mx);
 			g_customRules.push_back(r);
-			QueueActiveSwapTargetsLocked();
+			g_enabled = true;
+			RebuildActiveSwapTargetsLocked(true);
 		}
 		fx.EnsureInstalled();
 		fx.SaveSettings();
@@ -506,6 +534,7 @@ void ParticleFx_RunCommand(int argc, advancedfx::ICommandArgs* args, const char*
 			g_customRules.erase(std::remove_if(g_customRules.begin(), g_customRules.end(),
 				[&](const CustomRule& r) { return r.match == match; }), g_customRules.end());
 			removed = before - g_customRules.size();
+			RebuildActiveSwapTargetsLocked(removed != 0);
 		}
 		fx.SaveSettings();
 		RequestApplyReseek();

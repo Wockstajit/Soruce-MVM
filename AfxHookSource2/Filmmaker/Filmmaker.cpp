@@ -285,8 +285,8 @@ void RunMainThreadFrame() {
 	// is a cheap no-op and the regular editor is untouched.
 	GraphEditorExperimentHudRef().RunFrame();
 
-	// Particle-effect modifiers: lazy hook-arm retry only (rate-limited; no-op once installed
-	// or while every category is On). The detour itself needs no per-frame driving.
+	// Particle-effect modifiers: lazy hook-arm and one-resource-per-frame resolver. Fresh
+	// defaults are fully Off, so startup/demo entry performs no custom particle loading.
 	ParticleFxRef().PumpMainThread();
 	// Debug squares proving the barrel-smoke wisp's parent swap actually fires, distinctly for
 	// Modern vs On/Povarehok (opt-in; 'mirv_filmmaker fx debughud on|off'). No-op when off.

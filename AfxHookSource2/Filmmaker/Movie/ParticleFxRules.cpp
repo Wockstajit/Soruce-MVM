@@ -4,6 +4,7 @@
 
 #include "ParticleFxInternal.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace Filmmaker {
@@ -468,23 +469,36 @@ const char* VariantTargetLower(int cat, FxMode mode, const char* n) {
 
 // ============================== swap-target pre-queueing ===========================
 
-// Queue every name current settings could swap to, so targets are (re)resolved ahead of
-// the first creation that needs them. Called on install and on every settings change.
-void QueueActiveSwapTargetsLocked() {
-	auto add = [](const char* n) {
-		if (g_handleCache.find(n) != g_handleCache.end())
+bool HasActiveFxLocked() {
+	if (!g_enabled)
+		return false;
+	if (g_moneyHeadshot || !g_customRules.empty())
+		return true;
+	for (int i = 0; i < kFxCategoryCount; ++i)
+		if (g_modes[i] != FxMode::Off)
+			return true;
+	return false;
+}
+
+void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
+	std::vector<std::string> desired;
+	auto add = [&desired](const char* n) {
+		if (!n || !n[0])
 			return;
-		for (const std::string& q : g_resolveQueue)
-			if (q == n)
-				return;
-		g_resolveQueue.push_back(n);
+		if (std::find(desired.begin(), desired.end(), n) == desired.end())
+			desired.push_back(n);
 	};
-	add(kEmptySystem);
+	bool needsEmptySystem = false;
+	for (const CustomRule& r : g_customRules) {
+		if (r.target.empty())
+			needsEmptySystem = true;
+		else
+			add(r.target.c_str());
+	}
+	if (needsEmptySystem)
+		add(kEmptySystem);
 	if (g_moneyHeadshot)
 		add(kMoneyBurst);
-	for (const CustomRule& r : g_customRules)
-		if (!r.target.empty())
-			add(r.target.c_str());
 	const VariantRule* tables[] = { kVariantWeaponFx, kVariantTracers, kVariantBlood,
 		kVariantExplosions, kVariantBomb, kVariantImpacts, kVariantMolotov };
 	const size_t counts[] = {
@@ -517,11 +531,33 @@ void QueueActiveSwapTargetsLocked() {
 		for (const TracerFallback& f : kTracerFallbacks)
 			add(TracerFallbackTarget(tracerMode, f.substr));
 	}
+
+	if (invalidateObsoleteHandles) {
+		for (auto it = g_handleCache.begin(); it != g_handleCache.end();) {
+			const bool selected = std::find(desired.begin(), desired.end(), it->first) != desired.end();
+			// Explicit settings changes retry failed selected targets immediately,
+			// while ready handles shared with the new selection stay hot.
+			if (!selected || !it->second.handle)
+				it = g_handleCache.erase(it);
+			else
+				++it;
+		}
+	}
+
+	g_activeTargets.clear();
+	g_resolveQueue.clear();
+	if (!g_enabled)
+		return;
+
+	g_activeTargets = desired;
+	for (const std::string& name : desired)
+		if (g_handleCache.find(name) == g_handleCache.end())
+			g_resolveQueue.push_back(name);
 }
 
-void QueueActiveSwapTargets() {
+void RebuildActiveSwapTargets(bool invalidateObsoleteHandles) {
 	std::lock_guard<std::mutex> lock(g_mx);
-	QueueActiveSwapTargetsLocked();
+	RebuildActiveSwapTargetsLocked(invalidateObsoleteHandles);
 }
 
 } // namespace fx

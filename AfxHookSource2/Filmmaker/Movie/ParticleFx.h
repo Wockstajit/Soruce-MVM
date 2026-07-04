@@ -78,16 +78,16 @@ public:
 	// false (and only warns ONCE for hard shape mismatches) when the hook cannot arm yet.
 	bool EnsureInstalled();
 	bool Installed() const;
-	// True when current settings need the hook. Since On means the classic mod variant, the
-	// enabled default needs the hook too; logging can also force it while disabled.
+	// True when the master switch plus an active category/auxiliary feature need the hook;
+	// explicit diagnostic logging can also force it while effects remain disabled.
 	bool WantsHook() const;
 	// Lazy install retry, called once per main-thread frame (internally rate-limited).
 	void PumpMainThread();
 
-	bool Enabled() const;            // master switch over all category modes + custom rules
-	void SetEnabled(bool on);        // auto-saves
+	bool Enabled() const;            // master switch; fresh runtime default is Off
+	void SetEnabled(bool on);        // auto-saves; Off cancels pending resolves
 	FxMode Mode(FxCategory cat) const;
-	void SetMode(FxCategory cat, FxMode mode); // auto-saves
+	void SetMode(FxCategory cat, FxMode mode); // non-Off auto-enables master; auto-saves
 
 	void SetLogging(bool on);        // capture creations to the recent-ring (+ mvm_debug)
 	bool Logging() const;

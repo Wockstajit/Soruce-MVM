@@ -400,7 +400,7 @@ R"CFJS(
       moneyBtn.style.paddingLeft = '9px'; moneyBtn.style.paddingRight = '9px';
       moneyBtn.__lbl.style.fontSize = '12px';
     })();
-    var fxNote = lbl(fxSec, "On uses the converted Povarehok pack (Regular). Less uses the mod's reduced variants (only offered where they actually differ). Modern uses the converted MW2019 pack: class muzzle flashes, per-shot barrel smoke, MW tracers, and the MW frag explosion for HE. HE Grenade and Bomb are separate so you can mix packs. Off uses default CS2. Missing converted assets fail open to the original CS2 effect. Money on Headshot replaces the headshot-only blood/helmet particles, so it fires exactly on real headshot hits. Smoke grenades are never affected.", S.dim, 10);
+    var fxNote = lbl(fxSec, "FX starts Off. Choosing any non-Off mode turns Effects Control on and lazily loads only the selected categories. On uses the converted Povarehok pack (Regular). Less uses the mod's reduced variants (only offered where they actually differ). Modern uses the converted MW2019 pack: class muzzle flashes, per-shot barrel smoke, MW tracers, and the MW frag explosion for HE. HE Grenade and Bomb are separate so you can mix packs. Off uses default CS2. Missing converted assets fail open to the original CS2 effect. Money on Headshot replaces the headshot-only blood/helmet particles, so it fires exactly on real headshot hits. Smoke grenades are never affected.", S.dim, 10);
     fxNote.style.whiteSpace = 'normal'; fxNote.style.marginTop = '7px';
     var fxStatus = lbl(fxSec, 'Hook not armed yet - effects play unmodified until it arms (auto-retries).', '#e8b339ff', 10);
     fxStatus.style.whiteSpace = 'normal'; fxStatus.style.marginTop = '3px'; fxStatus.visible = false;
@@ -544,7 +544,7 @@ R"CFJS(
       fxMaster.pill.style.border = '1px solid ' + (fxOn ? '#1c8a3aff' : '#ffffff14');
       fxMaster.knob.style.horizontalAlign = fxOn ? 'right' : 'left';
       for (var fi = 0; fi < fxCtls.length; fi++) {
-        var fxMode = st[fxCtls[fi][0]] || 'on';
+        var fxMode = st[fxCtls[fi][0]] || 'off';
         fxCtls[fi][1].sync(fxMode);
       }
       var msOn = !!st.fxMoneyshot;

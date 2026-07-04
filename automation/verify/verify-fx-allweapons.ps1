@@ -199,8 +199,72 @@ if (-not $state) {
     exit 1
 }
 # Restore the user's persisted modes when done (SetMode auto-saves).
+$savedEnabled = [bool]$state.enabled
+$savedMoneyshot = [bool]$state.moneyHeadshot
 $savedModes = @{}
 foreach ($p in $state.modes.PSObject.Properties) { $savedModes[$p.Name] = $p.Value }
+
+# Lazy-precache state checks. Start from a known all-Off configuration, then prove that
+# selecting one category or auxiliary feature is sufficient to opt in, while master Off
+# always cancels the pending queue. Exact target names stay an internal implementation
+# detail; the all-other-categories-Off assertions prove the queue planner has one source.
+$categoryKeys = @('impacts', 'tracers', 'weaponfx', 'blood', 'explosions', 'bombfx', 'molotov', 'mapfx')
+foreach ($category in $categoryKeys) {
+    Send ("mirv_filmmaker fx set {0} off quiet" -f $category) 0.05 | Out-Null
+}
+Send 'mirv_filmmaker fx moneyshot off' 0.05 | Out-Null
+Send 'mirv_filmmaker fx off quiet' 0.05 | Out-Null
+$offState = Read-FxState
+Check '[lazy] master Off reports an empty resolve queue' ($offState -and -not $offState.enabled -and [int]$offState.resolveQueue -eq 0)
+$allModesOff = $offState -ne $null
+if ($offState) {
+    foreach ($category in $categoryKeys) {
+        if ($offState.modes.$category -ne 'off') { $allModesOff = $false }
+    }
+}
+Check '[lazy] all eight categories can remain Off' $allModesOff
+
+Send 'mirv_filmmaker fx set impacts on quiet' 0.05 | Out-Null
+$oneCategory = Read-FxState
+$onlyImpacts = $oneCategory -and $oneCategory.enabled -and $oneCategory.modes.impacts -eq 'on'
+if ($oneCategory) {
+    foreach ($category in ($categoryKeys | Where-Object { $_ -ne 'impacts' })) {
+        if ($oneCategory.modes.$category -ne 'off') { $onlyImpacts = $false }
+    }
+}
+Check '[lazy] selecting one non-Off category auto-enables master without changing other modes' $onlyImpacts
+$queueBeforeRepeat = if ($oneCategory) { [int]$oneCategory.resolveQueue } else { 0 }
+Send 'mirv_filmmaker fx set impacts on quiet' 0.05 | Out-Null
+$repeatState = Read-FxState
+Check '[lazy] repeating a selection does not grow the pending queue' `
+    ($repeatState -and [int]$repeatState.resolveQueue -le $queueBeforeRepeat)
+
+Send 'mirv_filmmaker fx set impacts less quiet' 0.05 | Out-Null
+$switchState = Read-FxState
+Check '[lazy] switching packs replaces the selected mode' `
+    ($switchState -and $switchState.enabled -and $switchState.modes.impacts -eq 'less')
+Send 'mirv_filmmaker fx off quiet' 0.05 | Out-Null
+$cancelState = Read-FxState
+Check '[lazy] disabling master cancels remaining precache work' `
+    ($cancelState -and -not $cancelState.enabled -and [int]$cancelState.resolveQueue -eq 0)
+
+Send 'mirv_filmmaker fx moneyshot on' 0.05 | Out-Null
+$moneyState = Read-FxState
+Check '[lazy] enabling Money on Headshot auto-enables master' `
+    ($moneyState -and $moneyState.enabled -and $moneyState.moneyHeadshot)
+Send 'mirv_filmmaker fx moneyshot off' 0.05 | Out-Null
+Send 'mirv_filmmaker fx off quiet' 0.05 | Out-Null
+
+$ruleToken = '__mvm_lazy_verify_' + (Get-Date -Format 'yyyyMMddHHmmssfff')
+$beforeRule = Read-FxState
+Send ("mirv_filmmaker fx block {0}" -f $ruleToken) 0.05 | Out-Null
+$ruleState = Read-FxState
+Check '[lazy] adding a custom rule auto-enables master' `
+    ($beforeRule -and $ruleState -and $ruleState.enabled -and `
+     [int]$ruleState.customRules -eq ([int]$beforeRule.customRules + 1))
+Send ("mirv_filmmaker fx unblock {0}" -f $ruleToken) 0.05 | Out-Null
+Send 'mirv_filmmaker fx off quiet' 0.05 | Out-Null
+
 Send 'mirv_filmmaker fx on quiet' | Out-Null
 Send 'mirv_filmmaker fx debughud on' | Out-Null
 Send 'mvm_debug start' 0.4 | Out-Null
@@ -332,15 +396,22 @@ foreach ($profile in $Profiles) {
     Send 'mirv_filmmaker fx log off' 0.3 | Out-Null
 
     if (-not $SkipDemoLoad) {
+        Send 'mirv_filmmaker fx off quiet' 0.2 | Out-Null
         Send 'disconnect' 1.5 | Out-Null
         Start-Sleep -Seconds 4
+        $offTransition = Read-FxState
+        Check ("[{0}] level exit while FX Off leaves the queue empty" -f $profile) `
+            ($offTransition -and -not $offTransition.enabled -and [int]$offTransition.resolveQueue -eq 0)
     }
 }
 
-# Restore the user's persisted category modes.
+# Restore the user's persisted category modes and auxiliary/master state. Restore master
+# last because non-Off modes and Money on Headshot intentionally auto-enable it.
 foreach ($entry in $savedModes.GetEnumerator()) {
     Send ("mirv_filmmaker fx set {0} {1} quiet" -f $entry.Key, $entry.Value) 0.25 | Out-Null
 }
+Send ("mirv_filmmaker fx moneyshot {0}" -f $(if ($savedMoneyshot) { 'on' } else { 'off' })) 0.25 | Out-Null
+Send ("mirv_filmmaker fx {0} quiet" -f $(if ($savedEnabled) { 'on' } else { 'off' })) 0.25 | Out-Null
 $client.Close()
 
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutDir 'report.json') -Encoding UTF8

@@ -116,10 +116,14 @@ FxMode NormalizeMode(int cat, FxMode mode);
 int CategoryFromKey(const char* key);
 int ModeFromName(const char* name);
 const char* VariantTargetLower(int cat, FxMode mode, const char* n);
-// Queue every name current settings could swap to, so targets are (re)resolved ahead of
-// the first creation that needs them. Called on install and on every settings change.
-void QueueActiveSwapTargetsLocked();
-void QueueActiveSwapTargets();
+// g_mx held. True only when the master switch and at least one category/auxiliary FX
+// feature are active. Logging is deliberately excluded: it needs the hook, not assets.
+bool HasActiveFxLocked();
+// Reconcile the authoritative active-target set and pending resolver queue with current
+// settings. Master-off always clears active/pending targets. Resolved handles are retained
+// on master-off, but an explicit mode/rule change can invalidate obsolete handles.
+void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles);
+void RebuildActiveSwapTargets(bool invalidateObsoleteHandles);
 
 // ============================== hook (ParticleFxHook.cpp) ==========================
 
@@ -128,6 +132,9 @@ extern bool g_installFailedHard;     // shape mismatch: stop retrying, feature i
 extern unsigned long long g_lastInstallTryMs;
 extern bool g_jitRedirectInstalled;
 extern std::unordered_map<std::string, HandleCacheEntry> g_handleCache; // guarded by g_mx
+// Names current settings permit the hook to resolve. Checking this set prevents an
+// in-flight creation from requeueing an obsolete target after FX is disabled or changed.
+extern std::vector<std::string> g_activeTargets; // guarded by g_mx
 // Swap-target names waiting for MAIN-THREAD resolution (guarded by g_mx).
 extern std::vector<std::string> g_resolveQueue;
 

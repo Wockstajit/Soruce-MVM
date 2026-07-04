@@ -22,7 +22,10 @@ does not hide the native HUD.
 Per-category particle swaps (impacts, tracers, muzzle FX, blood, explosions, molotov, map
 ambience) with **On / Less / Off** modes plus the Modern (MW2019) modes, backed by the
 runtime particle-create hook in `Movie/ParticleFx*.cpp` and the converted asset packs in
-`fx/`. Console equivalent: `mirv_filmmaker fx ...`.
+`fx/`. Fresh runtime defaults are master Off and every category Off, so opening a demo
+does not load custom particle assets. Selecting any non-Off mode turns the master on and
+precaches only the selected categories; disabling the master cancels pending work without
+forgetting the chosen modes. Console equivalent: `mirv_filmmaker fx ...`.
 
 Full documentation (modes, asset pipeline, hook internals, diagnostics):
 [filmmaker_effects_modifiers.md](filmmaker_effects_modifiers.md).

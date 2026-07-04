@@ -15,6 +15,7 @@
 #include <windows.h>
 #include "../../../deps/release/Detours/src/detours.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -68,6 +69,7 @@ bool g_installFailedHard = false;      // shape mismatch: stop retrying, feature
 unsigned long long g_lastInstallTryMs = 0;
 bool g_jitRedirectInstalled = false;
 std::unordered_map<std::string, HandleCacheEntry> g_handleCache; // guarded by g_mx
+std::vector<std::string> g_activeTargets; // guarded by g_mx
 // Swap-target names waiting for MAIN-THREAD resolution (see ResolveHandleOnMainThread).
 std::vector<std::string> g_resolveQueue;
 
@@ -285,6 +287,8 @@ void TryInstallJitRedirect() {
 void ResolveHandleOnMainThread(const char* name) {
 	{
 		std::lock_guard<std::mutex> lock(g_mx);
+		if (std::find(g_activeTargets.begin(), g_activeTargets.end(), name) == g_activeTargets.end())
+			return;
 		auto it = g_handleCache.find(name);
 		if (it != g_handleCache.end()) {
 			if (it->second.handle)
@@ -340,6 +344,8 @@ namespace {
 // queued for the main-thread pump and null is returned (caller fails open).
 void* LookupHandleOrQueue(const char* name) {
 	std::lock_guard<std::mutex> lock(g_mx);
+	if (std::find(g_activeTargets.begin(), g_activeTargets.end(), name) == g_activeTargets.end())
+		return nullptr;
 	auto it = g_handleCache.find(name);
 	if (it != g_handleCache.end()) {
 		if (it->second.handle)
@@ -680,7 +686,7 @@ bool TryInstall() {
 	g_mgr = mgr;
 	g_find = (FindSystem_t)find;
 	TryInstallJitRedirect();  // upgrade resolver blocking loads to manifest loads
-	QueueActiveSwapTargets(); // pre-resolve targets on the main-thread pump
+	RebuildActiveSwapTargets(false); // queue only currently enabled targets
 	g_installed.store(true);
 	advancedfx::Message("fx: particle hook installed (create-collection %s detoured).\n",
 		hookTarget == stub ? "stub" : "body");
