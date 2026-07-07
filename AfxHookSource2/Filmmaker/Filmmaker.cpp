@@ -9,6 +9,7 @@
 #include "Panorama/CameraTimelineHud.h"
 #include "Panorama/CameraEditorHud.h"
 #include "Panorama/ConfigHud.h"
+#include "Panorama/TestHud.h"
 #include "Panorama/GraphEditorExperimentHud.h"
 #include "Panorama/DemoBarButtons.h"
 #include "Movie/CameraBridge.h"
@@ -318,6 +319,9 @@ void RunMainThreadFrame() {
 	// in the same tick (they are mutually exclusive -- each closes the other on open).
 	ConfigHudRef().RunFrame();
 
+	// mvm_test offline live-match FX panel (effects-only; Insert toggles).
+	TestHudRef().RunFrame();
+
 	// Camera Editor Mode workspace shell. Runs LAST so its host orchestration (timeline
 	// hosting + gameplay-HUD hide) is applied on top of every other panel this frame.
 	CameraEditorHudRef().RunFrame();
@@ -368,6 +372,21 @@ bool CameraTimeline_WantsCursor() {
 	return tl.Cursor();
 }
 bool CameraTimeline_Visible() { return CameraTimelineHudRef().Visible(); }
+
+// --- Live-match FX test menu: release the GAME mouse so the cursor drives the panel ---
+// main.cpp detours CCSGOInput::MouseInputEnabled and returns false while this is true, so
+// the engine stops consuming the mouse for player aim and shows the cursor on a LIVE map
+// (GetSuspendMirvInput only suspends HLAE's own free-cam look, which does nothing about the
+// live player's aim capture). Gated on:
+//   - MvmTest_CanUseMenu(): an offline live match with a map loaded and NOT demo playback --
+//     the FX menu is a private-match-only harness and must never touch demo playback (the
+//     camera timeline reuses CameraTimelineHudRef().Cursor() during demos, so this explicit
+//     demo exclusion keeps the mouse hook from ever firing there); and
+//   - the FX panel actually open in UI-cursor mode -- pressing G (MOUSE: GAME) drops the
+//     timeline cursor flag so aiming/shooting returns.
+bool LiveFxMenu_WantsGameMouseReleased() {
+	return MvmTest_CanUseMenu() && TestHudRef().Enabled() && CameraTimelineHudRef().Cursor();
+}
 
 // --- camera-path view ownership + debug gate (read by main.cpp's view-setup hook) ---
 bool CameraPathOwnsView() { return CameraPathRef().OwnsView() || FollowCameraRef().OwnsView(); }

@@ -1,0 +1,37 @@
+// Reconstructed from the VTF's embedded particle sheet by export-source1-vtf.py
+
+sequence 0
+LOOP
+frame ins_muzzleflash_seq0_0.tga 1
+frame ins_muzzleflash_seq0_1.tga 1
+
+sequence 1
+LOOP
+frame ins_muzzleflash_seq1_0.tga 1
+frame ins_muzzleflash_seq1_1.tga 1
+
+sequence 2
+LOOP
+frame ins_muzzleflash_seq2_0.tga 1
+frame ins_muzzleflash_seq2_1.tga 1
+
+sequence 3
+LOOP
+frame ins_muzzleflash_seq3_0.tga 1
+frame ins_muzzleflash_seq3_1.tga 1
+
+sequence 4
+LOOP
+frame ins_muzzleflash_seq4.tga 1
+
+sequence 5
+LOOP
+frame ins_muzzleflash_seq5.tga 1
+
+sequence 6
+LOOP
+frame ins_muzzleflash_seq6.tga 1
+
+sequence 7
+LOOP
+frame ins_muzzleflash_seq7.tga 1

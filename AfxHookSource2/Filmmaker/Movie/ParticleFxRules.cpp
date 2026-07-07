@@ -285,21 +285,24 @@ const VariantRule kVariantWeaponFx[] = {
 	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_b_version_2.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_smoke_b_version_#2", "arc9_fas_muzzleflashes/barrel_smoke"),
 	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long",        "arc9_fas_muzzleflashes/barrel_smoke_plume"),
 	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long_b.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long_b",      "arc9_fas_muzzleflashes/barrel_smoke_plume"),
-	// Brass shell casings (user report 2026-07-03 "supposed to replace the shells"): the mod
-	// ships its own weapon_shell_casing_* systems rendering real converted shell meshes, but
-	// they were never mapped, so vanilla brass always passed through in every mode. CS2 has
-	// more caliber variants than the mod; nearest-caliber mapping (45acp/57 -> 9mm pistol
-	// brass, mag7/nova -> the one shotgun shell, AWP -> the .50 cal). The cosmetic-only
+	// Brass shell casings. SEPARATED per pack (user directive 2026-07-07 "modern and pov have
+	// different casings; nothing shared"): On/Less render Povarehok's casings (generic CS:GO
+	// shell meshes), Modern renders its OWN casings under modern/weapons/cs_weapon_fx/ that
+	// point at the mw2019/ shell models + the Modern port_smoke eject puff. Previously Modern
+	// reused Povarehok's casing SYSTEMS (FXRULE_MODERN_BP) and Modern's port_smoke was bolted
+	// onto them -- two kinds of cross-pack sharing, both now gone. CS2 has more caliber
+	// variants than either pack; nearest-caliber mapping (45acp/57 -> 9mm pistol brass,
+	// mag7/nova -> the one shotgun shell, AWP -> the .50 cal). The cosmetic-only
 	// weapon_shell_casing_super_trail stays untouched.
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_9mm.vpcf",           "weapons/cs_weapon_fx", "weapon_shell_casing_9mm"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_45acp.vpcf",         "weapons/cs_weapon_fx", "weapon_shell_casing_9mm"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_57.vpcf",            "weapons/cs_weapon_fx", "weapon_shell_casing_9mm"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_rifle.vpcf",         "weapons/cs_weapon_fx", "weapon_shell_casing_rifle"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_awp.vpcf",           "weapons/cs_weapon_fx", "weapon_shell_casing_50cal"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_deagle.vpcf",        "weapons/cs_weapon_fx", "weapon_shell_casing_deagle"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun.vpcf",       "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun_mag7.vpcf",  "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun"),
-	FXRULE_MODERN_BP("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun_nova.vpcf",  "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_9mm.vpcf",           "weapons/cs_weapon_fx", "weapon_shell_casing_9mm",     "weapons/cs_weapon_fx/weapon_shell_casing_9mm"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_45acp.vpcf",         "weapons/cs_weapon_fx", "weapon_shell_casing_9mm",     "weapons/cs_weapon_fx/weapon_shell_casing_9mm"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_57.vpcf",            "weapons/cs_weapon_fx", "weapon_shell_casing_9mm",     "weapons/cs_weapon_fx/weapon_shell_casing_9mm"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_rifle.vpcf",         "weapons/cs_weapon_fx", "weapon_shell_casing_rifle",   "weapons/cs_weapon_fx/weapon_shell_casing_rifle"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_awp.vpcf",           "weapons/cs_weapon_fx", "weapon_shell_casing_50cal",   "weapons/cs_weapon_fx/weapon_shell_casing_50cal"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_deagle.vpcf",        "weapons/cs_weapon_fx", "weapon_shell_casing_deagle",  "weapons/cs_weapon_fx/weapon_shell_casing_deagle"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun.vpcf",       "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun", "weapons/cs_weapon_fx/weapon_shell_casing_shotgun"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun_mag7.vpcf",  "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun", "weapons/cs_weapon_fx/weapon_shell_casing_shotgun"),
+	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_shell_casing_shotgun_nova.vpcf",  "weapons/cs_weapon_fx", "weapon_shell_casing_shotgun", "weapons/cs_weapon_fx/weapon_shell_casing_shotgun"),
 	FXRULE_MODERN("particles/unified_weapon_fx/weapon_muzzleflash_basic.vpcf",     "weapons/cs_weapon_fx", "weapon_muzzle_flash_assaultrifle", "arc9_fas_muzzleflashes/muzzleflash_ar"),
 	// Near-ground muzzle blast dust: CS2 spawns this system by proximity, the MW2019 mod's
 	// .50-cal Lua spawns engine ThumperDust at the feet -- the FAS M82 shock dust is the
@@ -581,6 +584,16 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 void RebuildActiveSwapTargets(bool invalidateObsoleteHandles) {
 	std::lock_guard<std::mutex> lock(g_mx);
 	RebuildActiveSwapTargetsLocked(invalidateObsoleteHandles);
+}
+
+void QueueAllUncachedActiveTargetsLocked() {
+	for (const std::string& name : g_activeTargets) {
+		if (g_handleCache.find(name) != g_handleCache.end())
+			continue;
+		if (std::find(g_resolveQueue.begin(), g_resolveQueue.end(), name) != g_resolveQueue.end())
+			continue;
+		g_resolveQueue.push_back(name);
+	}
 }
 
 } // namespace fx

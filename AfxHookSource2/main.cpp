@@ -328,7 +328,8 @@ private:
 			|| Filmmaker::MarkerMenu_WantsCursor()
 			|| Filmmaker::CameraTimeline_WantsCursor()
 			|| Filmmaker::GraphEditorExperiment_WantsCursor()
-			|| Filmmaker::CameraEditor_CustomizeModalOpen();
+			|| Filmmaker::CameraEditor_CustomizeModalOpen()
+			|| Filmmaker::TestHud_Enabled();
 	}
 
 	virtual void GetLastCameraData(double & x, double & y, double & z, double & rX, double & rY, double & rZ, double & fov) override {
@@ -1169,10 +1170,27 @@ CON_COMMAND(__mirv_o,"") {
 	ofsProj = (ofsProj + 1)%48;
 }*/
 
+// CCSGOInput::MouseInputEnabled -- client.dll's primary CCSGOInput vtable slot 23 (confirmed
+// by static RE of the current build: RTTI ".?AVCCSGOInput@@", the 33-slot primary vtable; the
+// slot is a multi-condition bool that gates whether the game consumes the mouse for player
+// aim). Returning false frees the mouse and shows the cursor -- the nerv/Andromeda technique
+// for giving a live-match menu the mouse. We only override while the offline mvm_test FX menu
+// is open in UI-cursor mode; otherwise we defer to the original so aiming/shooting is normal.
+// This is needed because GetSuspendMirvInput only suspends HLAE's own free-cam mouse-look,
+// which does nothing about a live player's aim capture (in a demo there is no such capture,
+// so the cursor already works there and this menu never opens during demo playback anyway).
+typedef bool (__fastcall * CCSGOInput_MouseInputEnabled_t)(void* This);
+CCSGOInput_MouseInputEnabled_t g_Old_CCSGOInput_MouseInputEnabled = nullptr;
+bool __fastcall New_CCSGOInput_MouseInputEnabled(void* This) {
+	if (Filmmaker::LiveFxMenu_WantsGameMouseReleased())
+		return false;
+	return g_Old_CCSGOInput_MouseInputEnabled(This);
+}
+
 typedef void (__fastcall * CViewRender_UnkMakeMatrix_t)(void* This);
 CViewRender_UnkMakeMatrix_t g_Old_CViewRender_UnkMakeMatrix = nullptr;
 void __fastcall New_CViewRender_UnkMakeMatrix(void* This) {
-	
+
 	g_Old_CViewRender_UnkMakeMatrix(This);
 	//memcpy(g_WorldToScreenMatrix.m,(unsigned char*)This + 0x1b8,sizeof(g_WorldToScreenMatrix.m));
 
@@ -1412,6 +1430,16 @@ void HookClientDll(HMODULE clientDll) {
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourAttach(&(PVOID&)g_Old_CViewRender_UnkMakeMatrix,New_CViewRender_UnkMakeMatrix);
+        if(NO_ERROR != DetourTransactionCommit()) ErrorBox(MkErrStr(__FILE__, __LINE__));
+	} else ErrorBox(MkErrStr(__FILE__, __LINE__));
+
+	// CCSGOInput::MouseInputEnabled = primary CCSGOInput vtable slot 23 (see the hook above).
+	// Frees the mouse to the offline mvm_test FX menu on a live map.
+	if(void ** vtable = (void**)Afx::BinUtils::FindClassVtable(clientDll,".?AVCCSGOInput@@", 0, 0x0)) {
+		g_Old_CCSGOInput_MouseInputEnabled = (CCSGOInput_MouseInputEnabled_t)vtable[23] ;
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourAttach(&(PVOID&)g_Old_CCSGOInput_MouseInputEnabled,New_CCSGOInput_MouseInputEnabled);
         if(NO_ERROR != DetourTransactionCommit()) ErrorBox(MkErrStr(__FILE__, __LINE__));
 	} else ErrorBox(MkErrStr(__FILE__, __LINE__));
 

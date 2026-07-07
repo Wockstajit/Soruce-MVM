@@ -1,0 +1,27 @@
+{
+  "impact_dust": {
+    "gamePath": "materials/particles/dust_puff.vtf",
+    "contentResource": "materials/particle/insurgency/dust_puff",
+    "localStem": "materials/particles/dust_puff"
+  },
+  "muzzle": {
+    "gamePath": "materials/particles/ins_muzzle_smoke.vtf",
+    "contentResource": "materials/particle/insurgency/ins_muzzle_smoke",
+    "localStem": "materials/particles/ins_muzzle_smoke"
+  },
+  "shell_eject": {
+    "gamePath": "materials/particle/shells/particle_shells.vtf",
+    "contentResource": "materials/particle/insurgency/particle_shells",
+    "localStem": "materials/particle/shells/particle_shells"
+  },
+  "thin_smoke": {
+    "gamePath": "materials/particles/ins_animsmokethin_01.vtf",
+    "contentResource": "materials/particle/insurgency/ins_animsmokethin_01",
+    "localStem": "materials/particles/ins_animsmokethin_01"
+  },
+  "heavy_smoke": {
+    "gamePath": "materials/particles/burst_01.vtf",
+    "contentResource": "materials/particle/insurgency/burst_01",
+    "localStem": "materials/particles/burst_01"
+  }
+}

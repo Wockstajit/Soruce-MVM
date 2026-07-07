@@ -1,0 +1,29 @@
+// Reconstructed from the VTF's embedded particle sheet by export-source1-vtf.py
+
+sequence 0
+LOOP
+frame ins_debris_rocks_seq0_0.tga 1
+frame ins_debris_rocks_seq0_1.tga 1
+frame ins_debris_rocks_seq0_2.tga 1
+frame ins_debris_rocks_seq0_3.tga 1
+
+sequence 1
+LOOP
+frame ins_debris_rocks_seq1_0.tga 1
+frame ins_debris_rocks_seq1_1.tga 1
+frame ins_debris_rocks_seq1_2.tga 1
+frame ins_debris_rocks_seq1_3.tga 1
+
+sequence 2
+LOOP
+frame ins_debris_rocks_seq2_0.tga 1
+frame ins_debris_rocks_seq2_1.tga 1
+frame ins_debris_rocks_seq2_2.tga 1
+frame ins_debris_rocks_seq2_3.tga 1
+
+sequence 3
+LOOP
+frame ins_debris_rocks_seq3_0.tga 1
+frame ins_debris_rocks_seq3_1.tga 1
+frame ins_debris_rocks_seq3_2.tga 1
+frame ins_debris_rocks_seq3_3.tga 1

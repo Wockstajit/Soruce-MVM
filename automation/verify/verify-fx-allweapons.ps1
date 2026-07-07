@@ -151,6 +151,13 @@ function Check([string]$name, [bool]$condition) {
     }
 }
 
+function Get-FxCategoryMode([object]$state, [string]$category) {
+    if (-not $state -or -not $state.modes) { return 'off' }
+    $prop = $state.modes.PSObject.Properties[$category]
+    if ($prop) { return [string]$prop.Value }
+    return 'off'
+}
+
 # Category modes per profile. 'modern' = the MW2019 pack everywhere it exists, 'classic'
 # = Povarehok On everywhere, 'less' = the mod's reduced variants where they exist.
 $profileModes = @{
@@ -169,7 +176,10 @@ $expectedGroups = @(
     @{ label = 'Muzzle flash (any weapon class)'; filter = 'muz';        match = @('uweapon_muzflsh', 'uweapon_muzzleflash', 'weapon_muzzleflash'); requireActed = $true },
     @{ label = 'Silenced muzzle flash';           filter = 'muzsilenced'; match = @('uweapon_muzsilenced'); requireActed = $true },
     @{ label = 'Bullet tracers';                  filter = 'tracer';     match = @('weapon_tracers'); requireActed = $true },
-    @{ label = 'Sustained-fire muzzle smoke';     filter = 'muzzle_smoke'; match = @('weapon_muzzle_smoke'); requireActed = $true },
+    @{ label = 'Sustained-fire muzzle smoke (On/Less)'; filter = 'muzzle_smoke'; match = @('weapon_muzzle_smoke'); requireActed = $true; profiles = @('classic', 'less') },
+    # Modern barrel smoke is a PCF child of the swapped class flash (never a top-level
+    # fx-names row). Prove the per-shot path by the same muzzle-flash swap signal.
+    @{ label = 'Barrel smoke (Modern per-shot child)'; filter = 'muz'; match = @('uweapon_muzflsh', 'uweapon_muzzleflash', 'weapon_muzzleflash'); requireActed = $true; profiles = @('modern') },
     @{ label = 'Bullet impacts';                  filter = 'impact_fx';  match = @('particles/impact_fx/impact_'); requireActed = $true },
     @{ label = 'HE grenade explosion';            filter = 'explosion';  match = @('explosion_hegrenade', 'explosion_basic'); requireActed = $true },
     @{ label = 'Bomb (C4) blast';                 filter = 'explosion_c4'; match = @('explosion_c4'); requireActed = $true },
@@ -219,17 +229,17 @@ Check '[lazy] master Off reports an empty resolve queue' ($offState -and -not $o
 $allModesOff = $offState -ne $null
 if ($offState) {
     foreach ($category in $categoryKeys) {
-        if ($offState.modes.$category -ne 'off') { $allModesOff = $false }
+        if ((Get-FxCategoryMode $offState $category) -ne 'off') { $allModesOff = $false }
     }
 }
 Check '[lazy] all eight categories can remain Off' $allModesOff
 
 Send 'mirv_filmmaker fx set impacts on quiet' 0.05 | Out-Null
 $oneCategory = Read-FxState
-$onlyImpacts = $oneCategory -and $oneCategory.enabled -and $oneCategory.modes.impacts -eq 'on'
+$onlyImpacts = $oneCategory -and $oneCategory.enabled -and (Get-FxCategoryMode $oneCategory 'impacts') -eq 'on'
 if ($oneCategory) {
     foreach ($category in ($categoryKeys | Where-Object { $_ -ne 'impacts' })) {
-        if ($oneCategory.modes.$category -ne 'off') { $onlyImpacts = $false }
+        if ((Get-FxCategoryMode $oneCategory $category) -ne 'off') { $onlyImpacts = $false }
     }
 }
 Check '[lazy] selecting one non-Off category auto-enables master without changing other modes' $onlyImpacts
@@ -242,7 +252,7 @@ Check '[lazy] repeating a selection does not grow the pending queue' `
 Send 'mirv_filmmaker fx set impacts less quiet' 0.05 | Out-Null
 $switchState = Read-FxState
 Check '[lazy] switching packs replaces the selected mode' `
-    ($switchState -and $switchState.enabled -and $switchState.modes.impacts -eq 'less')
+    ($switchState -and $switchState.enabled -and (Get-FxCategoryMode $switchState 'impacts') -eq 'less')
 Send 'mirv_filmmaker fx off quiet' 0.05 | Out-Null
 $cancelState = Read-FxState
 Check '[lazy] disabling master cancels remaining precache work' `
@@ -350,8 +360,10 @@ foreach ($profile in $Profiles) {
     (Send 'mirv_filmmaker fx recent 120' 1.5) |
         Set-Content -LiteralPath (Join-Path $OutDir ("fx-recent-{0}.txt" -f $profile)) -Encoding UTF8
 
-    # Assertions per expected group.
+    # Assertions per expected group (optional profile filter).
     foreach ($group in $expectedGroups) {
+        $groupProfiles = if ($group.ContainsKey('profiles')) { $group['profiles'] } else { $null }
+        if ($groupProfiles -and ($groupProfiles -notcontains $profile)) { continue }
         $hits = @($names.Values | Where-Object {
             $row = $_
             @($group.match | Where-Object { $row.name -like ('*' + $_ + '*') }).Count -gt 0

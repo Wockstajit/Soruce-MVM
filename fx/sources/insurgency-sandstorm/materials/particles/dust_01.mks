@@ -1,0 +1,12 @@
+// Reconstructed from the VTF's embedded particle sheet by export-source1-vtf.py
+
+sequence 0
+LOOP
+frame dust_01_seq0_0.tga 1
+frame dust_01_seq0_1.tga 1
+frame dust_01_seq0_2.tga 1
+
+sequence 1
+LOOP
+frame dust_01_seq0_0.tga 1
+frame dust_01_seq0_1.tga 1

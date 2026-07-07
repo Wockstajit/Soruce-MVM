@@ -426,15 +426,30 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 										if (it != g_sprayHeat.end())
 											sprayCount = it->second.count;
 									}
-									const int hotCount = (std::strstr(spray, "/povarehok/") != nullptr)
-										? kPovarehokSprayHotCount : kSprayHotCount;
+									const int hotCount = kSprayHotCount;
 									const bool wasHot = sprayCount >= hotCount;
 									// Heat is always counted; the bypass ("fx align gate
 									// off") only widens the upgrade to every shot.
 									const bool hotNow = SprayHotLocked(low, hotCount);
 									if (hotNow || g_sprayGateBypass.load(std::memory_order_relaxed)) {
-										target = spray;
-										sprayUpgraded = true;
+										// GMod AfterShotParticle semantics: ONE smoke per burst. Upgrade
+										// only the shot that STARTED the burst (count==1; the wrapper's
+										// smoke child blooms AFTERSHOT_SMOKE_DELAY later, i.e. right
+										// after short bursts end), with a re-arm guard so rapid taps
+										// can't stack plumes (we cannot StopEmission the previous
+										// instance like GMod's Lua does).
+										SprayHeat& h = g_sprayHeat[low];
+										const bool burstStart = h.count <= 1;
+										if (tickNow >= 0 && tickNow < h.lastUpgradeTick)
+											h.lastUpgradeTick = -0x40000000; // seeked backward
+										const bool rearmed = tickNow < 0
+											|| tickNow - h.lastUpgradeTick >= kSprayUpgradeCooldownTicks;
+										if ((burstStart && rearmed)
+											|| g_sprayGateBypass.load(std::memory_order_relaxed)) {
+											target = spray;
+											sprayUpgraded = true;
+											h.lastUpgradeTick = tickNow;
+										}
 									}
 									// #region agent log
 									if (DbgIsBarrelSmokePath(low) || DbgIsBarrelSmokePath(t)

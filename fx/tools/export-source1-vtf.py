@@ -218,6 +218,18 @@ def export_texture(source: Path, destination: Path, content_root: Path) -> tuple
     return frame_count, decoder, sheeted
 
 
+def _export_one(job: tuple[str, str, str, str]) -> dict:
+    """Process-pool worker: export one VTF and return a picklable result row."""
+    source, destination, content_root, relative = job
+    try:
+        frames, decoder, sheeted = export_texture(
+            Path(source), Path(destination), Path(content_root)
+        )
+        return {"relative": relative, "frames": frames, "decoder": decoder, "sheeted": sheeted}
+    except Exception as error:
+        return {"relative": relative, "error": repr(error)}
+
+
 def main() -> int:
     args = parse_args()
     source_root = args.input.resolve()
@@ -239,22 +251,35 @@ def main() -> int:
         "errors": [],
     }
 
-    for source in sorted(source_root.rglob("*.vtf")):
-        relative = source.relative_to(source_root)
-        destination = output_root / relative.with_suffix("")
-        try:
-            frames, decoder, sheeted = export_texture(source, destination, content_root)
-            if decoder == "envmap":
-                summary["skippedEnvmaps"].append(relative.as_posix())
-                continue
-            summary["textures"] += 1
-            summary["frames"] += frames
-            if sheeted:
-                summary["sheets"] += 1
-            if decoder == "vtf2img":
-                summary["fallbackTextures"] += 1
-        except Exception as error:  # report every failed source, then fail the run
-            summary["errors"].append({"path": relative.as_posix(), "error": repr(error)})
+    jobs = [
+        (
+            str(source),
+            str(output_root / source.relative_to(source_root).with_suffix("")),
+            str(content_root),
+            source.relative_to(source_root).as_posix(),
+        )
+        for source in sorted(source_root.rglob("*.vtf"))
+    ]
+
+    # Each VTF is independent, so decode/re-encode them across all cores.
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor() as pool:
+        results = list(pool.map(_export_one, jobs, chunksize=8))
+
+    for result in results:
+        if "error" in result:  # report every failed source, then fail the run
+            summary["errors"].append({"path": result["relative"], "error": result["error"]})
+            continue
+        if result["decoder"] == "envmap":
+            summary["skippedEnvmaps"].append(result["relative"])
+            continue
+        summary["textures"] += 1
+        summary["frames"] += result["frames"]
+        if result["sheeted"]:
+            summary["sheets"] += 1
+        if result["decoder"] == "vtf2img":
+            summary["fallbackTextures"] += 1
 
     if args.manifest:
         args.manifest.parent.mkdir(parents=True, exist_ok=True)

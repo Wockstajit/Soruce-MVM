@@ -339,6 +339,11 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Panorama/ConfigHud.h
     Filmmaker/Panorama/ConfigHudJs.h
     Filmmaker/Panorama/ConfigHudModifiersJs.h
+    Filmmaker/MvmTestCommand.cpp
+    Filmmaker/MvmTest.h
+    Filmmaker/Panorama/TestHud.cpp
+    Filmmaker/Panorama/TestHud.h
+    Filmmaker/Panorama/TestHudJs.h
     Filmmaker/Cosmetics/CosmeticUiQueries.cpp
     Filmmaker/Cosmetics/CosmeticUiQueries.h
     Filmmaker/FilmmakerDebugCommand.cpp
@@ -401,6 +406,7 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/ParticleFxMoney.cpp
     Filmmaker/Movie/ParticleFxSettings.cpp
     Filmmaker/Movie/ParticleFxDiagnostics.cpp
+    Filmmaker/Movie/ParticleFxPrefetch.cpp
     Filmmaker/Movie/FxAlign.cpp
     Filmmaker/Movie/FxAlign.h
     Filmmaker/Movie/ThirdPersonCamera.cpp

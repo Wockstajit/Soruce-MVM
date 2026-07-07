@@ -1,11 +1,10 @@
-// ParticleFx spray-gated barrel smoke.
-// User call 2026-07-03: lingering barrel smoke should only appear during SUSTAINED
-// fire, not after a single shot. The postprocess writes per-flash `mvm_spray_*`
-// wrapper systems (flash + barrel smoke); the hook counts creations of each vanilla
-// muzzle-flash NAME on the demo-tick clock and upgrades the swap target to the
-// wrapper from the kSprayHotCount-th shot of a spray onward. Single-shot snipers
-// keep per-shot smoke inside their own compositions instead (a spray gate can never
-// trigger on a bolt gun).
+// ParticleFx spray-gated barrel smoke (both packs since 2026-07-06).
+// Every class flash's smoke rides an `mvm_spray_*` wrapper (flash + barrel smoke)
+// instead of a per-shot PCF child: children spawn on EVERY shot, which stacked
+// overlapping smoke instances during sustained fire and double-smoked the sniper
+// compositions (the SCAR-20 report). The hook upgrades a flash swap to its wrapper
+// from the first shot but at most once per kSprayUpgradeCooldownTicks per name, so a
+// spraying weapon keeps ONE continuous wisp going.
 
 #include "ParticleFxInternal.h"
 
@@ -18,17 +17,12 @@ namespace fx {
 
 namespace {
 
-#define MODSPRAY(name) { "particles/filmmaker/modern/arc9_fas_muzzleflashes/" name ".vpcf", \
-	"particles/filmmaker/modern/arc9_fas_muzzleflashes/mvm_spray_" name ".vpcf" }
-// Each Povarehok variant owns its wrapper so Less can use its 10%-reduced smoke
-// without changing the flash child or borrowing Regular's full-strength plume.
+// Each Povarehok variant owns its wrapper so Less can use its reduced smoke plume
+// (70% for muzzle less/smoke; bullet impacts use the separate 50% less/impacts pack)
 #define BPSPRAY(variant, name) { \
 	"particles/filmmaker/povarehok/" variant "/weapons/cs_weapon_fx/" name ".vpcf", \
 	"particles/filmmaker/povarehok/" variant "/weapons/cs_weapon_fx/mvm_spray_" name ".vpcf" }
 const SprayPair kSprayPairs[] = {
-	MODSPRAY("muzzleflash_ar"), MODSPRAY("muzzleflash_smg"), MODSPRAY("muzzleflash_shotgun"),
-	MODSPRAY("muzzleflash_pistol"), MODSPRAY("muzzleflash_pistol_deagle"),
-	MODSPRAY("muzzleflash_lmg"), MODSPRAY("muzzleflash_dmr"),
 	BPSPRAY("regular", "weapon_muzzle_flash_assaultrifle"),
 	BPSPRAY("regular", "weapon_muzzle_flash_assaultrifle_fp"),
 	BPSPRAY("regular", "weapon_muzzle_flash_smg"),
@@ -55,9 +49,42 @@ const SprayPair kSprayPairs[] = {
 	BPSPRAY("less/smoke", "weapon_muzzle_flash_smg_silenced"),
 	BPSPRAY("less/smoke", "weapon_muzzle_flash_smg_silenced_fp"),
 	BPSPRAY("less/smoke", "weapon_muzzle_flash_assaultrifle_silenced"),
+	// Snipers (AWP world + FP hunting rifle): previously a direct smoke_long child on
+	// the flash, which stacked one 4s plume PER SHOT on the autosnipers (they map to
+	// the AWP flash but fire fast) -- the "two smokes on the SCAR-20" report.
+	BPSPRAY("regular", "weapon_muzzle_flash_awp"),
+	BPSPRAY("regular", "weapon_muzzle_flash_huntingrifle_fp"),
+	BPSPRAY("less/smoke", "weapon_muzzle_flash_awp"),
+	BPSPRAY("less/smoke", "weapon_muzzle_flash_huntingrifle_fp"),
+// Modern MW2019 wrappers (mvm_spray_<flash>): the smoke half is the class barrel
+// smoke the GMod AfterShotParticle mapping assigns (barrel_smoke, or _plume for
+// lmg/dmr); the sniper rows wrap the whole mvm composition with barrel_smoke_plume
+// (postprocess_modern writes the files; validate-povarehok-assets.py's MODSPRAY_RE
+// seeds them into the pack closure -- keep the macro name in sync).
+#define MODSPRAY(name) { \
+	"particles/filmmaker/modern/arc9_fas_muzzleflashes/" name ".vpcf", \
+	"particles/filmmaker/modern/arc9_fas_muzzleflashes/mvm_spray_" name ".vpcf" }
+	MODSPRAY("muzzleflash_ar"),
+	MODSPRAY("muzzleflash_ar_fp"),
+	MODSPRAY("muzzleflash_smg"),
+	MODSPRAY("muzzleflash_smg_fp"),
+	MODSPRAY("muzzleflash_shotgun"),
+	MODSPRAY("muzzleflash_shotgun_fp"),
+	MODSPRAY("muzzleflash_pistol"),
+	MODSPRAY("muzzleflash_pistol_fp"),
+	MODSPRAY("muzzleflash_pistol_deagle"),
+	MODSPRAY("muzzleflash_pistol_deagle_fp"),
+	MODSPRAY("muzzleflash_lmg"),
+	MODSPRAY("muzzleflash_lmg_fp"),
+	MODSPRAY("muzzleflash_dmr"),
+	MODSPRAY("muzzleflash_dmr_fp"),
+	MODSPRAY("mvm_muzzleflash_sniper_awp"),
+	MODSPRAY("mvm_muzzleflash_sniper_awp_fp"),
+	MODSPRAY("mvm_muzzleflash_sniper_auto"),
+	MODSPRAY("mvm_muzzleflash_sniper_auto_fp"),
+#undef MODSPRAY
 };
 #undef BPSPRAY
-#undef MODSPRAY
 
 } // namespace
 

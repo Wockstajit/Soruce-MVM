@@ -5,7 +5,9 @@
 #include "FollowCamera.h"
 #include "ThirdPersonCamera.h"
 #include "../Filmmaker.h"            // CameraTimeline_Visible()
+#include "../MvmTest.h"              // mvm_test offline FX menu
 #include "../Panorama/ConfigHud.h"   // ConfigHud_Enabled: Config panel gets editor-style G/wheel input priority
+#include "../Panorama/TestHud.h"     // TestHud_Enabled: mvm_test FX menu G key
 #include "../Panorama/MovieHud.h"
 #include "../../MirvTime.h"
 
@@ -35,6 +37,7 @@ namespace {
 	constexpr int kVK_L = 0x4C;     // delete the aimed-at marker
 	constexpr int kVK_F = 0x46;     // edit the aimed-at marker
 	constexpr int kVK_G = 0x47;     // toggle UI-mouse for the camera timeline panel
+	constexpr int kVK_INSERT = 0x2D; // mvm_test FX menu toggle (offline live match)
 	constexpr int kVK_Z = 0x5A;     // Ctrl+Z: undo last curve edit
 	constexpr int kVK_A = 0x41;     // Ctrl+A: select all keyframes (graph editor)
 	constexpr int kVK_DELETE = 0x2E;
@@ -69,6 +72,12 @@ void MovieMode::EnqueueCmd(const std::string& c) {
 }
 
 bool MovieMode::OnMouseWheel(int delta, bool shiftDown, bool ctrlDown, int x, int y) {
+	// mvm_test live-match FX panel: UI cursor on -> swallow wheel (same as demo UI-mouse).
+	if (MvmTest_CanUseMenu() && TestHud_Enabled()) {
+		if (CameraTimeline_WantsCursor())
+			return true;
+		return false;
+	}
 	if (!IsDemoActive())
 		return false;
 	if (delta == 0)
@@ -151,6 +160,13 @@ bool MovieMode::OnMouseButton(int button, bool down) {
 	// full-screen catcher absorbs strays).
 	if (button == 1 && IsDemoActive() && GraphEditorExperiment_WantsCursor())
 		return true;
+	// mvm_test live-match FX panel: UI cursor on -> let Panorama receive clicks; GAME
+	// cursor off -> pass input through for aiming/shooting (G toggles via camtl cursor).
+	if (MvmTest_CanUseMenu() && TestHud_Enabled()) {
+		if (CameraTimeline_WantsCursor())
+			return false;
+		return false;
+	}
 	// In FREE CAM, swallow LMB/RMB so CS2's spectator doesn't yank the view to a
 	// different player while the director is flying the camera. Gate on the ACTUAL free-cam
 	// state (MirvInput camera control), not the tracked spectator mode: free cam is enabled
@@ -189,6 +205,19 @@ bool MovieMode::OnKey(int vkey, bool down) {
 	// the free-cam slow modifier further below.
 	if (vkey == kVK_SHIFT)
 		m_shiftDown = down;
+
+	// mvm_test offline FX menu (live match, not demo playback). Insert auto-arms and opens.
+	if (vkey == kVK_INSERT && down) {
+		if (MvmTest_HandleInsertKey())
+			return true;
+	}
+	if (MvmTest_CanUseMenu()) {
+		if (vkey == kVK_G && TestHud_Enabled()) {
+			if (down) EnqueueCmd("mirv_filmmaker camtl cursor toggle");
+			return true;
+		}
+	}
+
 	if (!IsDemoActive())
 		return false; // director keys only act while a demo plays
 
@@ -244,7 +273,7 @@ bool MovieMode::OnKey(int vkey, bool down) {
 	// regardless of camera mode (in first person the regular-mode branch below would force
 	// the cursor OFF and the user could never get back into the panel).
 	if (vkey == kVK_G) {
-		if (CameraEditor_Active() || ConfigHud_Enabled()) {
+		if (CameraEditor_Active() || ConfigHud_Enabled() || TestHud_Enabled()) {
 			if (down) EnqueueCmd("mirv_filmmaker camtl cursor toggle");
 			return true;
 		}

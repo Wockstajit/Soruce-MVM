@@ -64,6 +64,10 @@ struct SprayPair {
 struct SprayHeat {
 	int lastTick = -0x40000000;
 	int count = 0;
+	// Demo tick of the last spray-wrapper upgrade for this name: the upgrade cooldown
+	// (kSprayUpgradeCooldownTicks) keeps ONE smoke instance going per weapon instead of
+	// stacking a new plume/wisp on every shot (user request 2026-07-06).
+	int lastUpgradeTick = -0x40000000;
 };
 
 constexpr size_t kRingCap = 128;
@@ -77,8 +81,15 @@ constexpr const char* kMoneyBurst = "particles/filmmaker/povarehok/regular/impac
 // Demo-tick based so playback speed does not distort the window (an 0.1x slow-mo
 // spray is still a spray). See ParticleFxSpray.cpp.
 constexpr int kSprayWindowTicks = 32; // ~0.5s at 64 tick between consecutive shots
-constexpr int kSprayHotCount = 4;
-constexpr int kPovarehokSprayHotCount = 1;
+// GMod AfterShotParticle semantics (user request 2026-07-06): ONE smoke per burst.
+// The hook upgrades only the shot that STARTED a burst (SprayHeat.count == 1); the
+// wrapper's smoke child carries AFTERSHOT_SMOKE_DELAY (postprocess_common.py, 0.45s)
+// so for short bursts it blooms right after firing stops, like GMod's burst-end
+// spawn. The re-arm guard below bounds plume overlap on rapid taps (GMod stops the
+// previous instance's emission per shot -- no such verb is RE'd for CS2, so overlap
+// is bounded instead of canceled).
+constexpr int kSprayHotCount = 1;
+constexpr int kSprayUpgradeCooldownTicks = 128; // re-arm guard, ~2s at 64 tick
 
 // ============================== core state (ParticleFx.cpp) ========================
 
@@ -124,6 +135,11 @@ bool HasActiveFxLocked();
 // on master-off, but an explicit mode/rule change can invalidate obsolete handles.
 void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles);
 void RebuildActiveSwapTargets(bool invalidateObsoleteHandles);
+// g_mx held. Warm-up entry point: queue EVERY active target that has no cached handle
+// (unlike the eager-only queueing in RebuildActiveSwapTargetsLocked). The main-thread
+// burst drain in ParticleFx.cpp then front-loads all cold blocking loads at demo open /
+// settings switch instead of hitching playback one lazy miss at a time.
+void QueueAllUncachedActiveTargetsLocked();
 
 // ============================== hook (ParticleFxHook.cpp) ==========================
 
@@ -158,6 +174,13 @@ const char* SprayUpgradeFor(const char* target);
 // g_mx held. Counts this creation of `low` and returns true once `hotCount` consecutive
 // shots within kSprayWindowTicks have fired. Same-tick repeats do not accumulate.
 bool SprayHotLocked(const char* low, int hotCount);
+
+// ====================== prefetch (ParticleFxPrefetch.cpp) ==========================
+
+// Once per process: detached background thread that plain-reads every file of the
+// mounted FX asset pack (USRLOCALCSGO) to warm the OS file cache. Touches no engine
+// APIs, so it is thread-safe; it just makes the main-thread blocking resolves cheap.
+void PrefetchFxPackOnce();
 
 // ============================== money (ParticleFxMoney.cpp) ========================
 

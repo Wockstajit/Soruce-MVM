@@ -149,6 +149,19 @@ ViewmodelMirrorResult MirrorWeaponCosmeticsToViewmodel(
 bool ReadActiveViewmodelWeaponState(unsigned char* pawn, const char* wantWeaponClass,
 	int* outVmIndex, int* outPaint, uint64_t* outMeshMask);
 
+// FxAlign muzzle probe: resolve the first-person VIEWMODEL weapon entity index (the weapon-like child
+// of the pawn's HUD-arms) WITHOUT the class/paint match ReadActiveViewmodelWeaponState requires --
+// that returns -1 on demo POV pawns whose arms child does not class-match the world weapon. Any
+// weapon-like arms child IS the first-person gun, and its muzzle/muzzle_flash attachment is the
+// viewmodel muzzle a m_bViewModelEffect particle anchors to. Prefers a class match, else the first
+// weapon-like child. Fills optional dbg with the arms source + every weapon-like child (idx:class).
+// Returns the viewmodel weapon entity index, or -1. The first-person viewmodel weapon is a
+// CLIENT-ONLY entity (index >= 0x4000), so it does NOT round-trip through the entity-list index
+// lookup -- outEntity receives the resolved CEntityInstance* directly (use that, not EntityAt(idx),
+// to read its muzzle attachment). SEH-guarded.
+int ResolveViewmodelWeaponEntityIndex(unsigned char* pawn, const char* wantWeaponClass,
+	char* dbg = nullptr, size_t dbgSize = 0, void** outEntity = nullptr);
+
 // Agent (player) model swap on a pawn entity: SetModel(pawn, modelPath). Returns true if SetModel
 // fired. Unsafe/non-player resource paths are rejected before SetModel.
 bool ApplyAgentModel(unsigned char* pawn, const char* modelPath);

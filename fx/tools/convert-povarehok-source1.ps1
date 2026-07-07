@@ -37,6 +37,7 @@ param(
     [string]$GmodRoot = 'G:\SteamLibrary\steamapps\common\GarrysMod',
     [switch]$RefreshModernFromGmod,
     [switch]$SkipModern,
+    [switch]$IncludeInsurgencySmoke,
     [switch]$Compile
 )
 
@@ -182,6 +183,9 @@ $materialsImport = Resolve-ExistingPath (Join-Path $source1ImportUtils 'material
 $particlesImport = Resolve-ExistingPath (Join-Path $source1ImportUtils 'particles_import.py') 'particles_import.py'
 $textureExporter = Resolve-ExistingPath (Join-Path $PSScriptRoot 'export-source1-vtf.py') 'VTF texture exporter'
 $particlePostprocess = Resolve-ExistingPath (Join-Path $PSScriptRoot 'postprocess_povarehok.py') 'Povarehok post-process tool'
+$insurgencySmokeExtractor = Join-Path $PSScriptRoot 'extract-insurgency-smoke.py'
+$insurgencySmokeStager = Join-Path $PSScriptRoot 'stage-insurgency-smoke.py'
+$insurgencySourceDir = Join-Path $repoRoot 'fx\sources\insurgency-sandstorm'
 $source2ConverterRoot = Resolve-ExistingPath $Source2ConverterDir 'Source2ConverterDir'
 $modelConverter = Resolve-ExistingPath (Join-Path $source2ConverterRoot 'convert_model.py') 'Source2Converter convert_model.py'
 
@@ -389,7 +393,33 @@ try {
     Pop-Location
 }
 
+# ---- Insurgency Sandstorm smoke staging (optional) ----
+if ($IncludeInsurgencySmoke) {
+    $insurgencyRoot = if ($env:INSURGENCY_DIR) { $env:INSURGENCY_DIR } else { 'F:\SteamLibrary\steamapps\common\insurgency2' }
+    $insurgencyPicks = Join-Path $insurgencySourceDir 'picks.json'
+    if (-not (Test-Path -LiteralPath $insurgencyPicks)) {
+        if (Test-Path -LiteralPath $insurgencyRoot) {
+            Write-Host "Extracting Insurgency smoke sources into $insurgencySourceDir..." -ForegroundColor Cyan
+            & $Python $insurgencySmokeExtractor --insurgency-root $insurgencyRoot
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Insurgency smoke export failed; post-process will use in-pack fallbacks."
+            }
+        } else {
+            Write-Warning "Insurgency install not found at $insurgencyRoot; skipping Insurgency smoke export."
+        }
+    }
+    if (Test-Path -LiteralPath $insurgencyPicks) {
+        Write-Host "Staging Insurgency smoke materials into content tree..." -ForegroundColor Cyan
+        & $Python $insurgencySmokeStager --content-root $contentDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Insurgency smoke staging failed; post-process will use in-pack fallbacks."
+        }
+    }
+}
+
 Write-Host "Applying CS2-specific Povarehok VPCF post-process..." -ForegroundColor Cyan
+Write-Host "  (scans ~7k converted .vpcf files; progress lines follow, usually ~30-90s)" -ForegroundColor DarkGray
+$env:PYTHONUNBUFFERED = "1"
 & $Python $particlePostprocess --content-root $contentDir
 if ($LASTEXITCODE -ne 0) { throw "Povarehok post-process failed with exit code $LASTEXITCODE" }
 

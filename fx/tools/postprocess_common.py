@@ -77,7 +77,9 @@ def scale_number(line: str, factor: float, cap: float | None = None, integer: bo
 
 CHILD_REF_PATTERN = re.compile(
     r"\n\t\t\{\n\t\t\tm_ChildRef = resource:\"(?P<resource>[^\"]+)\""
-    r"(?:\n\t\t\tm_flDelay = [^\n]+)?\n\t\t\},",
+    r"(?:\n\t\t\tm_flDelay = [^\n]+)?"
+    r"(?:\n\t\t\tm_bEndCap = [^\n]+)?"
+    r"\n\t\t\},",
     re.MULTILINE,
 )
 
@@ -579,11 +581,22 @@ VPCF12_HEADER = (
     "format:vpcf58:version{9bada39c-a931-42d0-abdd-e5c1b13d37a6} -->"
 )
 
-CHILD_ELEMENT = '\t\t{{\n\t\t\tm_ChildRef = resource:"{res}"\n\t\t\tm_flDelay = 0.0\n\t\t}},\n'
+CHILD_ELEMENT = '\t\t{{\n\t\t\tm_ChildRef = resource:"{res}"\n\t\t\tm_flDelay = {delay}\n\t\t}},\n'
+
+# GMod ARC9's AfterShotParticle spawns ~one RPM interval AFTER the last shot
+# (sh_think.lua: NextPrimaryFire + 60/RPM + AfterShotParticleDelay). The wrappers
+# emulate that with a delayed smoke child: short bursts (1-3 rounds) finish before
+# the smoke blooms, so the wisp appears just after firing stops, like GMod.
+AFTERSHOT_SMOKE_DELAY = 0.45
 
 
-def _composition_text(children: tuple[str, ...]) -> str:
-    elements = "".join(CHILD_ELEMENT.format(res=c) for c in children)
+def _composition_text(children: tuple) -> str:
+    """children: resource strings, or (resource, delaySeconds) tuples."""
+    elements = "".join(
+        CHILD_ELEMENT.format(res=c[0], delay=f"{float(c[1]):.2f}")
+        if isinstance(c, tuple) else CHILD_ELEMENT.format(res=c, delay="0.0")
+        for c in children
+    )
     return (
         f"{VPCF_HEADER}\n"
         "{\n"
@@ -606,7 +619,7 @@ def _add_child_once(path: Path, resource: str) -> bool:
     text = path.read_text(encoding="utf-8")
     if resource in text:
         return False
-    element = CHILD_ELEMENT.format(res=resource)
+    element = CHILD_ELEMENT.format(res=resource, delay="0.0")
     match = re.search(r"m_Children = \n(\t*)\[\n", text)
     if match:
         text = text[: match.end()] + element + text[match.end():]
@@ -645,25 +658,32 @@ def _ensure_viewmodel_effect_flag(text: str) -> str:
     )
 
 
-# CS2 viewmodel muzzle alignment copied from the working Povarehok per-shot
-# child weapon_muzzle_flash_smoke_small2 (local +X forward, spawn offset at the muzzle).
-# This is the SHARED base recipe both packs' rope-trail alignment build on --
-# Modern's patch_cs2_modern_rope_trail_alignment calls patch_cs2_muzzle_rope_trail_alignment
-# below (which uses this Povarehok-authored offset), then immediately overrides
-# the offset with its own values, so the base recipe must live here rather than
-# in either pack-specific file.
-_CS2_MUZZLE_OFFSET_BLOCK = (
-    "\t\t{\n"
-    '\t\t\t_class = "C_INIT_PositionOffset"\n'
-    "\t\t\tm_bLocalCoords = true\n"
-    "\t\t\tm_OffsetMin = [1.0, 0.0, 2.0]\n"
-    "\t\t\tm_OffsetMax = [6.0, 0.0, 4.0]\n"
-    "\t\t},\n"
-)
+# CS2 muzzle spawn offsets. The default (Povarehok forward/up kick) was copied from the
+# working Povarehok per-shot child weapon_muzzle_flash_smoke_small2 (local +X forward);
+# the barrel-tip values are what Modern's live barrel smoke uses (postprocess_modern's
+# _CS2_MODERN_ROPE_TRAIL_OFFSET_BLOCK) -- the sustained/wisp barrel smoke of BOTH packs
+# now spawns there so the smoke visibly starts AT the muzzle (user report 2026-07-06:
+# "Povarehok barrel smoke doesn't sit at the barrel like Modern"). This is the SHARED
+# base recipe both packs' alignment passes build on, so it lives here rather than in
+# either pack-specific file. Keep the barrel-tip values in sync with FxAlign.cpp's
+# kModernCfgOffset and postprocess_modern._CS2_MODERN_ROPE_TRAIL_OFFSET_BLOCK.
+MUZZLE_OFFSET_FORWARD = ("[1.0, 0.0, 2.0]", "[6.0, 0.0, 4.0]")
+MUZZLE_OFFSET_BARREL_TIP = ("[0.0, 0.0, -0.5]", "[0.5, 0.0, 0.0]")
 
 
-def _force_cs2_muzzle_offset_block(block: str) -> str:
-    """Rewrite one C_INIT_PositionOffset block to Povarehok's CS2-calibrated values,
+def _muzzle_offset_block(offsets: tuple[str, str]) -> str:
+    return (
+        "\t\t{\n"
+        '\t\t\t_class = "C_INIT_PositionOffset"\n'
+        "\t\t\tm_bLocalCoords = true\n"
+        f"\t\t\tm_OffsetMin = {offsets[0]}\n"
+        f"\t\t\tm_OffsetMax = {offsets[1]}\n"
+        "\t\t},\n"
+    )
+
+
+def _force_cs2_muzzle_offset_block(block: str, offsets: tuple[str, str] = MUZZLE_OFFSET_FORWARD) -> str:
+    """Rewrite one C_INIT_PositionOffset block to the given CS2-calibrated values,
     UNCONDITIONALLY (not just when the source pack's original numbers happen to be
     byte-identical to Povarehok's own pre-patch literals).
 
@@ -680,17 +700,17 @@ def _force_cs2_muzzle_offset_block(block: str) -> str:
             '_class = "C_INIT_PositionOffset"\n\t\t\tm_bLocalCoords = true',
             1,
         )
-    block = re.sub(r"m_OffsetMin = \[[^\]]*\]", "m_OffsetMin = [1.0, 0.0, 2.0]", block)
-    block = re.sub(r"m_OffsetMax = \[[^\]]*\]", "m_OffsetMax = [6.0, 0.0, 4.0]", block)
+    block = re.sub(r"m_OffsetMin = \[[^\]]*\]", f"m_OffsetMin = {offsets[0]}", block)
+    block = re.sub(r"m_OffsetMax = \[[^\]]*\]", f"m_OffsetMax = {offsets[1]}", block)
     return block
 
 
-def _ensure_cs2_muzzle_position_offset(text: str) -> str:
+def _ensure_cs2_muzzle_position_offset(text: str, offsets: tuple[str, str] = MUZZLE_OFFSET_FORWARD) -> str:
     if "C_INIT_PositionOffset" in text:
         edits = []
         for match in re.finditer(r'_class = "C_INIT_PositionOffset"', text):
             start, end = block_span(text, match.start())
-            edits.append((start, end, _force_cs2_muzzle_offset_block(text[start:end])))
+            edits.append((start, end, _force_cs2_muzzle_offset_block(text[start:end], offsets)))
         for start, end, replacement in reversed(edits):
             text = text[:start] + replacement + text[end:]
         return text
@@ -700,29 +720,173 @@ def _ensure_cs2_muzzle_position_offset(text: str) -> str:
     insert_at = text.find("\n\t\t},", anchor.start())
     if insert_at < 0:
         return text
-    return text[: insert_at + len("\n\t\t},")] + "\n" + _CS2_MUZZLE_OFFSET_BLOCK + text[insert_at + len("\n\t\t},") :]
+    return text[: insert_at + len("\n\t\t},")] + "\n" + _muzzle_offset_block(offsets) + text[insert_at + len("\n\t\t},") :]
+
+
+# C_OP_PositionLock handling. LESSONS (2026-07-06, three rounds):
+# - Rewriting lock times to huge values (start=end=1e6, then 0/1e6) made smoke read as
+#   FROZEN rigid in game ("gun goes up, smoke stays down").
+# - The bare `m_bLockRot = true` lock (the GMod original) rides the gun rigidly too --
+#   the user's final call: smoke must LAG like real smoke ("you'll see it draw like a
+#   sheet with the motion of the gun"), i.e. NOT be locked after birth.
+# - Stock CS2's own weapon_muzzle_smoke_long is the reference behavior: a brief
+#   0 -> 0.1s lock (newborn puff anchored to the muzzle for one beat, then free in the
+#   world) while CONTINUOUS EMISSION at the engine-driven muzzle CP keeps the smoke
+#   column's base on the gun. That combination is what draws the lagging sheet.
+_BRIEF_POSITION_LOCK_BODY = (
+    '\t\t\t_class = "C_OP_PositionLock"\n'
+    "\t\t\tm_flStartTime_min = 0.0\n"
+    "\t\t\tm_flStartTime_max = 0.0\n"
+    "\t\t\tm_flEndTime_min = 0.1\n"
+    "\t\t\tm_flEndTime_max = 0.1\n"
+)
+
+
+def ensure_brief_position_lock(text: str) -> str:
+    """Rewrite every C_OP_PositionLock to the stock brief 0->0.1s lock (insert if none)."""
+    if "C_OP_PositionLock" in text:
+        edits = []
+        for match in re.finditer(r'_class = "C_OP_PositionLock"', text):
+            start, end = block_span(text, match.start())
+            edits.append((start, end, "{\n" + _BRIEF_POSITION_LOCK_BODY + "\t\t}"))
+        for start, end, replacement in reversed(edits):
+            text = text[:start] + replacement + text[end:]
+        return text
+    match = re.search(r"m_Operators = \n(\t*)\[\n", text)
+    if match:
+        block = "\t\t{\n" + _BRIEF_POSITION_LOCK_BODY + "\t\t},\n"
+        return text[: match.end()] + block + text[match.end():]
+    return text
+
+
+# FULL-lifetime lock -- the deliberate OPPOSITE of the brief world-pass lock above, ONLY
+# for the FIRST-PERSON viewmodel (_fp) barrel-smoke twins. The world/third-person twins
+# use the brief lock so old smoke lags in the air (real-smoke look). But in first person
+# the viewmodel swings around fast during reload/inspect; brief-locked smoke goes free in
+# world space after 0.1s and floats where the barrel WAS (user report 2026-07-06 pm:
+# "reload/inspect -- barrel smoke doesn't follow the gun, floats where the barrel was").
+# The _fp twins render in the viewmodel pass, so locking them to the muzzle CP for their
+# whole life makes them ride the barrel through the animation. The lock ADDS the muzzle
+# CP's translation on top of the particle's own buoyant rise/noise (it does NOT freeze
+# them), so the wisp still lifts -- it just lifts relative to the moving barrel. The
+# "rigid/frozen smoke" reverts documented above were the WORLD twin; a viewmodel twin
+# that tracks the gun is exactly the wanted first-person behavior.
+_FULL_POSITION_LOCK_BODY = (
+    '\t\t\t_class = "C_OP_PositionLock"\n'
+    "\t\t\tm_flStartTime_min = 0.0\n"
+    "\t\t\tm_flStartTime_max = 0.0\n"
+    "\t\t\tm_flEndTime_min = 1000000.0\n"
+    "\t\t\tm_flEndTime_max = 1000000.0\n"
+)
+
+
+def ensure_full_position_lock(text: str) -> str:
+    """Rewrite every C_OP_PositionLock to a full-lifetime 0->1e6 lock (insert if none).
+
+    Use ONLY on first-person viewmodel (_fp) barrel-smoke twins so the wisp tracks the
+    barrel during reload/inspect (see _FULL_POSITION_LOCK_BODY). World twins keep
+    ensure_brief_position_lock. Idempotent."""
+    if "C_OP_PositionLock" in text:
+        edits = []
+        for match in re.finditer(r'_class = "C_OP_PositionLock"', text):
+            start, end = block_span(text, match.start())
+            edits.append((start, end, "{\n" + _FULL_POSITION_LOCK_BODY + "\t\t}"))
+        for start, end, replacement in reversed(edits):
+            text = text[:start] + replacement + text[end:]
+        return text
+    match = re.search(r"m_Operators = \n(\t*)\[\n", text)
+    if match:
+        block = "\t\t{\n" + _FULL_POSITION_LOCK_BODY + "\t\t},\n"
+        return text[: match.end()] + block + text[match.end():]
+    return text
+
+
+# REVERTED (2026-07-06 night): a m_controlPointConfigurations "game" block with
+# PATTACH_POINT_FOLLOW was briefly injected into every muzzle swap target (copied from
+# the stock uweapon_muzflsh_ak47_fps). In game it made things WORSE -- the engine's own
+# dispatch was already driving the control points correctly (the old pack's smoke
+# followed a thrown weapon), and the injected config froze/overrode that binding.
+# remove_muzzle_follow_config strips the block from already-patched trees.
+def remove_muzzle_follow_config(text: str) -> str:
+    match = re.search(r"(?m)^\tm_controlPointConfigurations = \n\t\[\n", text)
+    if not match:
+        return text
+    depth = 0
+    i = match.end() - 2  # at the '['
+    while i < len(text):
+        c = text[i]
+        if c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                if end < len(text) and text[end] == "\n":
+                    end += 1
+                return text[: match.start()] + text[end:]
+        i += 1
+    return text
+
+
+def clamp_sheet_sequences(root: Path, name_re: re.Pattern[str]) -> list[str]:
+    """Drop the LOOP flag from matching one-shot .mks sprite sheets (loop -> clamp).
+
+    The engine wraps a non-clamped sequence when the computed frame index passes the
+    last frame (frame %= count), so any renderer whose age*rate overshoots the sheet
+    visibly REPLAYS it -- the "smoke plays, fades, then plays again" report (2026-07-06;
+    setting ANIMATION_TYPE_FIT_LIFETIME was not sufficient because the animation rate
+    still multiplies under FIT and several converted smoke renderers overshoot).
+    Clamping holds the last frame instead, and the systems' own FadeOut/Decay handles
+    the tail. Scoped by sheet NAME to one-shot smoke/dust/splash sheets -- fire flicker
+    and other intentional loops keep their flag. Idempotent (the LOOP line is gone
+    after one run). Returns the changed .vtex resources; their compiled .vtex_c must
+    be rebuilt with resourcecompiler.
+    """
+    changed: list[str] = []
+    materials = root / "materials"
+    if not materials.is_dir():
+        return changed
+    for mks in materials.rglob("*.mks"):
+        rel = mks.relative_to(root).as_posix()
+        if not name_re.search(rel):
+            continue
+        text = mks.read_text(encoding="ascii")
+        new_text = re.sub(r"(?m)^LOOP\n", "", text)
+        if new_text == text:
+            continue
+        mks.write_text(new_text, encoding="ascii")
+        vtex = mks.with_suffix(".vtex")
+        if vtex.is_file():
+            changed.append(vtex.relative_to(root).as_posix())
+    return changed
 
 
 def patch_cs2_muzzle_rope_trail_alignment(text: str) -> str:
-    """CS2 viewmodel alignment for barrel ROPE wisps (GMod-style trail follows the gun).
+    """CS2 alignment for Povarehok's barrel ROPE wisps (GMod-style trail on the gun).
 
     User report 2026-07-03: converting RenderRopes -> RenderSprites removed the follow-the-
     barrel ribbon entirely; smoke read as a floating world puff in FP. Keep rope/trail
-    renderers, force viewmodel + local muzzle offset, restore ropes on already-sprited trees.
+    renderers and restore ropes on already-sprited trees.
 
-    Shared base recipe: called directly for Povarehok's own barrel-trail wisps, and reused
-    as the starting point for Modern's rope-trail alignment (which then overrides the
-    offset -- see postprocess_modern.patch_cs2_modern_rope_trail_alignment).
+    FINAL recipe (2026-07-06, third round -- user: "when I move the gun the smoke should
+    lag behind and draw like a sheet in the air, like real life"): mirror stock CS2's own
+    weapon_muzzle_smoke_long. WORLD-pass rendering (a viewmodel-pass wisp rides the
+    camera rigidly -- exactly the "doesn't move like in air" complaint) + the stock
+    brief 0->0.1s PositionLock (newborn anchored one beat, then free). The engine keeps
+    driving the instance's muzzle CP (needs NO config injection -- proven by the old
+    pack's smoke following a thrown gun), so continuous emission paints the lagging
+    sheet while old smoke hangs in the world. Barrel-TIP spawn offset kept.
     """
     new = text.replace("m_bLocalCoords = false", "m_bLocalCoords = true")
-    new = new.replace("m_bViewModelEffect = false", "m_bViewModelEffect = true")
-    new = _ensure_viewmodel_effect_flag(new)
+    new = new.replace("m_bViewModelEffect = true", "m_bViewModelEffect = false")
     # Trees already processed by the trail->sprite rewrite: put the rope renderer back.
     new = new.replace(
         '_class = "C_OP_RenderSprites"\n\t\t\tm_bBlendFramesSeq0 = true',
         '_class = "C_OP_RenderRopes"',
     )
     new = new.replace('_class = "C_OP_RenderSprites"', '_class = "C_OP_RenderRopes"', 1)
-    new = _ensure_cs2_muzzle_position_offset(new)
+    new = _ensure_cs2_muzzle_position_offset(new, MUZZLE_OFFSET_BARREL_TIP)
+    new = ensure_brief_position_lock(new)
+    new = remove_muzzle_follow_config(new)
     new = dedup_blend_frames_key(new)
     return new

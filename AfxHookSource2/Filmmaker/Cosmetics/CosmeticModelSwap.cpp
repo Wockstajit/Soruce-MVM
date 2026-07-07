@@ -902,4 +902,53 @@ bool ReadActiveViewmodelWeaponState(unsigned char* pawn, const char* wantWeaponC
 	return found;
 }
 
+int ResolveViewmodelWeaponEntityIndex(unsigned char* pawn, const char* wantWeaponClass,
+	char* dbg, size_t dbgSize, void** outEntity) {
+	if (dbg && dbgSize) dbg[0] = '\0';
+	if (outEntity) *outEntity = nullptr;
+	if (!pawn)
+		return -1;
+	const ClientDllOffsets_t& o = g_clientDllOffsets;
+	if (o.C_BaseEntity.m_pGameSceneNode == 0 || o.CGameSceneNode.m_pChild == 0
+		|| o.CGameSceneNode.m_pNextSibling == 0 || o.CGameSceneNode.m_pOwner == 0)
+		return -1;
+	HudArmsResolve hres = ResolveHudArmsForViewmodel(pawn, wantWeaponClass);
+	unsigned char* arms = hres.arms;
+	int used = 0;
+	if (dbg && dbgSize)
+		used = std::snprintf(dbg, dbgSize, "arms=%s(idx=%d)", hres.source, hres.armsIdx);
+	if (!arms)
+		return -1;
+
+	int classMatchIdx = -1, firstWeaponIdx = -1;
+	void* classMatchEnt = nullptr, *firstWeaponEnt = nullptr;
+	__try {
+		void* armsNode = *(void**)(arms + o.C_BaseEntity.m_pGameSceneNode);
+		if (!armsNode)
+			return -1;
+		void* child = *(void**)((unsigned char*)armsNode + o.CGameSceneNode.m_pChild);
+		for (int guard = 0; child && guard < 64; ++guard) {
+			void* owner = *(void**)((unsigned char*)child + o.CGameSceneNode.m_pOwner);
+			if (owner && LooksLikeWeapon(owner)) {
+				CEntityInstance* oe = (CEntityInstance*)owner;
+				SOURCESDK::CS2::CBaseHandle vh = oe->GetHandle();
+				const int idx = vh.IsValid() ? vh.GetEntryIndex() : -1;
+				const char* oc = oe->GetClassName();
+				if (!firstWeaponEnt) { firstWeaponIdx = idx; firstWeaponEnt = owner; }
+				if (!classMatchEnt && wantWeaponClass && oc && 0 == std::strcmp(oc, wantWeaponClass)) {
+					classMatchIdx = idx; classMatchEnt = owner;
+				}
+				if (dbg && dbgSize && used > 0 && used < (int)dbgSize)
+					used += std::snprintf(dbg + used, dbgSize - used, " child[%d]=%s", idx, oc ? oc : "?");
+			}
+			child = *(void**)((unsigned char*)child + o.CGameSceneNode.m_pNextSibling);
+		}
+	} __except (1) {
+		return -1;
+	}
+	void* chosen = classMatchEnt ? classMatchEnt : firstWeaponEnt;
+	if (outEntity) *outEntity = chosen;
+	return classMatchEnt ? classMatchIdx : firstWeaponIdx;
+}
+
 } // namespace Filmmaker

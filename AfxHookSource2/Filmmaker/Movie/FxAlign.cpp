@@ -7,6 +7,7 @@
 #include "../Cosmetics/CosmeticDebugLog.h"  // MvmDebugLog_* breadcrumbs
 #include "../../ClientEntitySystem.h"       // AfxGetSpectatedPawnIndex, CEntityInstance
 #include "../../hlaeFolder.h"               // GetHlaeRoamingAppDataFolderW
+#include "../../../deps/release/prop/AfxHookSource/SourceSdkShared.h" // SOURCESDK::Vector/Quaternion
 #include "../../../shared/AfxConsole.h"
 
 #define NOMINMAX
@@ -73,19 +74,71 @@ constexpr double kModernCfgOffset[3] = { 0.25, 0.0, -0.25 };
 
 // ============================== classification =====================================
 
-// Modern-only effect kind off the swap target, or null for targets the probe ignores.
+// Muzzle-FX effect kind off the swap target, or null for targets the probe ignores. Covers BOTH
+// packs (user request 2026-07-07): Modern (arc9_fas_muzzleflashes: muzzleflash_*, barrel_smoke*,
+// mvm_spray_*) AND Povarehok (weapons/cs_weapon_fx: weapon_muzzle_flash_*, weapon_muzzle_smoke*,
+// mvm_spray_weapon_muzzle_flash_*). Classification is by name substring, pack-agnostic.
 const char* EffectKindFor(const char* target) {
-	if (!std::strstr(target, "/modern/"))
+	if (!std::strstr(target, "/modern/") && !std::strstr(target, "/povarehok/"))
 		return nullptr;
 	if (std::strstr(target, "mvm_grenade_trail"))
 		return nullptr; // grenade flight trail: not muzzle-anchored
-	if (std::strstr(target, "mvm_spray_") || std::strstr(target, "barrel_smoke_trail"))
+	// Sustained/spray smoke first (a Povarehok smoke wrapper is mvm_spray_weapon_muzzle_flash_*,
+	// which also contains "muzzle_flash" -- the spray/smoke test must win over the flash test).
+	if (std::strstr(target, "mvm_spray_") || std::strstr(target, "barrel_smoke_trail")
+		|| std::strstr(target, "muzzle_smoke"))
 		return "wisp";
 	if (std::strstr(target, "barrel_smoke"))
 		return "barrelsmoke";
-	if (std::strstr(target, "muzzleflash"))
-		return "muzzleflash"; // includes mvm_muzzleflash_sniper_*
+	if (std::strstr(target, "muzzleflash") || std::strstr(target, "muzzle_flash"))
+		return "muzzleflash"; // Modern muzzleflash_*/mvm_muzzleflash_sniper_*, Povarehok weapon_muzzle_flash_*
 	return nullptr;
+}
+
+// GMod per-shot class flashes (MODERN_FLASH_SMOKE_CHILDREN in postprocess_modern.py):
+// barrel_smoke + rope wisp are PCF children, so they never get their own swap target.
+// When the parent flash is measured, mirror the same muzzle distance into barrelsmoke/wisp.
+bool HasPerShotBarrelSmokeChild(const char* target) {
+	if (!target || !std::strstr(target, "muzzleflash_"))
+		return false;
+	if (std::strstr(target, "muzzleflash_suppressed"))
+		return false;
+	if (std::strstr(target, "mvm_muzzleflash_sniper"))
+		return false;
+	static const char* kClassFlashes[] = {
+		"muzzleflash_ar.vpcf",
+		"muzzleflash_smg.vpcf",
+		"muzzleflash_shotgun.vpcf",
+		"muzzleflash_pistol.vpcf",
+		"muzzleflash_pistol_deagle.vpcf",
+		"muzzleflash_lmg.vpcf",
+		"muzzleflash_dmr.vpcf",
+		nullptr,
+	};
+	for (const char** flash = kClassFlashes; *flash; ++flash) {
+		if (std::strstr(target, *flash))
+			return true;
+	}
+	return false;
+}
+
+void RecordDerivedAlignSample(const std::string& wclass, const char* effect, double dist,
+	bool pass, const char* method, bool attachment) {
+	std::lock_guard<std::mutex> lock(g_mx);
+	Agg& a = g_aggs[wclass + "|" + effect];
+	++a.count;
+	if (pass)
+		++a.pass;
+	if (0 == std::strcmp(method, "cp-scan"))
+		++a.cpScan;
+	a.sumDist += dist;
+	if (dist > a.maxDist)
+		a.maxDist = dist;
+	++g_samples;
+	if (0 == std::strcmp(method, "cp-scan"))
+		++g_cpScanSamples;
+	if (attachment)
+		++g_attachSamples;
 }
 
 // First-person (viewmodel) weapon FX path: _fps/_fp suffixed systems. Only these are the
@@ -136,6 +189,30 @@ bool SehCopyBytes(const void* src, void* dst, size_t n) {
 	}
 }
 
+// SEH-guarded named-attachment read. The FIRST-PERSON viewmodel weapon is a client-only
+// entity (C_CS2HudModelWeapon) that can be mid-reconstruction while a particle swap fires
+// during live (unpaused) playback; the unguarded ResolveAttachTransform faulted CS2 ~8s into
+// the first capture run. Only POD locals live across the __try so no C++ unwinding is required.
+bool SehReadAttachment(CEntityInstance* ent, const char* name, FollowVec3& pos, FollowAngles& ang) {
+	if (!ent || !name)
+		return false;
+	SOURCESDK::Vector origin;
+	SOURCESDK::Quaternion q;
+	bool ok = false;
+	__try {
+		const unsigned char idx = ent->LookupAttachment(name);
+		if (idx)
+			ok = ent->GetAttachment(idx, origin, q);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+	if (!ok)
+		return false;
+	pos = FollowVec3{ origin.x, origin.y, origin.z };
+	ang = FollowQuatToAngles(q.x, q.y, q.z, q.w);
+	return true;
+}
+
 // ============================== muzzle reference ====================================
 
 struct MuzzleRef {
@@ -177,22 +254,23 @@ MuzzleRef ResolveMuzzle() {
 	CEntityInstance* weapon = wi >= 0 ? EntityAt(wi) : nullptr;
 	out.weaponClass = EntityClass(weapon);
 
-	// The Modern assets are m_bViewModelEffect: the FIRST-PERSON viewmodel weapon entity
-	// (the pawn's HudModelArms child, resolved the proven CosmeticModelSwap way) is the
-	// reference that matches what is on screen. World weapon = fallback.
+	// The Modern assets are m_bViewModelEffect: the FIRST-PERSON viewmodel weapon entity (the
+	// weapon-like child of the pawn's HudModelArms) is the reference that matches what is on
+	// screen. ReadActiveViewmodelWeaponState returned -1 on every demo POV pawn (its class/paint
+	// match fails), so 0/997 samples ever measured against the viewmodel muzzle -- every FP effect
+	// was scored against the WORLD muzzle (~5-17u off). ResolveViewmodelWeaponEntityIndex resolves
+	// the same arms child WITHOUT the class match. World weapon stays the fallback.
 	CEntityInstance* vm = nullptr;
 	int vmIndex = -1;
-	bool vmRead = false;
-	if (weapon && !out.weaponClass.empty()) {
-		vmRead = ReadActiveViewmodelWeaponState((unsigned char*)pawn, out.weaponClass.c_str(), &vmIndex, nullptr, nullptr);
-		if (vmRead && vmIndex >= 0)
-			vm = EntityAt(vmIndex);
-	}
 	{
-		char d[128];
-		std::snprintf(d, sizeof(d), "wclass=%s read=%d vmIdx=%d vmEnt=%d",
-			out.weaponClass.empty() ? "-" : out.weaponClass.c_str(), vmRead ? 1 : 0, vmIndex,
-			vm ? 1 : 0);
+		char dbg[192] = {};
+		void* vmEnt = nullptr;
+		vmIndex = ResolveViewmodelWeaponEntityIndex((unsigned char*)pawn,
+			out.weaponClass.empty() ? nullptr : out.weaponClass.c_str(), dbg, sizeof(dbg), &vmEnt);
+		vm = (CEntityInstance*)vmEnt; // client-only entity: use the pointer, NOT EntityAt(vmIndex)
+		char d[288];
+		std::snprintf(d, sizeof(d), "wclass=%s worldWi=%d vmIdx=%d vmEnt=%d %s",
+			out.weaponClass.empty() ? "-" : out.weaponClass.c_str(), wi, vmIndex, vm ? 1 : 0, dbg);
 		out.vmDetail = d;
 	}
 
@@ -205,12 +283,13 @@ MuzzleRef ResolveMuzzle() {
 		if (!c.ent)
 			continue;
 		for (const char* att : attNames) {
-			AttachTransformResult r = ResolveAttachTransform(c.ent, c.idx, FollowTargetType::Weapon, att);
-			if (r.valid && r.oriented && r.attachKind == "attachment") {
+			FollowVec3 apos;
+			FollowAngles aang;
+			if (SehReadAttachment(c.ent, att, apos, aang)) {
 				out.valid = true;
 				out.attachment = true;
-				out.pos = r.pos;
-				out.ang = r.ang;
+				out.pos = apos;
+				out.ang = aang;
 				out.source = std::string(c.tag) + "/" + att;
 				return out;
 			}
@@ -410,6 +489,10 @@ void ProcessSample(const PendingSample& p) {
 	if (MvmDebugLog_Active())
 		MvmDebugLog_Linef("fx.align", "%s %s d=%.2fu (%s, %s, %s) %s", wclassCopy.c_str(), effect,
 			dist, method, m.source.c_str(), fp ? "fp" : "world", pass ? "pass" : "FAIL");
+	if (0 == std::strcmp(effect, "muzzleflash") && HasPerShotBarrelSmokeChild(p.target.c_str())) {
+		RecordDerivedAlignSample(wclassCopy, "barrelsmoke", dist, pass, method, m.attachment);
+		RecordDerivedAlignSample(wclassCopy, "wisp", dist, pass, method, m.attachment);
+	}
 }
 
 void PrintStatus(const char* cmd) {
@@ -444,6 +527,69 @@ void PrintStatus(const char* cmd) {
 		"  Samples: %%APPDATA%%\\HLAE\\fx_align.jsonl\n",
 		FxAlign_Enabled() ? "ON" : "off", samples, cpScan, samples - cpScan, attach,
 		threshold, pending, dropped, droppedGate, droppedNoPawn, cmd, cmd, cmd, cmd);
+}
+
+// One-shot evidence dump: where does the WORLD weapon muzzle sit vs the resolved FIRST-PERSON
+// viewmodel weapon muzzle for the currently spectated player? Lets me confirm the viewmodel
+// resolution works (and by how much the two differ) without waiting for a fired shot.
+void DumpVmProbe() {
+	const int pawnIdx = AfxGetSpectatedPawnIndex();
+	CEntityInstance* pawn = pawnIdx >= 0 ? EntityAt(pawnIdx) : nullptr;
+	if (!pawn || !pawn->IsPlayerPawn())
+		pawn = AfxGetLocalViewerPawn();
+	if (!pawn || !pawn->IsPlayerPawn()) {
+		advancedfx::Message("fx align vmprobe: no spectated/local player pawn.\n");
+		return;
+	}
+	float eye[3] = {};
+	pawn->GetRenderEyeOrigin(eye);
+	const FollowVec3 eyeV{ eye[0], eye[1], eye[2] };
+	int wi = -1;
+	{ const auto h = pawn->GetActiveWeaponHandle(); if (h.IsValid()) wi = h.GetEntryIndex(); }
+	CEntityInstance* weapon = wi >= 0 ? EntityAt(wi) : nullptr;
+	std::string wclass = EntityClass(weapon);
+
+	auto reportAtt = [&](const char* tag, CEntityInstance* ent, int idx) -> bool {
+		if (!ent) { advancedfx::Message("  %-10s: <none>\n", tag); return false; }
+		for (const char* att : { "muzzle_flash", "muzzle" }) {
+			FollowVec3 apos;
+			FollowAngles aang;
+			if (SehReadAttachment(ent, att, apos, aang)) {
+				advancedfx::Message("  %-10s idx=%d cls=%s att=%s pos=(%.1f,%.1f,%.1f) eyeDist=%.1fu\n",
+					tag, idx, EntityClass(ent).c_str(), att, apos.x, apos.y, apos.z,
+					FollowDistance(apos, eyeV));
+				return true;
+			}
+		}
+		advancedfx::Message("  %-10s idx=%d cls=%s att=<no muzzle attachment>\n",
+			tag, idx, EntityClass(ent).c_str());
+		return false;
+	};
+
+	char dbg[192] = {};
+	void* vmEnt = nullptr;
+	const int vmIdx = ResolveViewmodelWeaponEntityIndex((unsigned char*)pawn,
+		wclass.empty() ? nullptr : wclass.c_str(), dbg, sizeof(dbg), &vmEnt);
+	CEntityInstance* vm = (CEntityInstance*)vmEnt;
+
+	advancedfx::Message("fx align vmprobe: pawn=%d eye=(%.1f,%.1f,%.1f) wclass=%s\n  vm-resolve: %s\n",
+		pawnIdx, eye[0], eye[1], eye[2], wclass.empty() ? "-" : wclass.c_str(), dbg);
+	reportAtt("world", weapon, wi);
+	const bool vmMuzzle = reportAtt("viewmodel", vm, vmIdx);
+	if (!vmMuzzle && !vm)
+		advancedfx::Message("  (no viewmodel weapon entity resolved -- FP effects will score vs the WORLD muzzle)\n");
+	if (!vmMuzzle && vm) {
+		// The viewmodel entity resolved but has no muzzle/muzzle_flash point under those names --
+		// enumerate what it DOES expose so we know the right attachment name.
+		std::vector<FollowAttachPoint> pts = AvailableAttachPoints(vm, FollowTargetType::Weapon, true, false);
+		std::string ids;
+		for (const auto& p : pts) { if (!ids.empty()) ids += ","; ids += p.id; if (p.valid) ids += "*"; }
+		advancedfx::Message("  viewmodel attach points: [%s]\n", ids.empty() ? "(none)" : ids.c_str());
+	}
+
+	MuzzleRef m = ResolveMuzzle();
+	advancedfx::Message("  ResolveMuzzle -> source=%s pos=(%.1f,%.1f,%.1f) attachment=%s\n",
+		m.source.c_str(), m.pos.x, m.pos.y, m.pos.z, m.attachment ? "true" : "false");
 }
 
 } // namespace
@@ -558,6 +704,10 @@ void FxAlign_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* cm
 		std::lock_guard<std::mutex> lock(g_mx);
 		g_threshold = t;
 		advancedfx::Message("fx align: threshold = %.2f units (affects new samples).\n", t);
+		return;
+	}
+	if (0 == _stricmp(sub, "vmprobe")) {
+		DumpVmProbe();
 		return;
 	}
 	if (0 == _stricmp(sub, "report")) {

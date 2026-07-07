@@ -1,143 +1,184 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives Claude Code the rules for working in this repo. Keep this file short. Detailed project background and optional agent workflows live in `docs/agent/`.
 
-## What this is
+## Read this first
 
-**SOURCE:MVM** — a fork of [HLAE / advancedfx](https://github.com/advancedfx/advancedfx) focused on building a native-feeling, in-game cinematics / demo-replay toolkit for **Counter-Strike 2 (Source 2)**. All active development targets CS2; the inherited GoldSource (`AfxHookGoldSrc`) and Source 1 (`AfxHookSource`) code is left intact but is **not** being worked on here.
+- Before changing code, read `docs/agent/project-context.md`.
+- If the task touches a specific feature, also read the feature doc listed in that context file.
+- Do not rely on memory when the repo docs or code can answer the question.
+- When docs and code disagree, trust the code and update the relevant doc as part of the work.
 
-Almost all new work lives in **`AfxHookSource2/`** (the CS2 hook DLL) and, within it, **`AfxHookSource2/Filmmaker/`** (the demo browser + camera tooling). When in doubt, that is where the feature you are touching lives.
+## Agent docs
 
-## Build & run
+Longer instructions live in `docs/agent/`. Read these only when relevant:
 
-The project is Windows-only and builds with CMake + Visual Studio 2022. A release is **two architectures** (Win32 for the GUI/injector, x64 for the CS2 hook) puzzled together by `cmake/MultiBuild.cmake`.
+- `docs/agent/project-context.md` — SOURCE:MVM architecture, repo layout, build flow, feature docs, threading rules, Panorama rules, FX pipeline, and gotchas.
+- `docs/agent/model-routing-cost-policy.md` — use before subagents, workflows, helper models, expensive reasoning, or long-running tasks.
+- `docs/agent/codex-review.md` — use before asking Codex/GPT-5.5 for an independent review.
+- `docs/agent/codex-implementation.md` — use before asking Codex/GPT-5.5 to implement a bounded patch.
+- `docs/agent/codex-computer-use.md` — use before asking Codex/GPT-5.5 to launch apps, use a browser, capture screenshots, inspect runtime behavior, or verify UI flows with computer use.
 
-### Primary workflow — `build.bat`
+Do not read every agent doc by default. Pick the smallest relevant doc for the task.
 
-`build.bat` (repo root) is the day-to-day build. The user generally wants Claude to run it after making changes. It:
-1. First offers to recompile the converted FX asset packs (`fx/tools/convert-povarehok-source1.ps1 -Compile` → `build/fx/povarehok-source1import/`) via a 3-second Y/N prompt that **defaults to No** (the conversion takes minutes and the mod sources rarely change). One run converts both the "Povarehok" pack (On/Less modes, staged as `particles/filmmaker/povarehok/{regular,less/impacts,less/smoke}/`) and the MW2019 "modern" pack (Modern modes, staged as `particles/filmmaker/modern/`; its Source 1 inputs are committed in-repo under `fx/sources/modern-warfare-gmod/`, so **no GMod install is needed** — pass `-RefreshModernFromGmod` to re-extract them from a local GMod via `extract-modern-particles-gmod.py`). Forced automatically when no compiled pack exists on disk (fresh checkout / cancelled prior conversion). Non-fatal — a machine missing the converter checkouts (`misc/source1import`, `misc/Source2Converter`) still gets a working DLL/game build, just with whatever pack (if any) was already on disk.
-2. Kills any running `cs2.exe` / `hlae.exe` — the staged DLL and mounted FX assets must be released before either rebuild starts.
-3. Rebuilds the FX packs first when requested, then continues even if conversion fails.
-4. Puts Cargo, gettext, and Go on `PATH`, and clears `NoDefaultCurrentDirectoryInExePath` (a hardened-shell var that breaks the `ShaderBuilder.exe` step — see [memory: build-shader-9009-fix]).
-5. Runs `cmake -DAFX_MULTIBUILD_STAGING=ON -P cmake/MultiBuild.cmake` (builds both arches → `build/staging-release/bin/HLAE.exe`).
-6. Builds the Go demo-info helper (`go build` in `FilmmakerDemoInfoGo/` → `build/staging-release/bin/x64/FilmmakerDemoInfo/FilmmakerDemoInfo.exe`).
-7. Stages the compiled `source_mvm_fx` game dir into `build/staging-release/fx/` so a shipped build carries it.
-8. Launches CS2 + the live dashboard via `automation/launch/live.bat`, which auto-mounts that pack over `USRLOCALCSGO` if present (see `automation/launch/launch-cs2-netcon.ps1`).
+## Core project direction
 
-`launch.bat` just runs the already-staged `build/staging-release/bin/HLAE.exe` without rebuilding.
+- This repo is SOURCE:MVM, a CS2 offline demo/movie-making tool built from HLAE/advancedfx.
+- Active work targets Counter-Strike 2 only.
+- Most new work belongs in `AfxHookSource2/`.
+- Most filmmaker/tooling work belongs in `AfxHookSource2/Filmmaker/`.
+- Do not modify inherited GoldSource or Source 1 code unless the task explicitly requires it.
+- This DLL is for offline demo/movie work only. Do not wire it up for VAC-protected or online servers.
 
-### Targeted dev builds (faster, single arch)
+## Cost and model usage
 
-When iterating on the CS2 hook only, prefer the x64 preset over a full MultiBuild:
+- Cost is a hard constraint.
+- Start with the cheapest reliable approach.
+- Prefer focused investigation over broad exploration.
+- Do not spawn many agents, workflows, or long-running tasks unless the task clearly needs it.
+- Do not use Max, X-High, Ultra, or equivalent high-cost modes unless explicitly requested.
+- If a task may use a lot of tokens or take a long time, stop and explain the risk before continuing.
+- Escalate only when the cheaper path fails or the risk justifies it.
+- Before using Codex, subagents, workflows, helper models, expensive reasoning, or long-running tasks, read `docs/agent/model-routing-cost-policy.md`.
 
-```batch
-cmake --preset x64-release
-cmake --build --preset x64-release --target AfxHookSource2
-cmake --install build/x64-release --config Release --prefix build/staging-release
-```
+## Reasoning defaults
 
-Presets: `win32-debug`, `x64-debug`, `win32-release`, `x64-release`. Use `win32-*` for the C# GUI / injector / Win32 hooks, `x64-*` for the CS2 hook. Build dirs are reused, so a one-file change only rebuilds affected targets. Full build options live in [BUILDING.md](BUILDING.md).
+Use low effort for:
 
-### Build prerequisites
+- Reading files.
+- Searching the repo.
+- Summarizing logs.
+- Simple edits.
+- Formatting.
+- Renaming.
+- Small config changes.
 
-VS 2022 (Desktop C++ **and** .NET desktop dev workloads + .NET Framework 4.6.2 targeting pack), Node.js 24 LTS, Python 3, GNU gettext, Rust/Cargo with the `i686-pc-windows-msvc` target added, and Go (for the demo helper). Rust is built `--locked` by default; pass `-DAFX_RUST_CARGO_LOCKED=FALSE` when intentionally updating `Cargo.lock`.
+Use medium effort for:
 
-### Tests
+- Normal bug fixes.
+- Moderate refactors.
+- Build errors.
+- Test failures.
+- Small feature additions.
 
-This is a game-hook DLL, so most "tests" are **live in-game verification harnesses**: `automation/verify/*.ps1` drive a running CS2 over netcon (e.g. `automation/verify/verify-followcam.ps1`, `verify-watch-ui.ps1`). To exercise a feature, launch CS2 via `automation/launch/launch-cs2-netcon.ps1` (windowed 1600x1200) and run the matching verifier.
+Use high effort only for:
 
-The one pure-logic unit test is the CTest target `FollowCameraMathTests` (`automation/tests/follow-camera-math-tests.cpp`, registered in `AfxHookSource2/CMakeLists.txt` via `add_test`). Build and run it standalone:
+- Hard debugging.
+- Risky code changes.
+- Architecture issues.
+- Cross-system changes.
+- Final review before merge.
+- Anything that could break core behavior.
 
-```batch
-cmake --build --preset x64-release --target FollowCameraMathTests
-ctest --test-dir build/x64-release -C Release -R FollowCameraMathTests --output-on-failure
-```
+## Windows environment
 
-## Architecture (the big picture)
+- The user is on Windows.
+- Prefer PowerShell-compatible commands unless the repo clearly requires Bash or WSL.
+- Use WSL only when it is already part of the project setup or clearly beneficial.
+- Do not assume macOS apps, paths, shortcuts, or Mac-only computer-use workflows.
+- For visual or runtime verification, prefer screenshots, logs, in-game observations, targeted commands, and file-level checks first.
+- If real local app/browser/UI interaction would help, read `docs/agent/codex-computer-use.md` before using Codex computer use.
 
-### Multi-project layout
+## Work style
 
-- **`hlae/`** — the C# .NET launcher GUI, shipped as the Win32 `HLAE.exe`. Injects the hook DLL into the game.
-- **`AfxHookSource2/`** — the C++ **CS2 hook DLL** (x64). This is where the action is. It also statically links a Rust library (`lib/`, mostly mirv-script). Built with `add_definitions(-DGAME_CS2)`.
-- **`AfxHookSource`** / **`AfxHookGoldSrc`** / **`AfxCppCli`** — Source 1 / GoldSource hooks and old C++/CLI code. Inherited from upstream, not in active development.
-- **`ShaderBuilder` / `shaders/` / `ShaderDisassembler`** — HLSL shaders are compiled to `.acs` combo files by `ShaderBuilder.exe` at build time (see the `add_custom_command` in `AfxHookSource2/CMakeLists.txt`); `copy_resources_release.bat` stages the `.acs` outputs.
-- **`shared/`** — C++ shared across hooks. **`deps/`** — git-submodule and CMake-pulled dependencies (Detours, prop/CS2 SDK, etc.); run `git clone --recurse-submodules` or `git submodule update --init`.
-- **`FilmmakerDemoInfoGo/`** — standalone **Go** binary (`demoinfocs-golang`) that parses a `.dem` to scoreboard JSON. Self-contained, no .NET runtime needed.
+- Investigate before editing.
+- Make the smallest correct change.
+- Do not rewrite large areas unless necessary.
+- Do not make unrelated improvements.
+- Do not invent missing requirements.
+- Do not create god files.
+- Keep features separated by responsibility.
+- Match the existing code style.
+- Avoid new dependencies unless necessary.
+- Ask before destructive actions.
+- Never merge, delete branches, delete files, close PRs, or rewrite history unless explicitly allowed.
 
-### How the hook drives the game (critical threading model)
+## Codex review
 
-`AfxHookSource2/main.cpp` installs the detours. Two callbacks matter and run on **different threads**:
+Before using Codex for independent review, read:
 
-- **`CS2_Client_FrameStageNotify` (MAIN / UI thread)** → calls `Filmmaker::RunMainThreadFrame()`. **All Panorama work runs here.** Panorama executes V8 JavaScript, which *must* be on the game's main thread.
-- **The DirectX Present hook (RENDER thread)** → calls `Filmmaker::RunFrame()`, which pumps only thread-safe backend work (start scans, apply picked folders).
+- `docs/agent/codex-review.md`
 
-**Calling `RunScript` (Panorama) from the render thread crashes** with `v8::Context::Exit() - Cannot exit non-entered context`. Keep this split intact: backend/IO on the render-thread pump, anything that touches the UI on the main-thread pump.
+Use Codex review only when:
 
-`main.cpp`'s WndProc hook routes raw input into `Filmmaker::MovieInput_OnKey/OnMouseButton/OnMouseWheel` (hotkeys for free-cam, markers, editor). `GetSuspendMirvInput()` is OR'd with editor/menu cursor-wants so the OS cursor shows and free-cam mouse-look pauses while a Panorama menu is up.
+- The user asks for a Codex/GPT-5.5 review.
+- A change is risky enough to need an independent second pass.
+- A diff needs to be compared against requirements.
 
-### The Filmmaker feature (`AfxHookSource2/Filmmaker/`)
+Do not use Codex review for small local checks, simple edits, or markdown-only changes. Codex review is review-only. Do not let it edit files.
 
-`Filmmaker.h` is the single integration surface the rest of the DLL touches (well-documented — read it first).
+## Codex implementation
 
-**File-organization convention (enforced):** one responsibility per file. When a file accretes a second unrelated job, split it — big subsystems use an `*Internal.h` shared-state header plus focused `.cpp` files behind one unchanged public header (see `Movie/ParticleFx*` and `Cosmetics/CosmeticModelSwap*` for the pattern). Embedded Panorama JS lives in per-panel `*Js.h` fragment headers. Console features get their own `*Command.cpp` next to the dispatcher. Deliberately NOT split (cohesive by design): `Filmmaker.cpp` (integration hub), `FollowCamera.cpp` (one state machine), the thin `*Command.cpp` dispatchers, single-panel `*Js.h` headers.
+Before delegating implementation work to Codex, read:
 
-- **`Filmmaker.{h,cpp}`** — facade: init, the two per-frame pumps, watch/playdemo, plus the public API for every camera/editor mode.
-- **`FilmmakerCommand.cpp`** — the `mirv_filmmaker <subcommand>` console command, now a **pure dispatcher**: each feature's grammar lives in its own file (`MarkerCommand.cpp`, `CameraTimelineCommand.cpp`, `CameraEditorCommand.cpp`, `FollowCommand.cpp`, `GraphEditorCommand.cpp`, `Cosmetics/CosmeticCommands.cpp`; shared arg helpers in `FilmmakerCommandUtil.cpp`). `FilmmakerDebugCommand.cpp` owns the `mvm_debug` command + the post-command state tracer. Adding a feature = a new `*_RunCommand` in its own file + one dispatch branch.
-- **`Demo/`** — discovery + parsing. `DemoScanner` finds `*.dem` recursively; `DemoHeaderReader` reads map/duration; `DemoInfoReader` reads the `.dem.info` matchmaking sidecar; `DemoLibrary` owns the list and runs the background scan.
-- **`Panorama/`** — the UI. `PanoramaBridge` wraps engine access + `CUIEngine::RunScript`; `PanoramaFindPanel.{h,cpp}` is the shared panel-by-id lookup (do not re-implement it in a bridge). The actual UI is embedded JS in `*Js.h` headers (`FilmmakerGuiJs.h`, `CameraEditorJs.h` + its `CameraEditor*Js.h` fragments, `CameraTimelineJs.h`, `ConfigHudJs.h`, …). `*Hud.cpp` files are the C++ bridges that push state into and read events out of that JS — one panel per bridge/JS pair.
-- **`Movie/`** — camera + effects systems: `CameraPath`/`CameraPathPicking`/`CamMarkers`/`CamPathEval`/`CamPlayback` (BO2-style dolly + timeline playback), `FollowCamera` + `FollowTarget*`/`FollowEventIndex`, `MovieMode`, `ViewFx`/`ViewFxVm` (camera-feel modifiers), `BodyCam`/`ActionCam` (Follow presets), `DemoEndHold`, and the **ParticleFx subsystem** split across `ParticleFx.cpp` (core/dispatch), `ParticleFxRules` (swap tables), `ParticleFxHook` (detour), `ParticleFxSpray`, `ParticleFxMoney`, `ParticleFxSettings`, `ParticleFxDiagnostics` behind `ParticleFx.h` (+ `ParticleFxInternal.h`).
-- **`Cosmetics/`** — the SteamID-keyed loadout/skin override system (apply loop, model swaps, catalog, `mvm_debug` log). File map in `docs/cosmetics-overview.md`.
-- **`Data/`** — `cosmetics.json`, the generated skin-catalog source data.
-- **`Platform/`** — `JsonBuilder`/`JsonParser` (hand-rolled; the DLL does not link a JSON lib), `ProtobufWire` (minimal protobuf reader — the DLL does **not** link protobuf), `TextEncoding`, `FolderPicker` (native `IFileOpenDialog`).
-- **`Config/`** — `DemoFolderStore` persists scanned folders under `%APPDATA%\HLAE\`.
+- `docs/agent/codex-implementation.md`
 
-### Feature → doc map
+Use Codex implementation only for bounded implementation tasks where Codex can produce a patch.
 
-| Feature | Doc |
-|---|---|
-| Demo browser / Watch tab | `docs/filmmaker_demos_feature.md` |
-| Movie director HUD + input | `docs/filmmaker_movie_controls.md` |
-| Camera Editor workspace (timeline, graph, inspectors) | `docs/camera-editor-feature.md` |
-| Follow / Attach camera | `docs/follow-camera/` (README indexes it) |
-| Config panel (general + EFFECTS + MODIFIERS) | `docs/filmmaker_config_panel.md` |
-| Particle-effects modes + FX asset pipeline | `docs/filmmaker_effects_modifiers.md` (+ `fx/README.md`, `docs/mw2019-fx-mapping-reference.md`, `docs/povarehok-csgo-mod-reference.md`) |
-| Cosmetics (skins/knife/gloves/agent) | `docs/cosmetics-overview.md` → methodology-notes, customize-handoff, legacy-vs-cs2 |
-| Panorama UI architecture | `docs/panorama_ui_guide.md` (+ `docs/panorama_viewmodel_preview.md`, `docs/panorama-player-preview-summary.md`) |
-| Superseded research (kept for history) | `docs/archive/` |
+Claude must still:
 
-### Engine integration via signature scanning
+- Scope the task.
+- Protect existing user changes.
+- Inspect `git status --short` before Codex edits anything.
+- Review `git diff` after Codex finishes.
+- Reject unrelated or overbuilt edits.
+- Run the cheapest useful verification.
+- Report what Codex changed, what Claude verified, and what risks remain.
 
-There is no CS2 SDK for these internals. Engine functions/globals (`CUIEngine::RunScript`, the main-menu panel global, Panorama accessors) are resolved at runtime by **byte-pattern scanning** the loaded modules (patterns largely cross-referenced from the Osiris project). Resolution lives in `DeathMsg.cpp` (`getPanoramaAddrs*`). `misc/sigscan.py` is a kept dev tool to validate a pattern is a unique match in a DLL. **When a CS2 update breaks the UI, a moved pattern or a renamed Panorama panel id is the first suspect** — re-validate with `sigscan.py` and check the id lists in the `*Js.h` files. Pattern misses are designed to be non-fatal (warn + fall back), so a broken pattern degrades a feature rather than crashing the game.
+Do not use Codex implementation for tiny edits. Do not let Codex commit, push, deploy, delete branches, or edit global config unless explicitly asked.
 
-### Demo scoreboard pipeline (two-phase)
+## Codex computer use
 
-`DemoLibrary::ScanWorker` runs in two phases (see [memory: filmmaker-demo-parsing]):
-1. **Phase 1 (instant):** `.dem` header (map + duration) + `.dem.info` sidecar (account ids + K/A/D, **no names**).
-2. **Phase 2 (slow):** shells out to `FilmmakerDemoInfo.exe` per demo for real names, end-of-match sides, MVPs, `perRound`, and weapon/C4 `events[]` (the latter feed the Follow Camera). Results are cached beside the demo as `<demo>.fmjson`.
+Before using Codex for local app/browser/simulator verification, read:
 
-**Contract:** `schemaVersion` in `FilmmakerDemoInfoGo/main.go` **must equal** `kSchemaVersion` in `Demo/DemoInfoHelper.cpp` — bump **both** when changing the JSON shape, or stale caches get reused. The cache is invalidated against the demo mtime, the helper-exe mtime, and the schema version. (The old C# helper `FilmmakerDemoInfo/` and "names-fast" mode were removed; the Go helper always does a full parse.)
+- `docs/agent/codex-computer-use.md`
 
-## Repository conventions (where files go)
+Use Codex computer use only when real UI interaction is useful:
 
-Keep the repo tidy — **do not dump files in the root.** Before working in a folder, read its `README.md` if present (`automation/README.md`, `docs/follow-camera/README.md`, etc.) and follow it.
+- Testing a flow.
+- Launching a local app.
+- Using a browser.
+- Capturing screenshots.
+- Inspecting runtime behavior.
+- Verifying UI behavior.
 
-- **`docs/`** — project documentation; the feature → doc map above indexes it. **Update the existing doc** for a feature rather than creating a parallel one; if a doc is contradicted by current code, fix it as part of the work. Superseded research goes to `docs/archive/` with an ARCHIVED banner explaining what overturned it — never silently delete it.
-- **`automation/`** — **testing/tooling only**: launchers, verifiers, capture helpers, and automation-only test drivers, each in its subfolder (`launch/`, `verify/`, `capture/`, `netcon/`, `tools/`, `tests/`, `config/`, `lib/`, `docs/`). **Generated screenshots/logs go under `automation/runs/<name>/<timestamp>/` or `automation/output/<feature>/` and are git-ignored** — never commit them. See `automation/docs/AUTOMATION_HYGIENE.md`. Note: the FX asset-conversion pipeline is **not** here — it's a build/release concern and lives in `fx/`.
-- **`fx/`** — the in-game particle FX packs (a build/release concern, deliberately separate from test-only `automation/`). `fx/tools/` holds the converter (`convert-povarehok-source1.ps1`) and its helpers — the post-process is split per responsibility into `postprocess_povarehok.py` (entry + Povarehok repairs), `postprocess_common.py` (shared repairs), and `postprocess_modern.py` (MW2019 pack), plus `validate-povarehok-assets.py` (closure + validation). `fx/sources/` holds committed source inputs (`modern-warfare-gmod/` — the MW2019 "Modern" pack's ~44 MB extracted Source 1 tree, so builds need no GMod install). The **compiled** output (~150 MB — the converter prunes the content tree to the runtime closure derived from the DLL's swap tables (the validator scans all `Movie/ParticleFx*` sources) before compiling, so ~85% of the mod's unreferenced assets never build) is a generated artifact under `build/fx/` (git-ignored) and is staged into `build/staging-release/fx/source_mvm_fx` so a shipped build carries it. The Povarehok pack's raw mod sources still live in the git-ignored `reference/csgo effect mod/`.
-- **`tools/`** — repo build/release helper Python scripts (`make_credits.py`, `make_readme.py`) — release tooling, not the place for ad-hoc scripts.
-- **`misc/`** — dev tools and odds-and-ends (`sigscan.py`, mirv-script).
-- **`.gitignore`** — keep it updated when a new class of generated/local artifact appears. `build/`, `lib/**/target/`, `automation/runs|output/`, `reference/`, `.agents/`, and `.claude/` are already ignored.
+Do not use Codex computer use for normal code reading, typechecking, linting, or tests Claude can run directly.
 
-## Gotchas worth knowing before you hit them
+Launching local apps, simulators, or browsers to verify the requested behavior is allowed. Ask first before doing anything that could disrupt the user's environment, close apps, change system settings, spend money, send messages, delete data, or act on real account data.
 
-- **Close CS2 before building** — the staged DLL is locked while loaded. `build.bat` does this for you; a manual `cmake --install` will fail with "Access is denied" if CS2 is open.
-- **MSVC ~16380-byte string-literal cap** — the embedded Panorama JS in `*Js.h` exceeds it and is split into adjacent raw literals (`)FMJS"` … `R"FMJS(`), which C++ concatenates. Add another split if a block grows past ~16 KB (error C2026 "string too big").
-- **`<Windows.h>` defines `min`/`max` macros** — use manual comparisons, not `std::min`/`std::max`, in files that include it.
-- **Panorama UI has no mouse-move event** — any dragging UI must be built from `Slider` panels, not custom drag handling (see [memory: panorama-ui-input-constraint]).
-- **Panorama: never set `style = ''`** — an empty-string style throws and aborts the script; clear a color with `rgba(0,0,0,0)` (see [memory: panorama-style-empty-string]).
-- **Netcon `ui_eval` truncates at 256 bytes** — drive the UI with short calls into pre-defined JS (`$.Filmmaker.gotoTab` etc.), not long inline JS strings (see [memory: netcon-256-and-ui-helpers]).
-- **Demo scrubbing is inherently slow** — seeking replays full packets; this is an engine cost the tool cannot remove (see [memory: demo-seek-cost-model]). Avoid redundant `SeekDemoTick` calls.
+## Build and verification
 
-## CS2 / VAC note
+- `build.bat` is the normal full build path.
+- For CS2 hook-only iteration, prefer the faster x64 release target described in `docs/agent/project-context.md`.
+- Do not run dev servers unless explicitly asked.
+- Assume CS2 or HLAE may already be running.
+- Close CS2 before building when the staged DLL may be locked.
+- Prefer safe verification commands first: build, typecheck, tests, grep/ripgrep, and diff inspection.
+- Before running expensive or long commands, explain why they are needed.
 
-This DLL is a game hook. It is for **offline demo/movie work only**. Never wire it up to join VAC-protected or online servers.
+## CS2 and FX work
+
+- Prioritize exact file-level verification.
+- Do not guess particle names, material paths, texture paths, or asset references.
+- Compare original files against modified files when possible.
+- Use the actual provided assets when the task asks for them.
+- Do not randomly clone effects just because names are similar.
+- Preserve existing file structure unless there is a clear reason to change it.
+- Report exact files touched and what still needs in-game testing.
+
+## Threading and Panorama safety
+
+- Never call Panorama `RunScript` from the render thread.
+- Panorama work belongs on the main/UI thread.
+- Backend or thread-safe work can run from the render-thread pump.
+- Keep the existing main-thread and render-thread split intact.
+
+## Output format after changes
+
+When finishing work, report:
+
+1. What changed.
+2. Files touched.
+3. Verification performed.
+4. What was not verified.
+5. Risks or next steps.

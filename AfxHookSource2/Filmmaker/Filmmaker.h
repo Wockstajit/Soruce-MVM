@@ -84,6 +84,11 @@ bool CameraTimeline_WantsCursor();
 // input layer to decide whether G should toggle the panel's UI-mouse mode.
 bool CameraTimeline_Visible();
 
+// True while the offline mvm_test FX menu is open in UI-cursor mode. main.cpp's
+// CCSGOInput::MouseInputEnabled detour returns false while this holds so a LIVE match
+// releases the mouse to the cursor (see the .cpp comment for why suspend alone can't).
+bool LiveFxMenu_WantsGameMouseReleased();
+
 // True while the camera PATH is actively driving the final view (dolly playing + free cam
 // engaged). main.cpp's view-setup hook uses this to block CS2's demo-view-override
 // (TrueView) from re-owning the view each frame the demo advances. CampathDebug() gates the
@@ -151,6 +156,11 @@ void GraphEditorExperiment_Toggle();
 bool GraphEditorExperiment_Enabled();
 bool GraphEditorExperiment_OwnsView();
 bool GraphEditorExperiment_WantsCursor();
+
+// --- mvm_test offline live-match FX testing ---
+bool MvmTest_Active();
+bool MvmTest_CanUseMenu();
+bool TestHud_Enabled();
 
 // True when non-preview UI should be hidden: always during full path playback,
 // and while the armed preview has its background HUD toggled off with Tab.

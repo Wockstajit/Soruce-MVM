@@ -8,6 +8,7 @@
 
 #include "Filmmaker.h"
 #include "Panorama/CameraTimelineHud.h"
+#include "Panorama/TestHud.h"
 #include "Movie/CameraPath.h"
 #include "Movie/FollowCamera.h"
 #include "Movie/MovieMode.h"
@@ -180,7 +181,7 @@ void CameraTimeline_RunCommand(int argc, advancedfx::ICommandArgs* args, const c
 		// In Camera Editor Mode the free cam is always on and the cursor is the user's
 		// way to flip between clicking the inspector and flying, so allow it regardless
 		// of the spectator mode gate.
-		if (!tl.EditorHosted() && !RegularCursorToggleAllowed()) {
+		if (!tl.EditorHosted() && !RegularCursorToggleAllowed() && !TestHud_Enabled()) {
 			tl.SetCursor(false);
 			advancedfx::Message("mirv_filmmaker: cursor toggle is available in third-person/freecam.\n");
 			return;

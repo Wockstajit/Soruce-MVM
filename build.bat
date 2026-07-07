@@ -109,6 +109,9 @@ if errorlevel 1 (
 )
 
 echo === Building HLAE (staging release) ===
+REM Let MSBuild build independent projects in parallel (/m). Per-file parallelism
+REM within a project comes from /MP set in the root CMakeLists.txt.
+set "CMAKE_BUILD_PARALLEL_LEVEL=%NUMBER_OF_PROCESSORS%"
 REM This builds BOTH win32 and x64 parts and stages them to build\staging-release
 cmake -DAFX_MULTIBUILD_STAGING=ON -P cmake/MultiBuild.cmake
 if errorlevel 1 (

@@ -19,6 +19,8 @@ fx/
   tools/                              the conversion pipeline
     convert-povarehok-source1.ps1     driver: stages both packs, imports, compiles, validates
     extract-modern-particles-gmod.py  (re)extracts the Modern source tree from a GMod install
+    extract-insurgency-smoke.py       exports Insurgency Sandstorm smoke VTFs + catalog
+    stage-insurgency-smoke.py         stages Insurgency picks into materials/particle/insurgency/
     export-source1-vtf.py             VTF -> vtex + sprite-sheet reconstruction
     postprocess_common.py             shared CS2 VPCF fixes (see docs/povarehok-csgo-mod-reference.md §10)
     postprocess_povarehok.py          Povarehok-only fixes + CLI entry point (drives postprocess_common/_modern too)
@@ -26,6 +28,7 @@ fx/
     validate-povarehok-assets.py      runtime resource-closure check
   sources/
     modern-warfare-gmod/              committed Modern (MW2019) Source 1 inputs
+    insurgency-sandstorm/             Insurgency smoke exports (see README; optional at convert)
 ```
 
 ## Build
@@ -36,6 +39,8 @@ powershell -File fx/tools/convert-povarehok-source1.ps1 -Compile
 
 - No GMod install needed — the Modern inputs are committed under `sources/`.
 - Add `-RefreshModernFromGmod` to re-pull the Modern inputs from a local GMod first.
+- Add `-IncludeInsurgencySmoke` to export/stage Insurgency Sandstorm muzzle/impact/shell
+  sprites into `materials/particle/insurgency/` (non-fatal if the game is not installed).
 - Output lands under `build/fx/…` and is **not** committed.
 - Before compiling, the content tree is **pruned to the runtime closure** derived from
   `ParticleFxRules.cpp`'s swap tables (the validator's `--emit-closure`). The mod ships far

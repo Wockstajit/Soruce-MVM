@@ -7,8 +7,10 @@
 
 #include "FxAlign.h"                       // Modern muzzle-FX alignment probe (fx align)
 #include "../Filmmaker.h"                  // PlayingDemoPath (level-change detection)
+#include "../MvmTest.h"                    // offline live-match FX testing (mvm_test)
 #include "../Cosmetics/CosmeticDebugLog.h" // MvmDebugLog_* (thread-safe flight recorder)
 #include "../Platform/JsonBuilder.h"
+#include "../Platform/TextEncoding.h"      // WideToUtf8 (FxLevelCacheKey)
 #include "../../../shared/AfxConsole.h"    // advancedfx::Message/Warning + ICommandArgs
 
 #define NOMINMAX
@@ -83,6 +85,27 @@ int DemoTick() {
 	return -1;
 }
 
+// Demo playback OR mvm_test on a loaded live map: main-thread precache/warmup is safe.
+bool FxMainThreadContextActive() {
+	if (DemoIsPlaying())
+		return true;
+	if (!MvmTest_Active() || !g_pEngineToClient)
+		return false;
+	const char* lvl = g_pEngineToClient->GetLevelNameShort();
+	return lvl && lvl[0] != '\0';
+}
+
+std::string FxLevelCacheKey() {
+	if (DemoIsPlaying())
+		return WideToUtf8(PlayingDemoPath());
+	if (MvmTest_Active() && g_pEngineToClient) {
+		const char* lvl = g_pEngineToClient->GetLevelNameShort();
+		if (lvl && lvl[0])
+			return std::string("live:") + lvl;
+	}
+	return std::string();
+}
+
 void ApplyReseekNow() {
 	const int tick = DemoTick();
 	if (tick <= 1 || !g_pEngineToClient)
@@ -127,8 +150,7 @@ std::string PopResolveTargetLocked() {
 }
 
 void DrainResolveQueueMainThread() {
-	const bool playing = DemoIsPlaying();
-	if (!playing)
+	if (!FxMainThreadContextActive())
 		return;
 	const bool paused = DemoIsPaused();
 	const unsigned long long now = GetTickCount64();
@@ -154,6 +176,131 @@ void DrainResolveQueueMainThread() {
 		g_nextResolveAtMs = afterMs
 			+ (costMs >= kHeavyResolveMs ? kPlaybackHeavyResolveBackoffMs : kPlaybackResolveIntervalMs);
 	}
+}
+
+// ============================== warm-up burst ======================================
+// Front-loaded precache. The trickle above is fine for stray lazy misses, but at demo
+// open (per-level cache wipe) or a settings switch the FULL active set (~100-145
+// targets) is cold, and one blocking load per 0.25-2s reads as a minutes-long stutter
+// storm. Instead: queue everything up front (QueueAllUncachedActiveTargetsLocked) and
+// drain it in per-frame time-budgeted bursts, concentrating the cost into the demo's
+// first moments. All resolves still go through ResolveHandleOnMainThread on the main
+// thread in the level's own resource context -- the CRASH LESSON invariants are
+// untouched, and the hook's lazy miss->queue fallback keeps working throughout.
+
+enum class WarmupPhase { Idle, WaitSettle, Bursting };
+WarmupPhase g_warmupPhase = WarmupPhase::Idle; // main-thread only (like all state below)
+unsigned long long g_warmupArmedAtMs = 0;
+int g_warmupTickAtArm = -1;
+int g_warmupTickAdvanceSeen = 0;
+unsigned long long g_warmupOpenWindowUntilMs = 0; // full-budget window after demo open
+unsigned g_warmupResolved = 0;
+unsigned long long g_warmupTotalMs = 0, g_warmupMaxMs = 0;
+std::string g_warmupMaxName;
+unsigned g_warmupFrames = 0;
+
+constexpr unsigned long long kBurstBudgetOpenMs = 100;  // paused, or just-opened demo
+constexpr unsigned long long kBurstBudgetPlayingMs = 20; // settings switch mid-playback
+constexpr unsigned long long kWarmupOpenWindowMs = 10000;
+constexpr unsigned long long kWarmupMaxDurationMs = 20000; // safety bail to the trickle
+
+void FinishWarmup(const char* why) {
+	g_warmupPhase = WarmupPhase::Idle;
+	g_nextResolveAtMs = 0; // let the trickle pick up strays immediately
+	if (MvmDebugLog_Active())
+		MvmDebugLog_Linef("fx.resolve", "warmup done (%s): %u resolved, %llums total, max %llums (%s), %u frame(s)",
+			why, g_warmupResolved, g_warmupTotalMs, g_warmupMaxMs,
+			g_warmupMaxName.empty() ? "-" : g_warmupMaxName.c_str(), g_warmupFrames);
+	// A paused frame the user is staring at should recompose under the now-resolved
+	// swaps (reuses the debounced reseek; it self-skips if the user unpauses).
+	if (g_warmupResolved && DemoIsPlaying() && DemoIsPaused())
+		RequestApplyReseek();
+}
+
+// Earliest provably-safe burst moment after a level change: the demo tick advancing on
+// two consecutive pumps shows the new level is simulating, i.e. resolves land in the
+// NEW resource context (the CRASH LESSON 4 hazard is stale-context handles). The old
+// 3s settle delay remains as the wall-clock fallback ceiling.
+bool WarmupSettleReachedMainThread() {
+	if (!FxMainThreadContextActive())
+		return false;
+	if (GetTickCount64() - g_warmupArmedAtMs >= kResolveAfterLevelSettleMs)
+		return true;
+	if (!DemoIsPlaying())
+		return false;
+	if (DemoTick() > g_warmupTickAtArm) {
+		if (++g_warmupTickAdvanceSeen >= 2)
+			return true;
+	} else {
+		g_warmupTickAdvanceSeen = 0;
+	}
+	return false;
+}
+
+void BurstDrainMainThread() {
+	if (!FxMainThreadContextActive())
+		return; // never resolve at the main menu (same invariant as the trickle)
+	const unsigned long long start = GetTickCount64();
+	if (start - g_warmupArmedAtMs > kWarmupMaxDurationMs) {
+		FinishWarmup("max duration");
+		return;
+	}
+	const unsigned long long budget = (DemoIsPaused() || start < g_warmupOpenWindowUntilMs)
+		? kBurstBudgetOpenMs : kBurstBudgetPlayingMs;
+	for (;;) {
+		std::string name;
+		{
+			std::lock_guard<std::mutex> lock(g_mx);
+			name = PopResolveTargetLocked();
+		}
+		if (name.empty()) {
+			++g_warmupFrames;
+			FinishWarmup("queue empty");
+			return;
+		}
+		const unsigned long long t0 = GetTickCount64();
+		ResolveHandleOnMainThread(name.c_str());
+		const unsigned long long costMs = GetTickCount64() - t0;
+		++g_warmupResolved;
+		g_warmupTotalMs += costMs;
+		if (costMs > g_warmupMaxMs) {
+			g_warmupMaxMs = costMs;
+			g_warmupMaxName = name;
+		}
+		if (GetTickCount64() - start >= budget)
+			break; // yield the frame; continue next pump
+	}
+	++g_warmupFrames;
+}
+
+// Main thread; caller must NOT hold g_mx. afterLevelChange waits for level settle
+// before bursting; a settings switch bursts on the next pump.
+void ArmWarmup(bool afterLevelChange) {
+	size_t queued = 0;
+	{
+		std::lock_guard<std::mutex> lock(g_mx);
+		if (!HasActiveFxLocked()) {
+			g_warmupPhase = WarmupPhase::Idle; // nothing to warm; trickle handles leftovers
+			return;
+		}
+		QueueAllUncachedActiveTargetsLocked();
+		queued = g_resolveQueue.size();
+	}
+	g_warmupPhase = afterLevelChange ? WarmupPhase::WaitSettle : WarmupPhase::Bursting;
+	g_warmupArmedAtMs = GetTickCount64();
+	g_warmupTickAtArm = afterLevelChange ? DemoTick() : -1;
+	g_warmupTickAdvanceSeen = 0;
+	// Settings-switch arms get no open window: budget is decided by pause state alone.
+	g_warmupOpenWindowUntilMs = 0;
+	g_warmupResolved = 0;
+	g_warmupTotalMs = 0;
+	g_warmupMaxMs = 0;
+	g_warmupMaxName.clear();
+	g_warmupFrames = 0;
+	PrefetchFxPackOnce(); // overlap the pack's disk warm with the loading screen
+	if (MvmDebugLog_Active())
+		MvmDebugLog_Linef("fx.resolve", "warmup armed: %zu target(s) queued (levelChange=%d)",
+			queued, afterLevelChange ? 1 : 0);
 }
 
 } // namespace fx
@@ -219,12 +366,20 @@ void ParticleFx::SetMoneyHeadshot(bool on) {
 		EnsureInstalled();
 	SaveSettings();
 	RequestApplyReseek();
+	if (FxMainThreadContextActive())
+		ArmWarmup(false);
 }
 
 void ParticleFx::PumpMainThread() {
 	// Spray-heat clock for the create hook (safe engine access is main-thread/pump
-	// only; the hook reads the atomic). -1 while no demo is playing = gate closed.
-	g_demoTickNow.store(DemoIsPlaying() ? DemoTick() : -1, std::memory_order_relaxed);
+	// only; the hook reads the atomic). Live mvm_test uses a synthetic tick.
+	int tickNow = -1;
+	if (DemoIsPlaying()) {
+		tickNow = DemoTick();
+	} else if (MvmTest_Active() && MvmTest_LevelLoaded()) {
+		tickNow = (int)(GetTickCount64() / 15);
+	}
+	g_demoTickNow.store(tickNow, std::memory_order_relaxed);
 	// The spectated-pawn -> userid lookup intermittently misses for single frames during
 	// playback (observed live 2026-07-04: it flickered to -1 BETWEEN weapon_fire events,
 	// so the FxDebugHud/FxAlign fire-window never armed). Hold the last good value for a
@@ -251,23 +406,51 @@ void ParticleFx::PumpMainThread() {
 		// first swap then hands the engine freed memory and its child-walk dies at
 		// particles.dll+0x3E3xx. So the cache is tied to the level: any demo/level
 		// change drops every cached handle and re-resolves in the NEW resource context.
-		static std::wstring s_lastDemoPath; // main-thread only
-		const std::wstring cur = PlayingDemoPath();
-		if (cur != s_lastDemoPath) {
-			s_lastDemoPath = cur;
-			std::lock_guard<std::mutex> lock(g_mx);
-			g_handleCache.clear();
-			g_resolveQueue.clear();
-			RebuildActiveSwapTargetsLocked(false);
-			g_nextResolveAtMs = GetTickCount64() + kResolveAfterLevelSettleMs;
-			if (MvmDebugLog_Active())
-				MvmDebugLog_Linef("fx.resolve", "level change -> handle cache cleared, %zu target(s) requeued",
-					g_resolveQueue.size());
+		static std::string s_lastLevelKey; // main-thread only (demo path or live:map)
+		const std::string cur = FxLevelCacheKey();
+		if (cur != s_lastLevelKey) {
+			s_lastLevelKey = cur;
+			{
+				std::lock_guard<std::mutex> lock(g_mx);
+				g_handleCache.clear();
+				g_resolveQueue.clear();
+				RebuildActiveSwapTargetsLocked(false);
+				g_nextResolveAtMs = GetTickCount64() + kResolveAfterLevelSettleMs;
+				if (MvmDebugLog_Active())
+					MvmDebugLog_Linef("fx.resolve", "level change -> handle cache cleared, %zu target(s) requeued",
+						g_resolveQueue.size());
+			}
+			// Front-loaded precache: queue the FULL active set and burst it once the new
+			// level settles, so playback starts with every swap target hot.
+			ArmWarmup(true);
 		}
-		// Drain swap-target resolves here, in the engine's own precache context. A cold
-		// resolve can blocking-load the resource, so playback gets a slower demand-only
-		// trickle with heavier backoff; paused demos warm faster. The main menu never drains.
-		DrainResolveQueueMainThread();
+		// Drain swap-target resolves here, in the engine's own precache context. During a
+		// warm-up the queue is burst-drained under a per-frame time budget; otherwise stray
+		// lazy misses get the slow demand-only trickle. The main menu never drains either way.
+		switch (g_warmupPhase) {
+		case WarmupPhase::WaitSettle:
+			if (WarmupSettleReachedMainThread()) {
+				g_warmupPhase = WarmupPhase::Bursting;
+				g_warmupOpenWindowUntilMs = GetTickCount64() + kWarmupOpenWindowMs;
+				if (MvmDebugLog_Active()) {
+					size_t queued = 0;
+					{
+						std::lock_guard<std::mutex> lock(g_mx);
+						queued = g_resolveQueue.size();
+					}
+					MvmDebugLog_Linef("fx.resolve", "warmup burst start: %zu queued, paused=%d",
+						queued, DemoIsPaused() ? 1 : 0);
+				}
+				BurstDrainMainThread();
+			}
+			break;
+		case WarmupPhase::Bursting:
+			BurstDrainMainThread();
+			break;
+		default:
+			DrainResolveQueueMainThread();
+			break;
+		}
 		// Debounced apply-now: re-create the paused moment's live effects under the new
 		// rules (see the g_applyAtMs comment). Skipped while playing -- self-corrects.
 		const unsigned long long applyAt = g_applyAtMs.load();
@@ -308,8 +491,11 @@ void ParticleFx::SetEnabled(bool on) {
 	if (wantsHook)
 		EnsureInstalled();
 	SaveSettings();
-	if (on)
+	if (on) {
 		RequestApplyReseek();
+		if (FxMainThreadContextActive())
+			ArmWarmup(false);
+	}
 }
 
 FxMode ParticleFx::Mode(FxCategory cat) const {
@@ -338,6 +524,8 @@ void ParticleFx::SetMode(FxCategory cat, FxMode mode) {
 		EnsureInstalled();
 	SaveSettings();
 	RequestApplyReseek();
+	if (FxMainThreadContextActive())
+		ArmWarmup(false);
 }
 
 void ParticleFx::SetLogging(bool on) {
@@ -362,6 +550,9 @@ std::string ParticleFx::DebugStateJson() const {
 	b.BoolField("sprayGateBypass", g_sprayGateBypass.load(std::memory_order_relaxed));
 	b.BoolField("align", FxAlign_Enabled());
 	b.BoolField("jitRedirect", g_jitRedirectInstalled);
+	// 0 = Idle (trickle), 1 = WaitSettle, 2 = Bursting. Main-thread state read here for
+	// diagnostics only; the console command runs on the engine's main thread.
+	b.IntField("warmupPhase", (int64_t)g_warmupPhase);
 	b.IntField("seen", (int64_t)g_totalSeen.load());
 	b.IntField("noName", (int64_t)g_totalNoName.load());
 	b.IntField("blocked", (int64_t)g_totalBlocked.load());
@@ -575,6 +766,8 @@ void ParticleFx_RunCommand(int argc, advancedfx::ICommandArgs* args, const char*
 		fx.EnsureInstalled();
 		fx.SaveSettings();
 		RequestApplyReseek();
+		if (FxMainThreadContextActive())
+			ArmWarmup(false);
 		advancedfx::Message("fx: rule added: '%s' -> %s.\n", r.match.c_str(),
 			r.target.empty() ? "BLOCK" : r.target.c_str());
 		return;
@@ -595,6 +788,8 @@ void ParticleFx_RunCommand(int argc, advancedfx::ICommandArgs* args, const char*
 		}
 		fx.SaveSettings();
 		RequestApplyReseek();
+		if (FxMainThreadContextActive())
+			ArmWarmup(false);
 		advancedfx::Message("fx: removed %zu rule(s) matching '%s'.\n", removed, match.c_str());
 		return;
 	}

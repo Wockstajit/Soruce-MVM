@@ -7,6 +7,13 @@ project ("advancedfx")
 # silently finds zero tests.
 enable_testing()
 
+# MSVC compiles one .cpp at a time per project unless /MP is set; without it the
+# whole build is effectively single-threaded. AfxCppCli (C++/CLI) is unaffected:
+# it builds through its own vcxproj, not CMake compile flags.
+if(MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
+endif()
+
 # Define CMAKE_CXX_STANDARD otherwise e.g. libprotobuf will have linking problems against ABSL when compiling protobuf:
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED On)

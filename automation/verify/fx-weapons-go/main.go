@@ -146,15 +146,15 @@ var sniperCompositionHint = map[string]string{
 	"arc9_fas_muzzleflashes/mvm_muzzleflash_sniper_auto": "autosniper",
 }
 
-// Modern sustained-fire spray wrappers (mvm_spray_muzzleflash_* in ParticleFxSpray.cpp kSprayPairs).
-var sprayTargetClass = map[string]string{
-	"mvm_spray_muzzleflash_ar":            "assaultrifle",
-	"mvm_spray_muzzleflash_smg":           "smg",
-	"mvm_spray_muzzleflash_shotgun":       "shotgun",
-	"mvm_spray_muzzleflash_pistol":        "pistol",
-	"mvm_spray_muzzleflash_pistol_deagle": "deagle",
-	"mvm_spray_muzzleflash_lmg":           "lmg",
-	"mvm_spray_muzzleflash_dmr":           "autosniper",
+// Modern per-shot class flashes (barrel_smoke + rope wisp are PCF children; world twin only).
+var modernFlashWispClass = map[string]string{
+	"muzzleflash_ar.vpcf":            "assaultrifle",
+	"muzzleflash_smg.vpcf":             "smg",
+	"muzzleflash_shotgun.vpcf":         "shotgun",
+	"muzzleflash_pistol.vpcf":          "pistol",
+	"muzzleflash_pistol_deagle.vpcf":   "deagle",
+	"muzzleflash_lmg.vpcf":             "lmg",
+	"muzzleflash_dmr.vpcf":             "autosniper",
 }
 
 // weaponPathPrefixes: used to decide whether an unrecognized name belongs in the
@@ -283,7 +283,7 @@ var fxNamesRowStartRe = regexp.MustCompile(`^\s*\d+\s+\d+\s+particles/`)
 // doc comment), but for multi-row table output where a real newline per row must be kept:
 // a wrapped continuation line (one that does NOT look like the start of a new row) is
 // spliced directly onto the end of the previous row instead of being treated as its own
-// line -- long Modern resource paths (e.g. .../mvm_spray_muzzleflash_pistol_deagle.vpcf)
+// line -- long Modern resource paths (e.g. .../muzzleflash_pistol_deagle.vpcf)
 // are exactly the kind of long single line that triggers this.
 func dewrapConsoleTable(text string, rowStart *regexp.Regexp) string {
 	normalized := strings.ReplaceAll(text, "\r\n", "\n")
@@ -477,8 +477,8 @@ func (t *shotTracker) processEvent(nc *NetCon, ev recentEvent, paused bool) {
 	if t.profile != "modern" || ev.action != ">" {
 		return
 	}
-	for hint, class := range sprayTargetClass {
-		if strings.Contains(targetLower, hint) {
+	for hint, class := range modernFlashWispClass {
+		if strings.Contains(targetLower, hint) && !strings.Contains(targetLower, "_fp") {
 			comboKey := class + "|wisp"
 			label := fmt.Sprintf("%s-%s-wisp", t.profile, class)
 			t.maybeSnap(nc, comboKey, label, paused)
@@ -658,8 +658,8 @@ func main() {
 						continue
 					}
 					targetLower := strings.ToLower(ev.target)
-					for hint, class := range sprayTargetClass {
-						if strings.Contains(targetLower, hint) {
+					for hint, class := range modernFlashWispClass {
+						if strings.Contains(targetLower, hint) && !strings.Contains(targetLower, "_fp") {
 							comboKey := class + "|wisp"
 							if _, done := tracker.screenshotted[comboKey]; !done {
 								needPause = true

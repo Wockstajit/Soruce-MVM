@@ -10,11 +10,11 @@ CS2 native weapons in `AfxHookSource2/Filmmaker/Movie/ParticleFxRules.cpp` (the 
 **Sources read** (GMod workshop content, already extracted next to their `.gma` via
 gmpublisher):
 
-| Layer | Workshop ID | Folder |
-|---|---|---|
-| ARC9 Weapon Base | `2910505837` | `G:\SteamLibrary\steamapps\workshop\content\4000\2910505837\ARC9 Weapon Base` |
-| ARC9 Modern Warfare 2019 | `3258297368` | `G:\SteamLibrary\steamapps\workshop\content\4000\3258297368\ARC9 Modern Warfare 2019` |
-| ARC9 MW2019 Shared Pack | `3258299652` | `G:\SteamLibrary\steamapps\workshop\content\4000\3258299652\ARC9 Modern Warfare 2019 Shared Pack` (models/sounds/materials only — no particles) |
+| Layer                    | Workshop ID  | Folder                                                                                                                                          |
+| ------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| ARC9 Weapon Base         | `2910505837` | `G:\SteamLibrary\steamapps\workshop\content\4000\2910505837\ARC9 Weapon Base`                                                                   |
+| ARC9 Modern Warfare 2019 | `3258297368` | `G:\SteamLibrary\steamapps\workshop\content\4000\3258297368\ARC9 Modern Warfare 2019`                                                           |
+| ARC9 MW2019 Shared Pack  | `3258299652` | `G:\SteamLibrary\steamapps\workshop\content\4000\3258299652\ARC9 Modern Warfare 2019 Shared Pack` (models/sounds/materials only — no particles) |
 
 ## 1. Two-layer addon architecture
 
@@ -22,10 +22,10 @@ MW2019 doesn't reinvent the firing/FX pipeline — it's a content pack laid on t
 generic **ARC9 Weapon Base**, which owns the class-based fallback particle set and the
 actual code that fires effects.
 
-| Layer | What it owns |
-|---|---|
-| **ARC9 Weapon Base** (`2910505837`) | Generic firing pipeline + class-based fallback particles (`particles/arc9_fas_muzzleflashes.pcf`, `arc9_fas_explosions.pcf`). Defines every field a weapon can set. |
-| **ARC9 MW2019** (`3258297368`) | Adds `mw2019_effects.pcf`, `mw2019_tracer.pcf`, `mw2019_rockettrail.pcf`, `mw2019_explosions_pak.pcf`, and one Lua file per weapon that overrides the base pack's fallback values with COD-specific ones. |
+| Layer                               | What it owns                                                                                                                                                                                              |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ARC9 Weapon Base** (`2910505837`) | Generic firing pipeline + class-based fallback particles (`particles/arc9_fas_muzzleflashes.pcf`, `arc9_fas_explosions.pcf`). Defines every field a weapon can set.                                       |
+| **ARC9 MW2019** (`3258297368`)      | Adds `mw2019_effects.pcf`, `mw2019_tracer.pcf`, `mw2019_rockettrail.pcf`, `mw2019_explosions_pak.pcf`, and one Lua file per weapon that overrides the base pack's fallback values with COD-specific ones. |
 
 MW2019 weapons set a handful of string fields (`MuzzleParticle`, `AfterShotParticle`,
 `TracerEffect`) on top of the base pack's generic effect system — they don't define new
@@ -58,24 +58,31 @@ SWEP:PrimaryAttack()
 **Key fact for the port:** in GMod the tracer is a genuine two-control-point beam
 particle (CP0 = start, CP1 = end).
 
-> ⚠️ **Correction (2026-07-04): CS2's native tracers are NOT two-control-point beams.**
-> Decompiling stock `weapon_tracers.vpcf` shows it spawns particles at CP0 and gives them a
-> muzzle-**local forward velocity** (`C_INIT_CreateWithinSphereTransform`
-> `m_LocalCoordinateSystemSpeed = [2400,0,0]`) plus `C_INIT_LifespanFromVelocity`
-> (`m_flMaxTraceLength = 2048`) — it flies straight down the barrel and traces to the
-> impact surface, and **never reads CP1**. CS2's weapon-tracer dispatch does not populate a
-> tracer end control point. The converted GMod tracers kept `C_INIT_MoveBetweenPoints`
-> (CP0→CP1), so with CP1 unset they interpolate toward the world origin — the user-reported
-> "tracer locked to the gun / fires in a random direction, not toward what you're shooting."
-> `postprocess_modern.patch_modern_tracer_forward` rebuilds the four routed parents
-> (`mw2019_tracer{,_fast,_slow,_small}`) on the native chassis: drop `MoveBetweenPoints` +
-> the fixed `RandomLifeTime`, set the local-forward velocity, add `LifespanFromVelocity`.
-> This is the exact shape Povarehok's own working `weapon_tracers.vpcf` already uses.
+> ⚠️ **Tracer port (2026-07-04):** GMod tracers are CP0→CP1 beams; the converted MW2019
+> parents shipped with broken emitters (random −1..1 count on `mw2019_tracer`) and extreme
+> MoveBetweenPoints speeds. GMod's own parent stack is `Lifetime from Time to Impact` +
+> `Lifespan Decay` (no `FadeAndKillForTracers` — that operator is Povarehok-only in this
+> repo). `postprocess_modern.patch_modern_tracer_cs2_discipline` fixes CS2 motion (13k u/s
+> MoveBetweenPoints, exactly one particle per shot, zero spawn offset) while restoring that
+> GMod lifecycle on the four routed MW2019 parents (`mw2019_tracer{,_fast,_slow,_small}`).
+> Follow-on passes (same file): automatic-weapon parent `mw2019_tracer` drops sniper-only
+> children (`mgbase_tracer_glow_large`, `weapon_tracers_4incendiary`); glow/trail leaves
+> halve alpha/radius/self-illum; parent `RenderTrails` keep `m_flLengthFadeInTime ≈ 0.12`
+> plus head/tail alpha taper; AR parent uses `tracer_middle` (not spark); the visible rope
+> child (`mgbase_tracer_trail*`) keeps converted GMod `fas_smoke_beam` with V-scroll so
+> smoke wisps drift along the CP0→CP1 beam (GMod-authentic; no static stretched tile).
+
+> **Modern barrel smoke (2026-07-05):** CS2 Modern now matches GMod's per-shot
+> `AfterShotParticle` — `barrel_smoke(_plume)` is a direct PCF child of each class flash
+> (world + `_fp`), not a spray-gated wrapper. Rope wisps (`barrel_smoke_trail*`) stay
+> `C_OP_RenderRopes` in world space for third-person visibility. Eject-port puff
+> (`port_smoke` / `shellsmoke`) is attached as a child of each `weapon_shell_casing_*`
+> swap target (CS2 has no separate eject-port create).
 
 `GetProcessedValue()` is ARC9's attachment-aware property resolver — it lets an
 attachment (e.g. a suppressor) override a weapon's base field at runtime. That
 resolution plumbing lives in the base pack's stats file
-(`weapons/arc9_base/sh_0_stats.lua`); the actual MW2019 override *values* live in
+(`weapons/arc9_base/sh_0_stats.lua`); the actual MW2019 override _values_ live in
 `arc9/common/attachments_bulk/mw19_ammo_types.lua`.
 
 ## 3. Class → effect defaults (the 90% case)
@@ -84,20 +91,20 @@ Set as `SWEP.MuzzleParticle` / `SWEP.AfterShotParticle` / `SWEP.TracerEffect` in
 weapon file (falls back to `arc9_cod2019_base.lua`'s `TracerEffect = "cod2019_tracer"`
 if a weapon doesn't override it).
 
-| Weapon class | Example guns | MuzzleParticle | AfterShotParticle (barrel smoke) | TracerEffect | Extra |
-|---|---|---|---|---|---|
-| Assault Rifle | AK-47, M4, FAL, SCAR, Kilo141, RAM-7, Oden, CR-56, AN-94, FAMAS, Grau 5.56, M13 | `muzzleflash_ar` | `barrel_smoke` | *(default)* `cod2019_tracer` | AS-VAL is the odd AR: `muzzleflash_suppressed` |
-| SMG | MP5, MP7, P90, Vector, Uzi, Bizon, CX-9, ISO, Striker 45, AUG | `muzzleflash_smg` | `barrel_smoke` | *(default)* | — |
-| LMG | PKM, MG34, Holger-26, Bruen Mk9, M91, RAAL, SA87, FiNN | `muzzleflash_lmg` | `barrel_smoke` | *(default)* | Minigun: `barrel_smoke_plume` |
-| Marksman/DMR | Kar98k, M14, Mk2, SKS, SP-R 208 | `muzzleflash_dmr` | `barrel_smoke` | `cod2019_tracer_fast` | Crossbow: `muzzleflash_suppressed`, no smoke/tracer |
-| **Sniper** | AX-50, HDR, SVD, Rytec AMR | **`muzzleflash_smg`** ⚠️ | `barrel_smoke` | `cod2019_tracer_fast` | `MakeEnvironmentDust(150)` fires on shot — ground dust puff (§6) |
-| Shotgun | Model 680, JAK-12, R9-0, Origin-12, VLK Rogue, .725 | `muzzleflash_shotgun` | `barrel_smoke` | `cod2019_tracer_slow` | — |
-| Pistol | M19, M1911, Renetti, Sykov, X16 | `muzzleflash_pistol` | `barrel_smoke` | `cod2019_tracer_small` | Akimbo variants revert to plain `cod2019_tracer` |
-| Pistol (magnum) | .357, .50 GS | `muzzleflash_pistol_deagle` | `barrel_smoke` | `cod2019_tracer_small` | — |
-| Launcher | RPG-7, PILA, JOKR, Strela-P, M32 | `muzzleflash_m79` | `barrel_smoke_plume` (`AfterShotParticleDelay = -1`, instant) | *(default)*, M32 = `cod2019_tracer_slow` | `MakeEnvironmentDust(200)` on fire |
+| Weapon class    | Example guns                                                                    | MuzzleParticle              | AfterShotParticle (barrel smoke)                              | TracerEffect                             | Extra                                                            |
+| --------------- | ------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| Assault Rifle   | AK-47, M4, FAL, SCAR, Kilo141, RAM-7, Oden, CR-56, AN-94, FAMAS, Grau 5.56, M13 | `muzzleflash_ar`            | `barrel_smoke`                                                | _(default)_ `cod2019_tracer`             | AS-VAL is the odd AR: `muzzleflash_suppressed`                   |
+| SMG             | MP5, MP7, P90, Vector, Uzi, Bizon, CX-9, ISO, Striker 45, AUG                   | `muzzleflash_smg`           | `barrel_smoke`                                                | _(default)_                              | —                                                                |
+| LMG             | PKM, MG34, Holger-26, Bruen Mk9, M91, RAAL, SA87, FiNN                          | `muzzleflash_lmg`           | `barrel_smoke`                                                | _(default)_                              | Minigun: `barrel_smoke_plume`                                    |
+| Marksman/DMR    | Kar98k, M14, Mk2, SKS, SP-R 208                                                 | `muzzleflash_dmr`           | `barrel_smoke`                                                | `cod2019_tracer_fast`                    | Crossbow: `muzzleflash_suppressed`, no smoke/tracer              |
+| **Sniper**      | AX-50, HDR, SVD, Rytec AMR                                                      | **`muzzleflash_smg`** ⚠️    | `barrel_smoke`                                                | `cod2019_tracer_fast`                    | `MakeEnvironmentDust(150)` fires on shot — ground dust puff (§6) |
+| Shotgun         | Model 680, JAK-12, R9-0, Origin-12, VLK Rogue, .725                             | `muzzleflash_shotgun`       | `barrel_smoke`                                                | `cod2019_tracer_slow`                    | —                                                                |
+| Pistol          | M19, M1911, Renetti, Sykov, X16                                                 | `muzzleflash_pistol`        | `barrel_smoke`                                                | `cod2019_tracer_small`                   | Akimbo variants revert to plain `cod2019_tracer`                 |
+| Pistol (magnum) | .357, .50 GS                                                                    | `muzzleflash_pistol_deagle` | `barrel_smoke`                                                | `cod2019_tracer_small`                   | —                                                                |
+| Launcher        | RPG-7, PILA, JOKR, Strela-P, M32                                                | `muzzleflash_m79`           | `barrel_smoke_plume` (`AfterShotParticleDelay = -1`, instant) | _(default)_, M32 = `cod2019_tracer_slow` | `MakeEnvironmentDust(200)` on fire                               |
 
 ⚠️ **Sniper quirk, verified not a bug**: every bolt-action/AMR sniper (AX-50, HDR, SVD,
-Rytec) uses `muzzleflash_smg`, *not* `muzzleflash_dmr`. This is consistent across all
+Rytec) uses `muzzleflash_smg`, _not_ `muzzleflash_dmr`. This is consistent across all
 four sniper weapon files — likely a copy-paste artifact in the original addon, but
 treat it as intentional/authoritative when porting, not something to "correct."
 
@@ -107,22 +114,22 @@ Weapons that are inherently suppressed hardcode
 `SWEP.MuzzleParticle = "muzzleflash_suppressed"` directly in their weapon file
 (AS-VAL, the bolt crossbow). There's also an ammo/attachment-level field
 `ATT.MuzzleParticleSilenced = "AC_muzzle_shotgun_suppressed"` defined on shotgun slug
-ammo types in `mw19_ammo_types.lua`, but the runtime code that *consumes* that field at
+ammo types in `mw19_ammo_types.lua`, but the runtime code that _consumes_ that field at
 fire time lives outside the two packs read here (in the base ARC9 attachment
 framework), so there's no verified read-path for dynamic suppressor-attachment
 swapping — only the hardcoded per-weapon case above is confirmed from source.
 
 ## 5. Tracer effect name → actual particle system
 
-| `SWEP.TracerEffect` (Lua effect) | Real PCF particle it spawns |
-|---|---|
-| `cod2019_tracer` (default) | `mw2019_tracer_3` |
-| `cod2019_tracer_fast` | `mw2019_tracer_fast` |
-| `cod2019_tracer_slow` | `mw2019_tracer_slow_new` |
-| `cod2019_tracer_small` | `mw2019_tracer_3` (⚠️ dead code — a commented-out line shows it *used to* point at `mw2019_tracer_small`, but currently reuses tracer_3) |
-| `cod2019_tracer_2` | `mw2019_tracer_2` |
-| `cod2019_tracer_inc` | `mw2019_tracer_inc` |
-| `cod2019_tracer_rainbow` | `mw2019_tracer_rainbow` |
+| `SWEP.TracerEffect` (Lua effect) | Real PCF particle it spawns                                                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `cod2019_tracer` (default)       | `mw2019_tracer_3`                                                                                                                        |
+| `cod2019_tracer_fast`            | `mw2019_tracer_fast`                                                                                                                     |
+| `cod2019_tracer_slow`            | `mw2019_tracer_slow_new`                                                                                                                 |
+| `cod2019_tracer_small`           | `mw2019_tracer_3` (⚠️ dead code — a commented-out line shows it _used to_ point at `mw2019_tracer_small`, but currently reuses tracer_3) |
+| `cod2019_tracer_2`               | `mw2019_tracer_2`                                                                                                                        |
+| `cod2019_tracer_inc`             | `mw2019_tracer_inc`                                                                                                                      |
+| `cod2019_tracer_rainbow`         | `mw2019_tracer_rainbow`                                                                                                                  |
 
 All spawned via `CreateParticleSystem(weapon, name, PATTACH_ABSORIGIN, attachment)`
 then `SetControlPoint(0, start)` / `SetControlPoint(1, end)`.
@@ -131,7 +138,7 @@ then `SetControlPoint(0, start)` / `SetControlPoint(1, end)`.
 
 - **HE/frag explosion**: `entities/arc9_cod2019_thrownfrag` →
   `effects/cod2019_grenade_explosion.lua` → precaches `particles/fas_explosions.pcf`
-  and plays **`explosion_grenade`**. This is the *base pack's* explosion system, not
+  and plays **`explosion_grenade`**. This is the _base pack's_ explosion system, not
   `mw2019_explosions_pak.pcf` — MW2019 grenades reuse the FAS pack's detonation
   particle rather than bringing their own.
 - **Sniper/launcher floor dust**: `MakeEnvironmentDust()` in `arc9_cod2019_base.lua` is
@@ -169,7 +176,7 @@ your view/weapon around — distinct from the single per-shot muzzle puff descri
   the air for the ~5s the segment stays alive, which is exactly the visual being
   described (smoke hanging in space, "following" the barrel when you look around).
 - **Known CS2-port gotcha**: converting `C_OP_RenderRopes` as-is in Source 2 stretches a
-  single ribbon across the muzzle's *entire* sweep between puffs rather than reading as
+  single ribbon across the muzzle's _entire_ sweep between puffs rather than reading as
   drifting smoke — it needs to become a sprite emitter (with frame blending) and a
   shorter lifetime (~2–3s) to look right, not a literal 1:1 rope port.
 
@@ -235,11 +242,11 @@ still clear cached handles because CS2 purges particle resources across map tran
 
 ## 7. Particle source files (what to extract/convert)
 
-| File | Contents |
-|---|---|
-| `arc9_fas_muzzleflashes.pcf` | All `muzzleflash_*` class systems, `barrel_smoke*` (incl. the un-precached rope trail `barrel_smoke_trail`/`_b`, §6b), `shellsmoke`, `port_smoke*` |
-| `arc9_fas_explosions.pcf` (loaded as `fas_explosions.pcf` in the grenade effect — the two references don't match; verify the actual filename on disk) | `explosion_grenade` and friends |
-| `mw2019_tracer.pcf` | `mw2019_tracer`, `_2`, `_3`, `_fast`, `_slow_new`, `_small`, `_inc`, `_rainbow` |
-| `mw2019_effects.pcf` | Misc COD-specific effects (grenade trails, molotov, etc.) |
-| `mw2019_rockettrail.pcf` | Launcher rocket trails |
-| `mw2019_explosions_pak.pcf` | Non-grenade explosions (rockets, C4, etc. — grenades don't use this one) |
+| File                                                                                                                                                  | Contents                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `arc9_fas_muzzleflashes.pcf`                                                                                                                          | All `muzzleflash_*` class systems, `barrel_smoke*` (incl. the un-precached rope trail `barrel_smoke_trail`/`_b`, §6b), `shellsmoke`, `port_smoke*` |
+| `arc9_fas_explosions.pcf` (loaded as `fas_explosions.pcf` in the grenade effect — the two references don't match; verify the actual filename on disk) | `explosion_grenade` and friends                                                                                                                    |
+| `mw2019_tracer.pcf`                                                                                                                                   | `mw2019_tracer`, `_2`, `_3`, `_fast`, `_slow_new`, `_small`, `_inc`, `_rainbow`                                                                    |
+| `mw2019_effects.pcf`                                                                                                                                  | Misc COD-specific effects (grenade trails, molotov, etc.)                                                                                          |
+| `mw2019_rockettrail.pcf`                                                                                                                              | Launcher rocket trails                                                                                                                             |
+| `mw2019_explosions_pak.pcf`                                                                                                                           | Non-grenade explosions (rockets, C4, etc. — grenades don't use this one)                                                                           |

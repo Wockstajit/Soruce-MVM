@@ -3,7 +3,7 @@
 Repository automation, verification harnesses, launchers, configs, screenshots, and automation-only test drivers belong in this directory.
 
 - `docs/` — automation documentation, including `AUTOMATION_HYGIENE.md` and the live UI editing guide.
-- `launch/` — CS2 launchers and the live dashboard. `launch/launch-cs2-netcon.ps1` consistently launches CS2 windowed at 1600x1200, and `launch/live.bat` starts CS2 plus the dashboard.
+- `launch/` — CS2 launchers and the live dashboard. `launch/launch-cs2-netcon.ps1` consistently launches CS2 windowed at 1600x1200, and `launch/live.bat` starts CS2 plus the dashboard. **Console spam:** `[InputSystem] Processing SDL events took Xms` is emitted by **CS2 itself** (not the hook); `-console` makes it visible. If it correlates with stutter, try lowering the mouse poll rate, avoid free-cam cursor warping while testing, and use the **Release** staged hook (not Debug). Launch without `-console` hides the lines but does not fix root stalls.
 - `capture/` — screenshot helpers. Prefer `capture/capture-game-window.ps1` for UI detail and use `capture/capture-main-monitor.ps1` only when desktop context matters.
 - `netcon/` — low-level netcon command helpers.
 - `verify/` — live and static verification harnesses. `verify/fx-weapons-go/` is a Go netcon harness (build with `go build`, no external deps) that buckets `mirv_filmmaker fx names`/`fx recent` output by weapon class and takes event-triggered screenshots; the PowerShell `verify/verify-fx-allweapons.ps1` covers the same ground at coarser (effect-group, not per-weapon) granularity.

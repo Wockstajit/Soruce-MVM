@@ -1,0 +1,9 @@
+// Reconstructed from the VTF's embedded particle sheet by export-source1-vtf.py
+
+sequence 0
+LOOP
+frame ins_smokeburst_seq0.tga 1
+
+sequence 1
+LOOP
+frame ins_smokeburst_seq1.tga 1

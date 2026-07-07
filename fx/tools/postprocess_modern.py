@@ -36,15 +36,15 @@ import postprocess_common as common
 MODERN_MUZZLE_DIR = "particles/filmmaker/modern/arc9_fas_muzzleflashes"
 MODERN_EXPLOSION_DIR = "particles/filmmaker/modern/arc9_fas_explosions"
 
-# Spray-gated barrel smoke (2026-07-03 rework, user: "smoke should only appear
-# after multiple shots in a short time, not after one shot"): the per-shot
-# barrel_smoke children previously added to the class flashes are REMOVED, and
-# per-flash `mvm_spray_*` composition wrappers (flash + smoke) are written
-# instead. The C++ hook counts recent creations of each muzzle-flash name and
-# upgrades the swap target to the spray wrapper only once a spray is detected
-# (kSprayPairs in ParticleFxSpray.cpp). Snipers keep their per-shot plume via the
-# mvm_muzzleflash_sniper_* compositions -- authentic .50-cal behavior.
-MODERN_SPRAY_SMOKE = {
+# Class flash -> barrel smoke pairing (GMod's AfterShotParticle mapping). 2026-07-06
+# night: these are NO LONGER direct PCF children of the flashes -- a child spawns with
+# EVERY shot, so sustained fire stacked overlapping smoke instances (user: "duplicating
+# the smoke every time you shoot; keep one wisp going") and the sniper compositions got
+# the plume TWICE (own child + the dmr flash's child = the SCAR-20 double smoke). The
+# pairing now produces spray wrappers (mvm_spray_muzzleflash_*, world + _fp), and the
+# hook's kSprayPairs + upgrade cooldown (ParticleFxSpray.cpp) keeps ONE smoke instance
+# alive per weapon instead of one per shot.
+MODERN_FLASH_SMOKE_CHILDREN = {
     "muzzleflash_ar.vpcf": "barrel_smoke.vpcf",
     "muzzleflash_smg.vpcf": "barrel_smoke.vpcf",
     "muzzleflash_shotgun.vpcf": "barrel_smoke.vpcf",
@@ -56,17 +56,20 @@ MODERN_SPRAY_SMOKE = {
 
 # Synthesized composition systems (children-only files, same structure as the
 # pack's own barrel_smoke.vpcf). Sniper comps reproduce the mod's .50-cal look.
+# 2026-07-06 night: barrel_smoke_plume REMOVED from the sniper comps -- the dmr flash
+# child used to carry its own plume too, so the autosniper got the SAME plume twice per
+# shot (the "two smokes on the SCAR-20/autosniper" report), and per-shot comp smoke
+# stacked on fast-firing autos anyway. The plume now rides the comps' mvm_spray_*
+# wrappers (kSprayPairs + upgrade cooldown = one plume kept going).
 MVM_COMPOSITIONS = {
     f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_awp.vpcf": (
         f"{MODERN_MUZZLE_DIR}/muzzleflash_smg.vpcf",
         f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
         f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
     ),
     f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_auto.vpcf": (
         f"{MODERN_MUZZLE_DIR}/muzzleflash_dmr.vpcf",
         f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
         f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
     ),
     f"{MODERN_MUZZLE_DIR}/mvm_grenade_trail.vpcf": (
@@ -76,20 +79,16 @@ MVM_COMPOSITIONS = {
 }
 
 # First-person twins of the sniper compositions above: identical except the flash CHILD is
-# the viewmodel-effect _fp leaf (the shock-dust / plume / heat children stay world-space, as
-# they do for the world composition -- only the flash needs the viewmodel pass to align in
-# first person). The _fps sniper rows in kVariantWeaponFx route here.
+# the viewmodel-effect _fp leaf. The _fps sniper rows in kVariantWeaponFx route here.
 MVM_COMPOSITIONS_FP = {
     f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_awp_fp.vpcf": (
         f"{MODERN_MUZZLE_DIR}/muzzleflash_smg_fp.vpcf",
         f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
         f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
     ),
     f"{MODERN_MUZZLE_DIR}/mvm_muzzleflash_sniper_auto_fp.vpcf": (
         f"{MODERN_MUZZLE_DIR}/muzzleflash_dmr_fp.vpcf",
         f"{MODERN_MUZZLE_DIR}/m82_shocksmoke.vpcf",
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf",
         f"{MODERN_MUZZLE_DIR}/muzzle_heatwave.vpcf",
     ),
 }
@@ -449,7 +448,7 @@ MODERN_BARREL_TRAIL_FILES = (
 )
 # The files ACTUALLY swapped to at runtime (kVariantWeaponFx's Modern targets for CS2's
 # own weapon_muzzle_smoke/weapon_muzzle_smoke_long, and the smoke half of every
-# MODERN_SPRAY_SMOKE composition below). Bug (2026-07-03, "Modern's muzzle attach doesn't
+# MODERN_FLASH_SMOKE_CHILDREN composition below). Bug (2026-07-03, "Modern's muzzle attach doesn't
 # follow Povarehok's"): only the *_trail files above ever received the CS2 muzzle
 # alignment patch, but nothing in the ParticleFx swap tables (ParticleFxRules.cpp) ever swaps to them -- they are dead
 # output. These two are the ones that actually spawn on screen; route them through the
@@ -483,20 +482,16 @@ MODERN_FLASH_BURST_NEW_TEXTURE = "materials/effects/fas_muzzleflash_test_b.vtex"
 # by shipping a SEPARATE _fp flash with m_bViewModelEffect = true and routing the _fps
 # systems to it (see weapon_muzzle_flash_*_fp in kVariantWeaponFx / kSprayPairs). We do the
 # same: apply_modern_gameplay_composites writes a viewmodel-effect twin of every world flash
-# above, and the _fps rows in kVariantWeaponFx point at the _fp twin (barrel smoke already
-# gets its own viewmodel attach, which is why it aligned while the flash did not).
+# above, and the _fps rows in kVariantWeaponFx point at the _fp twin. Barrel smoke/wisps
+# get the same world + _fp split (see make_modern_smoke_fp below) so FP reload animations
+# track the viewmodel muzzle while third person keeps the world-pass twins.
 
 # Modern tracer parents actually routed to at runtime (kVariantTracers + kTracerFallbacks in
-# ParticleFxRules.cpp). Bug (user report 2026-07-04, "tracers don't work on every gun -- some
-# pistols shoot the tracer in a random direction, and on the AK/M249 the tracer is locked to
-# the gun instead of flying toward what you're shooting"): converted from GMod, these fly via
-# C_INIT_MoveBetweenPoints from CP0 (muzzle) to CP1. CS2's own weapon-tracer dispatch never
-# sets a tracer END control point -- stock weapon_tracers.vpcf flies FORWARD on a local-space
-# velocity and ignores CP1. With CP1 unset the converted tracer interpolates toward the world
-# origin (a fixed wrong direction) or, where a stray local-forward velocity also survived
-# conversion (mw2019_tracer_small), fights it. Rebuild them on the SAME native chassis
-# Povarehok's own working tracer uses: muzzle-local forward velocity + a velocity-traced
-# lifespan, no CP1 dependency.
+# ParticleFxRules.cpp). Converted GMod tracers shipped with broken emitters (random -1..1
+# count on mw2019_tracer) and extreme MoveBetweenPoints speeds. patch_modern_tracer_cs2_
+# discipline keeps the MW2019 renderer textures/children but fixes CS2 motion: exactly one
+# particle per shot, MoveBetweenPoints @ 13k u/s, and GMod's parent lifecycle stack
+# (LifespanFromVelocity + Decay — no FadeAndKillForTracers, which GMod never had).
 MODERN_TRACER_DIR = "particles/filmmaker/modern/mw2019_tracer"
 MODERN_TRACER_PARENTS = (
     f"{MODERN_TRACER_DIR}/mw2019_tracer.vpcf",
@@ -504,9 +499,45 @@ MODERN_TRACER_PARENTS = (
     f"{MODERN_TRACER_DIR}/mw2019_tracer_slow.vpcf",
     f"{MODERN_TRACER_DIR}/mw2019_tracer_small.vpcf",
 )
-# Local +X (muzzle-forward) tracer speed, matched to CS2 stock weapon_tracers and Povarehok's
-# converted tracer (both 2400 u/s + a 2048u velocity-traced lifespan).
-_TRACER_LOCAL_FORWARD = "2400.0"
+# AR/SMG/LMG/automatic tier -- must not mount sniper-only glow/incendiary children.
+MODERN_TRACER_AR_TIER = (f"{MODERN_TRACER_DIR}/mw2019_tracer.vpcf",)
+SNIPER_ONLY_TRACER_CHILDREN = frozenset(
+    {"mgbase_tracer_glow_large.vpcf", "weapon_tracers_4incendiary.vpcf"}
+)
+MODERN_TRACER_GLOW_LEAVES = (
+    "mgbase_tracer_glow.vpcf",
+    "mgbase_tracer_glow_small.vpcf",
+    "mgbase_tracer_glow_large.vpcf",
+    "mgbase_tracer_trail.vpcf",
+    "mgbase_tracer_trail_faint.vpcf",
+    "weapon_tracers_4incendiary.vpcf",
+)
+# Povarehok per-class tracers (weapon_tracers_assrifle etc.) all fly at this speed.
+_TRACER_MOVE_SPEED = "13000.0"
+# User tuning: softer MW2019 glow stack + soft streak head on RenderTrails.
+TRACER_GLOW_BRIGHTNESS_SCALE = 0.5
+_TRACER_TRAIL_LENGTH_FADE_IN = "0.12"
+# Tracer rope child (mgbase_tracer_trail*): keep converted GMod fas_smoke_beam + V-scroll.
+# RenderTrails head/tail alpha scale (0 = transparent at that end of the streak).
+_TRACER_HEAD_ALPHA_SCALE = "0.0"
+_TRACER_TAIL_ALPHA_SCALE = "0.0"
+_TRACER_RADIUS_HEAD_TAPER = "0.35"
+_TRACER_PF_LITERAL_BLOCK_RE = re.compile(
+    r"(?m)^(\t\t\t)(m_fl(?:Head|Tail)AlphaScale|m_flRadiusHeadTaper) = \n"
+    r"\t\t\t\{[^\n]*\n(?:\t\t\t\t[^\n]*\n)*?\t\t\t\},?\n"
+)
+# GMod Lua places CP0 at the muzzle -- no forward kick. Longer trail segments (vs the
+# converted 20u postage-stamp) pair with m_flLengthFadeInTime for a soft line head.
+MODERN_TRACER_TRAIL_LENGTH = {
+    "mw2019_tracer.vpcf": 110.0,
+    "mw2019_tracer_fast.vpcf": 120.0,
+    "mw2019_tracer_slow.vpcf": 110.0,
+    "mw2019_tracer_small.vpcf": 90.0,
+}
+MODERN_TRACER_TRAIL_CHILD_SOFT_HEAD = frozenset(
+    {"mgbase_tracer_trail.vpcf", "mgbase_tracer_trail_faint.vpcf"}
+)
+RENDER_TRAILS_RE = re.compile(r'_class = "C_OP_RenderTrails"')
 
 # Modern rope wisps attach to the barrel and trace gun motion (§6b). The Povarehok
 # plume offset (postprocess_common._CS2_MUZZLE_OFFSET_BLOCK) pushes spawn 1-6 units
@@ -559,6 +590,47 @@ def _ensure_cs2_modern_rope_trail_position_offset(text: str) -> str:
     )
 
 
+# Povarehok's own barrel plume rises because C_OP_BasicMovement carries a positive-Z
+# gravity ([0,0,25] on weapon_muzzle_smoke_long) -- buoyancy that lifts the smoke off the
+# barrel after it spawns. The converted Modern rope wisps (barrel_smoke_trail{,_b}) came
+# through with m_Gravity = [0,0,0], so they sat glued to the muzzle (user report 2026-07-06,
+# "Modern smoke mostly sits at the barrel; make it rise like Povarehok"). This is the SINGLE
+# lever that makes it rise: the muzzle-local spawn offset is untouched, so the wisp still
+# starts at the barrel tip and only the post-spawn drift is upward, exactly like Povarehok.
+_MODERN_SMOKE_RISE_GRAVITY_Z = 22.0
+
+
+def _force_modern_smoke_rise(text: str, gravity_z: float = _MODERN_SMOKE_RISE_GRAVITY_Z) -> str:
+    """Set every C_OP_BasicMovement gravity to a pure upward vector (buoyant rise).
+
+    Zeroing X/Y keeps the rise vertical like Povarehok's plume (whose only gravity component
+    is +Z); any inherited forward/side gravity from the conversion is dropped. Idempotent:
+    the value is rewritten to the same literal on re-runs.
+    """
+    edits = []
+    for match in re.finditer(r'_class = "C_OP_BasicMovement"', text):
+        start, end = common.block_span(text, match.start())
+        block = text[start:end]
+        if re.search(r"m_Gravity = \[[^\]]*\]", block):
+            new_block = re.sub(
+                r"m_Gravity = \[[^\]]*\]",
+                f"m_Gravity = [0.0, 0.0, {gravity_z}]",
+                block,
+                count=1,
+            )
+        else:
+            new_block = block.replace(
+                '_class = "C_OP_BasicMovement"',
+                f'_class = "C_OP_BasicMovement"\n\t\t\tm_Gravity = [0.0, 0.0, {gravity_z}]',
+                1,
+            )
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in reversed(edits):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
 def _tune_modern_rope_trail_particles(text: str) -> str:
     """Keep C_OP_RenderRopes; reduce world-up velocity bias and soften the ribbon."""
     new = text
@@ -589,24 +661,57 @@ def _tune_modern_rope_trail_particles(text: str) -> str:
     new = new.replace("m_flTessScale = 10", "m_flTessScale = 6")
     new = new.replace("m_flConstantRadius = 5.0", "m_flConstantRadius = 3.5")
     new = re.sub(r"m_flEndScale = 3\.0", "m_flEndScale = 2.0", new)
-    new = re.sub(r"m_nAlphaMax = 50", "m_nAlphaMax = 38", new)
+    # Alpha was reduced to 38/255 (~15%) which made the rifle wisp nearly invisible once it
+    # was past its peak -- combined with the old fade-from-birth it read as "doesn't show all
+    # the way" and left nothing visible to follow during a reload/inspect (2026-07-06). Keep
+    # it a wisp, but visible: ~100/255.
+    new = re.sub(r"m_nAlphaMax = 50", "m_nAlphaMax = 100", new)
     new = re.sub(r"m_flSelfIllumAmount = 1\.0", "m_flSelfIllumAmount = 0.35", new, count=1)
+    # Buoyant upward drift like Povarehok's rising plume (was m_Gravity = [0,0,0] -> sat at
+    # the barrel). Spawn stays muzzle-anchored; only the post-spawn rise changes.
+    new = _force_modern_smoke_rise(new)
+    # Rifle barrel wisp lifetime/fade (user report + demo capture 2026-07-06): the converted
+    # wisp died at 20% of its 5s lifespan (C_OP_FadeAndKill m_flEndFadeOutTime = 0.2) AND
+    # faded from birth (m_flStartFadeOutTime = 0.0), so the AK/M4 muzzle smoke "disappeared
+    # really quickly, didn't show all the way" and was already gone ~1s later when the player
+    # reloaded/inspected -- leaving the follow PositionLock (barrel_smoke_trail_fp) nothing to
+    # track. (The LMG/DMR barrel_smoke_plume already faded over its full life, which is why
+    # only rifles/SMG showed it.) Hold full, then fade over the back half of a punchier ~3s
+    # life so the wisp shows fully AND survives long enough to be followed through a reload/
+    # inspect. m_flEndFadeOutTime = 1.0 keeps the kill at end-of-life (no wrap).
+    new = re.sub(r"\bm_flStartFadeOutTime = [0-9.]+", "m_flStartFadeOutTime = 0.4", new, count=1)
+    new = re.sub(r"\bm_flEndFadeOutTime = [0-9.]+", "m_flEndFadeOutTime = 1.0", new, count=1)
+    new = re.sub(r"m_fLifetimeMin = [0-9.]+", "m_fLifetimeMin = 3.0", new)
+    new = re.sub(r"m_fLifetimeMax = [0-9.]+", "m_fLifetimeMax = 3.0", new)
     return new
 
 
 def patch_cs2_modern_rope_trail_alignment(text: str) -> str:
-    """Modern-only barrel rope wisps: spawn at muzzle tip, not Povarehok plume offset."""
-    new = common.patch_cs2_muzzle_rope_trail_alignment(text)
+    """Modern barrel rope wisps: same FINAL recipe as Povarehok's (see
+    common.patch_cs2_muzzle_rope_trail_alignment) -- WORLD-pass + stock brief 0->0.1s
+    lock, so moving/reloading draws the lagging smoke sheet in the air while emission
+    tracks the engine-driven muzzle CP. Viewmodel-pass + ride-the-gun locks (both tried
+    2026-07-06) read as rigid camera-glued smoke.
+    """
+    new = text.replace("m_bLocalCoords = false", "m_bLocalCoords = true")
+    new = new.replace("m_bViewModelEffect = true", "m_bViewModelEffect = false")
+    new = new.replace(
+        '_class = "C_OP_RenderSprites"\n\t\t\tm_bBlendFramesSeq0 = true',
+        '_class = "C_OP_RenderRopes"',
+    )
+    new = new.replace('_class = "C_OP_RenderSprites"', '_class = "C_OP_RenderRopes"', 1)
     new = _ensure_cs2_modern_rope_trail_position_offset(new)
     new = _tune_modern_rope_trail_particles(new)
+    new = common.ensure_brief_position_lock(new)
+    new = common.remove_muzzle_follow_config(new)
     return new
 
 
 def patch_cs2_modern_barrel_smoke_alignment(text: str) -> str:
-    """Modern barrel_smoke_plume + wrapper: viewmodel attach at barrel tip (not plume [1-6,+Z])."""
+    """Modern barrel_smoke(_plume): WORLD-pass + brief lock (2026-07-06 final; see
+    patch_cs2_modern_rope_trail_alignment)."""
     new = text.replace("m_bLocalCoords = false", "m_bLocalCoords = true")
-    new = new.replace("m_bViewModelEffect = false", "m_bViewModelEffect = true")
-    new = common._ensure_viewmodel_effect_flag(new)
+    new = new.replace("m_bViewModelEffect = true", "m_bViewModelEffect = false")
     new = _ensure_cs2_modern_rope_trail_position_offset(new)
     # Same bug as _tune_modern_rope_trail_particles (found 2026-07-04): forcing LOCAL
     # space re-anchors the plume's noise/movement to the moving muzzle every frame, so
@@ -626,7 +731,85 @@ def patch_cs2_modern_barrel_smoke_alignment(text: str) -> str:
         new,
         count=1,
     )
+    # Match Povarehok: buoyant vertical rise. The converted plume came through with a mixed
+    # forward+up gravity ([15,0,15]); force a clean upward vector so the LMG/DMR/sniper plume
+    # lifts off the barrel the same way the rope wisps now do.
+    new = _force_modern_smoke_rise(new)
+    # Stock-style brief anchor (rewrites any experimental lock left on patched trees);
+    # the reverted CP-config injection stays stripped.
+    new = common.ensure_brief_position_lock(new)
+    new = common.remove_muzzle_follow_config(new)
     return new
+
+
+# Shell eject port puff (GMod arc9_shelleffect.lua spawns port_smoke/shellsmoke separately).
+MODERN_SHELL_PORT_SMOKE_CANDIDATES = (
+    "port_smoke.vpcf",
+    "shellsmoke.vpcf",
+    "port_smoke_small.vpcf",
+)
+# SEPARATE Modern casings (user directive 2026-07-07 "modern and pov have different casings;
+# nothing shared"): Modern gets its OWN casing systems under modern/weapons/cs_weapon_fx/ that
+# render the mw2019/ shell models + the Modern port_smoke eject puff. Povarehok keeps its own
+# generic-mesh casings, unmodified. Previously Modern reused Povarehok's casing SYSTEMS and the
+# Modern port_smoke was bolted onto them (two kinds of cross-pack sharing) -- both removed.
+MODERN_CASING_DIR = "particles/filmmaker/modern/weapons/cs_weapon_fx"
+PVRH_CASING_DIR = "particles/filmmaker/povarehok/regular/weapons/cs_weapon_fx"
+# caliber -> mw2019 shell model the Modern casing renders (generic geometry -> mw2019 geometry)
+MODERN_CASING_MODEL = {
+    "weapon_shell_casing_9mm": "models/shells/mw2019/shell_pistol.vmdl",
+    "weapon_shell_casing_rifle": "models/shells/mw2019/shell_rifle.vmdl",
+    "weapon_shell_casing_deagle": "models/shells/mw2019/shell_pistol.vmdl",
+    "weapon_shell_casing_shotgun": "models/shells/mw2019/shell_12gauge.vmdl",
+    "weapon_shell_casing_50cal": "models/shells/mw2019/shell_50cal.vmdl",
+}
+
+
+def _resolve_modern_shell_port_smoke(root: Path) -> str | None:
+    for name in MODERN_SHELL_PORT_SMOKE_CANDIDATES:
+        res = f"{MODERN_MUZZLE_DIR}/{name}"
+        if common.resource_path(root, res).is_file():
+            return res
+    return None
+
+
+def patch_modern_shell_port_smoke(root: Path, changed: list[str]) -> None:
+    """Build Modern's OWN casing systems (mw2019 mesh + eject-port puff) and de-contaminate
+    Povarehok's. Idempotent. See MODERN_CASING_* above and ParticleFxRules.cpp's separated
+    FXRULE_MODERN shell-casing rows."""
+    port_smoke = _resolve_modern_shell_port_smoke(root)
+    # 1. create/refresh each Modern casing from the matching Povarehok regular one.
+    for name, mw_model in MODERN_CASING_MODEL.items():
+        src = common.resource_path(root, f"{PVRH_CASING_DIR}/{name}.vpcf")
+        if not src.is_file():
+            continue
+        t = src.read_text(encoding="utf-8")
+        t = re.sub(r'm_model = resource:"models/shells/[^"]*"',
+                   f'm_model = resource:"{mw_model}"', t)
+        # drop the Povarehok fallback cross-ref (self-contained; casing count is tiny in a movie)
+        t = re.sub(r'\tm_hFallback = resource:"[^"]*"\n', "", t)
+        t = re.sub(r'\tm_nFallbackMaxCount = \d+\n', "", t)
+        # strip any Povarehok/Modern port-smoke child inherited from the source, then add ours.
+        common.write_if_different(root, f"{MODERN_CASING_DIR}/{name}.vpcf", t, changed)
+        dst = common.resource_path(root, f"{MODERN_CASING_DIR}/{name}.vpcf")
+        common.remove_child_refs(dst, {"port_smoke.vpcf", "shellsmoke.vpcf", "port_smoke_small.vpcf"})
+        if port_smoke and common._add_child_once(dst, port_smoke):
+            changed.append(f"{MODERN_CASING_DIR}/{name}.vpcf")
+    # 2. de-contaminate Povarehok casings: strip any Modern port-smoke, restore generic shotgun mesh.
+    for variant in ("regular", "less/smoke"):
+        vdir = common.resource_path(root, f"particles/filmmaker/povarehok/{variant}/weapons/cs_weapon_fx")
+        if not vdir.is_dir():
+            continue
+        for p in sorted(vdir.glob("weapon_shell_casing_*.vpcf")):
+            res = p.relative_to(root).as_posix()
+            if common.remove_child_refs(p, {"port_smoke.vpcf", "shellsmoke.vpcf", "port_smoke_small.vpcf"}):
+                changed.append(res)
+            if "shotgun" in p.name:
+                t = p.read_text(encoding="utf-8")
+                n = t.replace("models/shells/mw2019/shell_12gauge.vmdl", "models/shells/shell_12gauge.vmdl")
+                if n != t:
+                    p.write_text(n, encoding="utf-8")
+                    changed.append(res)
 
 
 def patch_cs2_modern_muzzleflash_alignment(text: str) -> str:
@@ -691,6 +874,73 @@ def make_modern_muzzleflash_fp(world_text: str) -> str:
     return common._ensure_viewmodel_effect_flag(new)
 
 
+def _rewrite_modern_smoke_fp_child_refs(text: str) -> str:
+    """Point wrapper children at _fp trail twins (barrel_smoke -> barrel_smoke_trail_b_fp)."""
+    for base in ("barrel_smoke_trail_b", "barrel_smoke_trail", "barrel_smoke_plume", "barrel_smoke"):
+        text = text.replace(f"/{base}.vpcf", f"/{base}_fp.vpcf")
+    return text
+
+
+# The "game" control-point config CS2's own first-person weapon FX use (verified by
+# decompiling uweapon_muzflsh_ak47_fps.vpcf): it makes the ENGINE drive control point 0 to
+# continuously follow the weapon's "muzzle_flash" attachment. Without it, a swapped viewmodel
+# effect's CP0 is set once (at the muzzle-flash create event) and never updated, so the smoke
+# stays where it was fired. WITH it, the emission SOURCE tracks the moving muzzle -- new smoke
+# comes off the barrel as the gun moves -- while already-emitted particles still fly free in
+# world space (see make_modern_smoke_fp). This is exactly how stock weapon_muzzle_smoke works.
+_FP_MUZZLE_FOLLOW_CONFIG = (
+    '\tm_controlPointConfigurations = \n'
+    "\t[\n"
+    "\t\t{\n"
+    '\t\t\tm_name = "game"\n'
+    "\t\t\tm_drivers = \n"
+    "\t\t\t[\n"
+    "\t\t\t\t{\n"
+    '\t\t\t\t\tm_iAttachType = "PATTACH_POINT_FOLLOW"\n'
+    '\t\t\t\t\tm_attachmentName = "muzzle_flash"\n'
+    '\t\t\t\t\tm_entityName = "self"\n'
+    "\t\t\t\t},\n"
+    "\t\t\t]\n"
+    "\t\t},\n"
+    "\t]\n"
+)
+
+
+def _add_fp_muzzle_follow_config(text: str) -> str:
+    if "m_controlPointConfigurations" in text:
+        return text
+    anchor = '\t_class = "CParticleSystemDefinition"\n'
+    if anchor not in text:
+        return text
+    return text.replace(anchor, anchor + _FP_MUZZLE_FOLLOW_CONFIG, 1)
+
+
+def make_modern_smoke_fp(world_text: str) -> str:
+    """First-person viewmodel twin of world barrel smoke / rope wisp assets.
+
+    RECIPE (2026-07-07, user directive "Povarehok looks better -- whatever Povarehok is
+    doing, do it for Modern too"): the `_fp` twin rides the barrel through reload/inspect via
+    a FULL-LIFETIME C_OP_PositionLock (0 -> 1e6) in the viewmodel pass, with NO
+    `m_controlPointConfigurations` follow driver. This is the recipe the shipped Povarehok
+    fp smoke (weapon_muzzle_smoke_long_fp) already used and that the user judged as following
+    the gun better than Modern's previous brief-lock + follow-config approach. The full lock
+    ADDS the muzzle CP's translation on top of the particle's own buoyant rise/noise (it does
+    NOT freeze them -- see common.ensure_full_position_lock), so the wisp still lifts, it just
+    lifts relative to the moving barrel = follows during reload/inspect.
+
+    HISTORY: an earlier iteration used the brief 0->0.1s lock + a PATTACH_POINT_FOLLOW "game"
+    driver so already-emitted particles flew free in world space. The user's final call
+    (2026-07-07) is that Povarehok's full-lock look follows better, so both packs now use it
+    (Povarehok's fp smoke is built through this same function -- postprocess_povarehok.py
+    lines ~916/927 -- so this keeps the two packs consistent). `remove_muzzle_follow_config`
+    strips the reverted follow driver from any already-patched tree."""
+    new = world_text.replace("m_bViewModelEffect = false", "m_bViewModelEffect = true")
+    new = common._ensure_viewmodel_effect_flag(new)
+    new = common.remove_muzzle_follow_config(new)   # strip the reverted follow driver
+    new = common.ensure_full_position_lock(new)     # ride the barrel through reload (Povarehok recipe)
+    return _rewrite_modern_smoke_fp_child_refs(new)
+
+
 def _ensure_modern_flash_position_lock(text: str) -> str:
     if 'C_OP_PositionLock' in text:
         return text
@@ -745,52 +995,425 @@ def _remove_init_blocks(text: str, class_name: str) -> str:
         text = text[:line_start] + text[j:]
 
 
-def patch_modern_tracer_forward(text: str) -> str:
-    """Native-chassis forward-flying tracer (see MODERN_TRACER_PARENTS).
+def _insert_after_class_block(text: str, class_name: str, new_block: str) -> str:
+    m = re.search(rf'_class = "{re.escape(class_name)}"', text)
+    if not m:
+        return text
+    _, end = common.block_span(text, m.start())
+    j = end
+    if j < len(text) and text[j] == ",":
+        j += 1
+    if j < len(text) and text[j] == "\n":
+        j += 1
+    return text[:j] + new_block + text[j:]
 
-    Drops the CP1-dependent C_INIT_MoveBetweenPoints (CS2 never sets a tracer end CP) and
-    the fixed C_INIT_RandomLifeTime, gives the spawn a muzzle-local forward velocity, and
-    derives lifespan from that velocity so the streak ends at the impact surface -- the
-    same shape CS2's stock weapon_tracers and Povarehok's converted tracer already use.
+
+def _force_tracer_spawn_at_muzzle(text: str) -> str:
+    """GMod sets CP0 at the muzzle via Lua -- trust engine CP0, zero forward kick."""
+    edits = []
+    for match in re.finditer(r'_class = "C_INIT_PositionOffset"', text):
+        start, end = common.block_span(text, match.start())
+        block = text[start:end]
+        block = re.sub(r"m_bLocalCoords = (?:true|false)", "m_bLocalCoords = true", block)
+        block = re.sub(r"m_OffsetMin = \[[^\]]*\]", "m_OffsetMin = [0.0, 0.0, 0.0]", block)
+        block = re.sub(r"m_OffsetMax = \[[^\]]*\]", "m_OffsetMax = [0.0, 0.0, 0.0]", block)
+        edits.append((start, end, block))
+    for start, end, replacement in reversed(edits):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def _tracer_pf_literal_field(field: str, value: str) -> str:
+    return (
+        f"\t\t\t{field} = \n"
+        "\t\t\t{\n"
+        '\t\t\t\tm_nType = "PF_TYPE_LITERAL"\n'
+        f"\t\t\t\tm_flLiteralValue = {value}\n"
+        "\t\t\t}\n"
+    )
+
+
+def _upsert_render_trails_endpoint_fade(block: str) -> str:
+    """Along-trail alpha taper at head and tail (fixes hard rectangular streak ends)."""
+    block = _TRACER_PF_LITERAL_BLOCK_RE.sub("", block)
+    block = re.sub(
+        r"(?m)^\t\t\tm_fl(?:Head|Tail)AlphaScale = \S+\n",
+        "",
+        block,
+    )
+    block = re.sub(
+        r"(?m)^\t\t\tm_flRadiusHeadTaper = \S+\n",
+        "",
+        block,
+    )
+    insert = (
+        _tracer_pf_literal_field("m_flHeadAlphaScale", _TRACER_HEAD_ALPHA_SCALE)
+        + _tracer_pf_literal_field("m_flTailAlphaScale", _TRACER_TAIL_ALPHA_SCALE)
+        + _tracer_pf_literal_field("m_flRadiusHeadTaper", _TRACER_RADIUS_HEAD_TAPER)
+    )
+    anchor = "m_flLengthFadeInTime"
+    if anchor in block:
+        line_end = block.find("\n", block.find(anchor))
+        return block[: line_end + 1] + insert + block[line_end + 1 :]
+    anchor = "m_flMaxLength"
+    if anchor in block:
+        line_end = block.find("\n", block.find(anchor))
+        return block[: line_end + 1] + insert + block[line_end + 1 :]
+    return block.replace(
+        '_class = "C_OP_RenderTrails"',
+        '_class = "C_OP_RenderTrails"\n' + insert,
+        1,
+    )
+
+
+def patch_modern_tracer_trail_endpoint_fade(text: str) -> str:
+    """Soft fade at both ends of the streak (RenderTrails head/tail alpha scale)."""
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if "C_OP_RenderTrails" not in block:
+            continue
+        new_block = _upsert_render_trails_endpoint_fade(block)
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def patch_modern_tracer_mw_streak_texture(text: str) -> str:
+    """Use the pack's tracer_middle streak on the AR parent (spark reads as a hard bar)."""
+    return (
+        text.replace(
+            'm_hMaterial = resource:"materials/effects/spark.vmat"',
+            'm_hMaterial = resource:"materials/effects/tracer_middle.vmat"',
+        ).replace(
+            'm_hTexture = resource:"materials/effects/spark.vtex"',
+            'm_hTexture = resource:"materials/effects/tracer_middle.vtex"',
+        )
+    )
+
+
+def patch_modern_tracer_soft_head(text: str, trail_length: float) -> str:
+    """Longer RenderTrails segments so LengthFadeInTime reads as a soft streak head."""
+    length = f"{trail_length:.1f}".rstrip("0").rstrip(".")
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if "C_OP_RenderTrails" not in block:
+            continue
+        new_block = block
+        if re.search(r"m_flMaxLength = ", new_block):
+            new_block = re.sub(r"m_flMaxLength = \S+", f"m_flMaxLength = {length}", new_block)
+        if re.search(r"m_flMinLength = ", new_block):
+            new_block = re.sub(r"m_flMinLength = \S+", f"m_flMinLength = {length}", new_block)
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+# The MW2019 tracer wisp ropes (mgbase_tracer_trail{,_faint}) animate in GMod by
+# V-SCROLLING the fas_smoke_beam texture along the ribbon. The converted files carry
+# m_flTextureVScrollRate = -50 (the current engine schema still has the field on
+# C_OP_RenderRopes, offset 0x2F90 build in reference/cs2-offsets), but with NO explicit
+# m_flTextureVWorldSize the V mapping leaves the scroll imperceptible -- the wisps read
+# as static (user report 2026-07-06: "the wisps from the bullet trails are supposed to
+# be animated and they're not"). One texture repeat per 128 units at -50 u/s ~= 0.4
+# repeats/s of visible flow along the trail.
+_TRACER_TRAIL_V_WORLD_SIZE = "128.0"
+
+
+def patch_modern_tracer_trail_scroll(text: str) -> str:
+    """Explicit V-world-size on scrolling rope renderers so the beam scroll shows."""
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if "C_OP_RenderRopes" not in block or "m_flTextureVScrollRate" not in block:
+            continue
+        if re.search(r"m_flTextureVWorldSize = ", block):
+            new_block = re.sub(
+                r"m_flTextureVWorldSize = \S+",
+                f"m_flTextureVWorldSize = {_TRACER_TRAIL_V_WORLD_SIZE}",
+                block,
+            )
+        else:
+            new_block = re.sub(
+                r"(?m)^(\s*)(m_flTextureVScrollRate = [^\n]+)$",
+                rf"\1\2\n\1m_flTextureVWorldSize = {_TRACER_TRAIL_V_WORLD_SIZE}",
+                block,
+                count=1,
+            )
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def patch_modern_tracer_trail_child_soft_head(text: str) -> str:
+    """MW2019 rope child: ease the beam color in at the head (GMod-style soft leading edge)."""
+    edits = []
+    for match in re.finditer(r'_class = "C_OP_ColorInterpolate"', text):
+        start, end = common.block_span(text, match.start())
+        block = text[start:end]
+        new_block = re.sub(r"m_bEaseInOut = \S+", "m_bEaseInOut = true", block)
+        new_block = re.sub(r"m_flFadeStartTime = \S+", "m_flFadeStartTime = 0.0", new_block)
+        new_block = re.sub(r"m_flFadeEndTime = \S+", "m_flFadeEndTime = 0.25", new_block)
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def _ensure_gmod_tracer_parent_lifecycle(text: str) -> str:
+    """GMod mw2019_tracer_3 parent: LifespanFromVelocity + Decay, not FadeAndKillForTracers."""
+    text = _remove_init_blocks(text, "C_OP_FadeAndKillForTracers")
+
+    if "C_OP_Decay" not in text:
+        decay_block = (
+            "\t\t{\n"
+            '\t\t\t_class = "C_OP_Decay"\n'
+            "\t\t},\n"
+        )
+        text = _insert_after_class_block(text, "C_OP_BasicMovement", decay_block)
+
+    if "C_INIT_LifespanFromVelocity" not in text:
+        lifespan_block = (
+            "\t\t{\n"
+            '\t\t\t_class = "C_INIT_LifespanFromVelocity"\n'
+            "\t\t\tm_flMaxTraceLength = 8192.0\n"
+            "\t\t},\n"
+        )
+        anchor = "C_INIT_MoveBetweenPoints" if "C_INIT_MoveBetweenPoints" in text else "C_INIT_PositionOffset"
+        text = _insert_after_class_block(text, anchor, lifespan_block)
+
+    return text
+
+
+def patch_modern_tracer_cs2_discipline(text: str) -> str:
+    """MW2019 tracer look with CS2 motion fixes and GMod parent lifecycle (MODERN_TRACER_PARENTS).
+
+    Keeps MW2019 renderer textures and child glow/trail systems. Fixes broken emitters and
+    MoveBetweenPoints speed while restoring GMod's LifespanFromVelocity + Decay stack (GMod
+    never shipped FadeAndKillForTracers — that was a Povarehok-only CS2 addition).
     """
     text = _remove_init_blocks(text, "C_INIT_MoveBetweenPoints")
-    text = _remove_init_blocks(text, "C_INIT_RandomLifeTime")
+
     m = re.search(r'_class = "C_INIT_CreateWithinSphere"', text)
     if m:
         start, end = common.block_span(text, m.start())
         block = text[start:end]
         block = re.sub(
             r"m_LocalCoordinateSystemSpeedMin = \[[^\]]*\]",
-            f"m_LocalCoordinateSystemSpeedMin = [{_TRACER_LOCAL_FORWARD}, 0.0, 0.0]", block)
+            "m_LocalCoordinateSystemSpeedMin = [0.0, 0.0, 0.0]",
+            block,
+        )
         block = re.sub(
             r"m_LocalCoordinateSystemSpeedMax = \[[^\]]*\]",
-            f"m_LocalCoordinateSystemSpeedMax = [{_TRACER_LOCAL_FORWARD}, 0.0, 0.0]", block)
-        block = re.sub(r"m_bLocalCoords = (?:true|false)", "m_bLocalCoords = true", block)
+            "m_LocalCoordinateSystemSpeedMax = [0.0, 0.0, 0.0]",
+            block,
+        )
+        block = re.sub(r"m_fSpeedRandExp = \S+", "m_fSpeedRandExp = 0.0", block)
+        block = re.sub(r"m_vecDistanceBias = \[[^\]]*\]", "m_vecDistanceBias = [0.0, 0.0, 0.0]", block)
+        block = re.sub(r"m_fSpeedMin = \S+", "m_fSpeedMin = 0.0", block)
+        block = re.sub(r"m_fSpeedMax = \S+", "m_fSpeedMax = 0.0", block)
         text = text[:start] + block + text[end:]
-        if "C_INIT_LifespanFromVelocity" not in text:
-            m2 = re.search(r'_class = "C_INIT_CreateWithinSphere"', text)
-            _, e2 = common.block_span(text, m2.start())
-            j = e2
-            if j < len(text) and text[j] == ",":
-                j += 1
-            if j < len(text) and text[j] == "\n":
-                j += 1
-            lifespan = (
-                "\t\t{\n"
-                '\t\t\t_class = "C_INIT_LifespanFromVelocity"\n'
-                "\t\t\tm_flMaxTraceLength = 2048.0\n"
-                "\t\t},\n"
-            )
-            text = text[:j] + lifespan + text[j:]
-    # The GMod tracer spawned 150u ahead of the muzzle (a MoveBetweenPoints head-start);
-    # with real forward motion that just opens a gap between the muzzle and the streak.
-    text = text.replace("m_OffsetMin = [150.0, 0.0, 0.0]", "m_OffsetMin = [0.0, 0.0, 0.0]")
-    text = text.replace("m_OffsetMax = [150.0, 0.0, 0.0]", "m_OffsetMax = [0.0, 0.0, 0.0]")
+
+    move_block = (
+        "\t\t{\n"
+        '\t\t\t_class = "C_INIT_MoveBetweenPoints"\n'
+        f"\t\t\tm_flSpeedMin = {_TRACER_MOVE_SPEED}\n"
+        f"\t\t\tm_flSpeedMax = {_TRACER_MOVE_SPEED}\n"
+        "\t\t},\n"
+    )
+    if "C_INIT_MoveBetweenPoints" not in text:
+        anchor = "C_INIT_PositionOffset" if "C_INIT_PositionOffset" in text else "C_INIT_CreateWithinSphere"
+        text = _insert_after_class_block(text, anchor, move_block)
+
+    if "C_OP_RenderTrails" in text and "C_INIT_RandomTrailLength" not in text:
+        trail_block = (
+            "\t\t{\n"
+            '\t\t\t_class = "C_INIT_RandomTrailLength"\n'
+            "\t\t\tm_flLengthRandExponent = 2.0\n"
+            "\t\t\tm_flMaxLength = 0.093\n"
+            "\t\t\tm_flMinLength = 0.084\n"
+            "\t\t},\n"
+        )
+        text = _insert_after_class_block(text, "C_INIT_MoveBetweenPoints", trail_block)
+
+    text = _ensure_gmod_tracer_parent_lifecycle(text)
+    text = patch_modern_tracer_trail_length_fade(text)
+    text = _force_tracer_spawn_at_muzzle(text)
+
+    text = re.sub(
+        r"\t\t\tm_nParticlesToEmit = \n\t\t\t\{[^}]+\}\n",
+        "\t\t\tm_nParticlesToEmit = 1\n",
+        text,
+        flags=re.DOTALL,
+    )
+    text = re.sub(r"m_nParticlesToEmit = -?\d+", "m_nParticlesToEmit = 1", text)
+    text = re.sub(r"m_nMaxEmittedPerFrame = -?\d+", "m_nMaxEmittedPerFrame = 1", text)
+    text = re.sub(
+        r"\t\t\tm_flStartTime = \n\t\t\t\{[^}]+\}\n",
+        "",
+        text,
+        flags=re.DOTALL,
+    )
+    text = re.sub(r"m_nMaxParticles = 2", "m_nMaxParticles = 1", text)
     return text
 
 
-def apply_modern_gameplay_composites(root: Path) -> list[str]:
-    """Returns the content-relative resources that were written/changed."""
+# Legacy name used by docs / earlier commits.
+patch_modern_tracer_forward = patch_modern_tracer_cs2_discipline
+
+
+def _format_tracer_scaled_number(source: str, value: float) -> str:
+    if "." not in source and value.is_integer():
+        return str(int(value))
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _scale_tracer_numeric_fields(
+    block: str, fields: tuple[str, ...], scale: float, *, integer: bool
+) -> str:
+    field_group = "|".join(re.escape(field) for field in fields)
+    pattern = re.compile(rf"(?m)^(\s*(?:{field_group}) = )(-?\d+(?:\.\d+)?)(\s*)$")
+
+    def repl(match: re.Match[str]) -> str:
+        scaled = float(match.group(2)) * scale
+        if integer:
+            value = str(max(0, round(scaled)))
+        else:
+            value = _format_tracer_scaled_number(match.group(2), scaled)
+        return f"{match.group(1)}{value}{match.group(3)}"
+
+    return pattern.sub(repl, block)
+
+
+def patch_modern_tracer_glow_brightness(text: str) -> str:
+    """Halve MW2019 tracer glow/trail brightness (alpha, radius, self-illum)."""
+    scale = TRACER_GLOW_BRIGHTNESS_SCALE
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if "C_OP_RenderTrails" not in block and "C_OP_RenderSprites" not in block and "C_OP_RenderRopes" not in block:
+            continue
+        new_block = _scale_tracer_numeric_fields(
+            block,
+            ("m_nAlphaMin", "m_nAlphaMax"),
+            scale,
+            integer=True,
+        )
+        new_block = _scale_tracer_numeric_fields(
+            new_block,
+            ("m_flRadiusMin", "m_flRadiusMax", "m_flConstantRadius", "m_flStartScale", "m_flEndScale"),
+            scale,
+            integer=False,
+        )
+        new_block = re.sub(
+            r"(?m)^(\s*m_flSelfIllumAmount = )1\.0(\s*)$",
+            rf"\g<1>{_format_tracer_scaled_number('1.0', scale)}\2",
+            new_block,
+        )
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for class_name in ("C_INIT_RandomAlpha", "C_INIT_RandomRadius", "C_OP_InterpolateRadius"):
+        for match in re.finditer(rf'_class = "{class_name}"', text):
+            start, end = common.block_span(text, match.start())
+            block = text[start:end]
+            integer = class_name == "C_INIT_RandomAlpha"
+            fields = (
+                ("m_nAlphaMin", "m_nAlphaMax")
+                if integer
+                else ("m_flRadiusMin", "m_flRadiusMax", "m_flStartScale", "m_flEndScale")
+            )
+            new_block = _scale_tracer_numeric_fields(block, fields, scale, integer=integer)
+            if new_block != block:
+                edits.append((start, end, new_block))
+    if "m_flConstantRadius = " in text:
+        for match in re.finditer(r"(?m)^(\s*m_flConstantRadius = )(-?\d+(?:\.\d+)?)(\s*)$", text):
+            scaled = float(match.group(2)) * scale
+            replacement = (
+                f"{match.group(1)}{_format_tracer_scaled_number(match.group(2), scaled)}{match.group(3)}"
+            )
+            edits.append((match.start(), match.end(), replacement))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+def patch_modern_tracer_trail_length_fade(text: str) -> str:
+    """RenderTrails soft streak head via m_flLengthFadeInTime (GMod render_sprite_trail)."""
+    edits = []
+    for start, end in common.iter_renderer_blocks(text):
+        block = text[start:end]
+        if "C_OP_RenderTrails" not in block:
+            continue
+        if re.search(r"m_flLengthFadeInTime = ", block):
+            new_block = re.sub(
+                r"m_flLengthFadeInTime = \S+",
+                f"m_flLengthFadeInTime = {_TRACER_TRAIL_LENGTH_FADE_IN}",
+                block,
+            )
+        else:
+            indent = re.search(r"(?m)^(\s*)m_flMaxLength", block)
+            prefix = indent.group(1) if indent else "\t\t\t"
+            new_block = block.replace(
+                '_class = "C_OP_RenderTrails"',
+                '_class = "C_OP_RenderTrails"\n'
+                f"{prefix}m_flLengthFadeInTime = {_TRACER_TRAIL_LENGTH_FADE_IN}",
+                1,
+            )
+        if new_block != block:
+            edits.append((start, end, new_block))
+    for start, end, replacement in sorted(edits, reverse=True):
+        text = text[:start] + replacement + text[end:]
+    return text
+
+
+# Legacy alias.
+patch_modern_tracer_muzzle_fade = patch_modern_tracer_trail_length_fade
+
+
+def patch_modern_tracer_class_tiers(root: Path, changed: list[str]) -> None:
+    """Keep sniper-only MW2019 tracer children off the automatic-weapon parent."""
+    for res in MODERN_TRACER_AR_TIER:
+        path = common.resource_path(root, res)
+        if path.is_file() and common.remove_child_refs(path, set(SNIPER_ONLY_TRACER_CHILDREN)):
+            changed.append(res)
+
+
+def patch_modern_tracer_glow_leaves(root: Path, changed: list[str]) -> None:
+    """Apply brightness + muzzle fade to routed MW2019 tracer child glow/trail leaves."""
+    tracer_dir = common.resource_path(root, MODERN_TRACER_DIR)
+    if not tracer_dir.is_dir():
+        return
+    names = set(MODERN_TRACER_GLOW_LEAVES)
+    for path in tracer_dir.glob("*.vpcf"):
+        if path.name not in names:
+            continue
+        text = path.read_text(encoding="utf-8")
+        new_text = patch_modern_tracer_glow_brightness(text)
+        if path.name in MODERN_TRACER_TRAIL_CHILD_SOFT_HEAD:
+            new_text = patch_modern_tracer_trail_child_soft_head(new_text)
+        if new_text != text:
+            path.write_text(new_text, encoding="utf-8")
+            changed.append(path.relative_to(root).as_posix())
+
+
+def apply_modern_gameplay_composites(root: Path, *, tune_tracer_brightness: bool = True) -> list[str]:
+    """Returns the content-relative resources that were written/changed.
+
+    tune_tracer_brightness: patch_modern_tracer_glow_brightness MULTIPLIES alpha/radius
+    by TRACER_GLOW_BRIGHTNESS_SCALE, so it is NOT idempotent -- it must run exactly once,
+    in the full (fresh-conversion) pipeline, like the tone_down passes. In-place patch
+    entries (--gameplay-composites-only) must pass False or every re-run visibly dims
+    the tracers again (caught 2026-07-06: an in-place run halved the already-halved
+    values a second time).
+    """
     changed: list[str] = []
 
     for res, params in MVM_HEATWAVES.items():
@@ -830,12 +1453,23 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
             path.write_text(new_text, encoding="utf-8")
             changed.append(res)
 
+    # FP viewmodel twins for barrel smoke + rope wisps (reload follow fix; world twins above).
+    for res in MODERN_LIVE_BARREL_SMOKE_FILES + MODERN_BARREL_TRAIL_FILES:
+        path = common.resource_path(root, res)
+        if not path.is_file():
+            continue
+        world = path.read_text(encoding="utf-8")
+        common.write_if_different(root, _fp_variant_res(res), make_modern_smoke_fp(world), changed)
+
     for res in MODERN_MUZZLEFLASH_FILES:
         path = common.resource_path(root, res)
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
         world = patch_cs2_modern_muzzleflash_alignment(text)
+        # Strip the reverted CP-config experiment (2026-07-06 night; it froze the
+        # engine's own, already-correct control-point driving).
+        world = common.remove_muzzle_follow_config(world)
         if world != text:
             path.write_text(world, encoding="utf-8")
             changed.append(res)
@@ -851,23 +1485,47 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
-        new_text = patch_modern_tracer_forward(text)
+        trail_length = MODERN_TRACER_TRAIL_LENGTH.get(path.name, 110.0)
+        new_text = patch_modern_tracer_cs2_discipline(text)
+        new_text = patch_modern_tracer_mw_streak_texture(new_text)
+        new_text = patch_modern_tracer_soft_head(new_text, trail_length)
+        new_text = patch_modern_tracer_trail_endpoint_fade(new_text)
+        if tune_tracer_brightness:
+            new_text = patch_modern_tracer_glow_brightness(new_text)
         if new_text != text:
             path.write_text(new_text, encoding="utf-8")
             changed.append(res)
+
+    patch_modern_tracer_class_tiers(root, changed)
+    if tune_tracer_brightness:
+        patch_modern_tracer_glow_leaves(root, changed)
+
+    # Wisp-scroll animation (idempotent, runs in-place too -- unlike the brightness
+    # pass above): explicit V mapping so the beam texture's scroll is visible.
+    tracer_dir_path = common.resource_path(root, MODERN_TRACER_DIR)
+    if tracer_dir_path.is_dir():
+        for path in tracer_dir_path.glob("*.vpcf"):
+            if path.name not in MODERN_TRACER_TRAIL_CHILD_SOFT_HEAD:
+                continue
+            text = path.read_text(encoding="utf-8")
+            new_text = patch_modern_tracer_trail_scroll(text)
+            if new_text != text:
+                path.write_text(new_text, encoding="utf-8")
+                changed.append(path.relative_to(root).as_posix())
 
     # Wire the "smoke follows the gun through the air" rope wisp back in (user
     # report 2026-07-03, see docs/mw2019-fx-mapping-reference.md §6b). ARC9's OWN
     # barrel_smoke.vpcf is already a thin wrapper whose ONLY content is a child
     # ref to barrel_smoke_trail_b.vpcf (confirmed post-conversion, 2026-07-03 --
     # barrel_smoke.vpcf has no renderers/operators of its own at all, so every
-    # class in MODERN_SPRAY_SMOKE that resolves to it already gets the rope wisp
+    # class in MODERN_FLASH_SMOKE_CHILDREN that resolves to it already gets the rope wisp
     # natively). barrel_smoke_plume.vpcf (the lmg/dmr/sniper-composition smoke)
     # has NO such child, so its classes never got a wisp at all. Give it the
     # OTHER trail file (barrel_smoke_trail.vpcf, previously unused by anything)
     # instead of duplicating barrel_smoke's own trail_b onto it.
     modern_trail_children = {
         f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf": f"{MODERN_MUZZLE_DIR}/barrel_smoke_trail.vpcf",
+        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume_fp.vpcf": f"{MODERN_MUZZLE_DIR}/barrel_smoke_trail_fp.vpcf",
     }
     for parent_res, child_res in modern_trail_children.items():
         if not common.resource_path(root, child_res).is_file():
@@ -879,28 +1537,49 @@ def apply_modern_gameplay_composites(root: Path) -> list[str]:
         if not all(common.resource_path(root, c).is_file() for c in children):
             continue
         common.write_if_different(root, res, common._composition_text(children), changed)
+        # Sniper comps additionally get an mvm_spray_ wrapper adding the .50-cal plume
+        # (see the MVM_COMPOSITIONS comment; the grenade trail is not muzzle smoke).
+        if "mvm_muzzleflash_sniper" in res:
+            plume = f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf"
+            plume_fp = _fp_variant_res(plume)
+            child = plume_fp if res.endswith("_fp.vpcf") else plume
+            if common.resource_path(root, child).is_file():
+                common.write_if_different(
+                    root,
+                    common._spray_wrapper_res(res),
+                    common._composition_text(
+                        (res, (child, common.AFTERSHOT_SMOKE_DELAY))),
+                    changed,
+                )
 
-    # Spray rework: strip the per-shot barrel smoke children the previous design
-    # added directly to the class flashes, then write the spray wrappers.
-    for name in MODERN_SPRAY_SMOKE:
-        res = f"{MODERN_MUZZLE_DIR}/{name}"
-        path = common.resource_path(root, res)
-        if path.is_file() and common.remove_child_refs(
-            path, {"barrel_smoke.vpcf", "barrel_smoke_plume.vpcf"}
-        ):
-            changed.append(res)
-
-    for name, smoke in MODERN_SPRAY_SMOKE.items():
-        flash_res = f"{MODERN_MUZZLE_DIR}/{name}"
+    # Spray wrappers (flash + barrel smoke), world + _fp; the hook upgrades to these
+    # under its smoke cooldown (see MODERN_FLASH_SMOKE_CHILDREN comment). The old
+    # direct smoke children are stripped from already-patched trees. _fp wrappers use
+    # _fp smoke twins so reload animations track the viewmodel muzzle in first person.
+    for name, smoke in MODERN_FLASH_SMOKE_CHILDREN.items():
         smoke_res = f"{MODERN_MUZZLE_DIR}/{smoke}"
-        if not common.resource_path(root, flash_res).is_file() or not common.resource_path(root, smoke_res).is_file():
+        smoke_fp_res = _fp_variant_res(smoke_res)
+        if not common.resource_path(root, smoke_res).is_file():
             continue
-        common.write_if_different(
-            root,
-            common._spray_wrapper_res(flash_res),
-            common._composition_text((flash_res, smoke_res)),
-            changed,
-        )
+        for flash_res in (f"{MODERN_MUZZLE_DIR}/{name}", _fp_variant_res(f"{MODERN_MUZZLE_DIR}/{name}")):
+            flash_path = common.resource_path(root, flash_res)
+            if not flash_path.is_file():
+                continue
+            is_fp = flash_res.endswith("_fp.vpcf")
+            child_smoke = smoke_fp_res if is_fp else smoke_res
+            if not common.resource_path(root, child_smoke).is_file():
+                child_smoke = smoke_res
+            if common.remove_child_refs(flash_path, {smoke_res, smoke_fp_res}):
+                changed.append(flash_res)
+            common.write_if_different(
+                root,
+                common._spray_wrapper_res(flash_res),
+                common._composition_text(
+                    (flash_res, (child_smoke, common.AFTERSHOT_SMOKE_DELAY))),
+                changed,
+            )
+
+    patch_modern_shell_port_smoke(root, changed)
 
     for name in MODERN_HEATWAVE_CHILDREN_TO_REMOVE:
         res = f"{MODERN_MUZZLE_DIR}/{name}"

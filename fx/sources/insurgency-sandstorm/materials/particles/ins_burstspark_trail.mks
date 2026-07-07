@@ -1,0 +1,17 @@
+// Reconstructed from the VTF's embedded particle sheet by export-source1-vtf.py
+
+sequence 0
+LOOP
+frame ins_burstspark_trail_seq0.tga 1
+
+sequence 1
+LOOP
+frame ins_burstspark_trail_seq1.tga 1
+
+sequence 2
+LOOP
+frame ins_burstspark_trail_seq2.tga 1
+
+sequence 3
+LOOP
+frame ins_burstspark_trail_seq3.tga 1
