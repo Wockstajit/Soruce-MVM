@@ -186,7 +186,6 @@ $textureExporter = Resolve-ExistingPath (Join-Path $PSScriptRoot 'export-source1
 $particlePostprocess = Resolve-ExistingPath (Join-Path $PSScriptRoot 'postprocess_povarehok.py') 'Povarehok post-process tool'
 $insurgencySmokeExtractor = Join-Path $PSScriptRoot 'extract-insurgency-smoke.py'
 $insurgencySmokeStager = Join-Path $PSScriptRoot 'stage-insurgency-smoke.py'
-$ragdollConverter = Resolve-ExistingPath (Join-Path $PSScriptRoot 'convert-improved-ragdolls.py') 'Improved ragdoll converter'
 $insurgencySourceDir = Join-Path $repoRoot 'fx\sources\insurgency-sandstorm'
 $source2ConverterRoot = Resolve-ExistingPath $Source2ConverterDir 'Source2ConverterDir'
 $modelConverter = Resolve-ExistingPath (Join-Path $source2ConverterRoot 'convert_model.py') 'Source2Converter convert_model.py'
@@ -448,14 +447,9 @@ foreach ($alias in $modelAliases.GetEnumerator()) {
     Copy-Item -LiteralPath $source -Destination $destination -Force
 }
 
-# Rebuild the Source 1 Improved Ragdolls profile as native ModelDoc physics on every
-# current CS2 CT/T player model. VRF preserves Valve's render meshes and skeletons;
-# the converter changes physics only and intentionally ignores hostage/audio assets.
-Write-Host "Preparing CS2 Improved Ragdolls model overrides..." -ForegroundColor Cyan
-& $Python $ragdollConverter --content-root $contentDir `
-    --vrf-cli $VrfCli `
-    --cs2-vpk (Join-Path $csgoGameDir 'pak01_dir.vpk')
-if ($LASTEXITCODE -ne 0) { throw "Improved Ragdolls conversion failed." }
+# NOTE: Improved Ragdolls are built by a SEPARATE, standalone pipeline
+# (fx\tools\build-improved-ragdolls.ps1). This script is particle FX only; it must never
+# build, compile, graft, or stage ragdoll models.
 
 if ($Compile) {
     $resourceCompilerPath = Resolve-ExistingPath $ResourceCompiler 'ResourceCompiler'
@@ -511,7 +505,6 @@ if ($Compile) {
         @{ Label = 'materials'; Input = Join-Path $contentDir 'materials\*.vmat'; AllowPartial = $true },
         @{ Label = 'direct particle textures'; Input = Join-Path $contentDir 'materials\*.vtex'; AllowPartial = $false },
         @{ Label = 'models'; Input = Join-Path $contentDir 'models\*.vmdl'; AllowPartial = $false },
-        @{ Label = 'improved ragdoll player models'; Input = Join-Path $contentDir 'models\filmmaker\improved_ragdolls\*.vmdl'; AllowPartial = $false },
         @{ Label = 'particle systems'; Input = Join-Path $contentDir 'particles\filmmaker\povarehok\*.vpcf'; AllowPartial = $false }
     )
     if ($modernAvailable) {
@@ -539,25 +532,7 @@ if ($Compile) {
         Textures = @(Get-ChildItem $gameDir -Recurse -File -Filter '*.vtex_c').Count
         Models = @(Get-ChildItem $gameDir -Recurse -File -Filter '*.vmdl_c').Count
     }
-    $ragdollReport = Join-Path $contentDir 'improved-ragdolls-report.txt'
-    $ragdollModelCount = if (Test-Path -LiteralPath $ragdollReport) {
-        [int](Get-Content -LiteralPath $ragdollReport | Where-Object { $_ -like 'model_count=*' } | ForEach-Object { $_.Substring(12) })
-    } else { 0 }
-    if ($ragdollModelCount -le 0) {
-        throw "Improved Ragdolls compile validation failed: conversion report contains no player models."
-    }
-    $reportedModels = @(Get-Content -LiteralPath $ragdollReport | Where-Object { $_ -like 'models/filmmaker/improved_ragdolls/*.vmdl' })
-    if ($reportedModels.Count -ne $ragdollModelCount) {
-        throw "Improved Ragdolls report mismatch: expected $ragdollModelCount paths, found $($reportedModels.Count)."
-    }
-    $missingCompiledModels = @($reportedModels | Where-Object {
-        $compiledRelative = $_.Substring(0, $_.Length - 5) + '.vmdl_c'
-        -not (Test-Path -LiteralPath (Join-Path $gameDir $compiledRelative))
-    })
-    if ($missingCompiledModels.Count -gt 0) {
-        throw "Improved Ragdolls compile validation failed: $($missingCompiledModels.Count) reported player models are missing."
-    }
-    foreach ($required in @('Particles', 'Materials', 'Textures', 'Models')) {
+    foreach ($required in @('Particles', 'Materials', 'Textures')) {
         if ($compiledCounts[$required] -le 0) {
             throw "Compiled asset validation failed: no $required were produced under $gameDir"
         }

@@ -9,6 +9,26 @@ This file gives Claude Code the rules for working in this repo. Keep this file s
 - Do not rely on memory when the repo docs or code can answer the question.
 - When docs and code disagree, trust the code and update the relevant doc as part of the work.
 
+## NEVER couple a new thing into an existing thing (hard rule)
+
+This is absolute. Do not bolt a new feature/pipeline/step onto an existing script, module,
+or build path just because it already exists and is convenient.
+
+- New capability → **make it its own thing**: its own script/file/module with its own inputs,
+  outputs, and build/run entry point. It must build and run without invoking the unrelated
+  existing thing.
+- Only add to an existing thing when the existing thing is *specifically the home for that
+  kind of work* (extending a system with more of what it already does) — not merely nearby.
+- Shared output at runtime is fine; shared *build/authoring logic* across unrelated features
+  is not. If two features must share a mount/dir, each owns only its own subtree and neither
+  clobbers the other.
+- If you catch yourself editing an existing script to make it also do a new, separable job:
+  stop, create the separate thing instead.
+
+Example (reference implementation of this rule): Improved Ragdolls build
+(`fx/tools/build-improved-ragdolls.ps1`) is fully standalone and must never be folded back
+into the particle-FX converter (`fx/tools/convert-povarehok-source1.ps1`).
+
 ## Agent docs
 
 Longer instructions live in `docs/agent/`. Read these only when relevant:

@@ -75,6 +75,32 @@ if "!FM_FX_REBUILD!"=="1" (
 )
 echo.
 
+echo === Improved Ragdolls ^(standalone; independent of the particle FX packs^) ===
+REM Ragdolls are built by their OWN pipeline (fx\tools\build-improved-ragdolls.ps1) into a
+REM separate build tree; they only share the runtime source_mvm_fx mount at stage time and
+REM own solely the models\filmmaker\improved_ragdolls subtree there. Never fold this into the
+REM particle converter. Same opt-in model: forced if none exist, else a 3-second Y/N.
+set "FM_RAGDOLL_DIR=%~dp0build\staging-release\fx\source_mvm_fx\models\filmmaker\improved_ragdolls"
+set "FM_RAGDOLL_REBUILD=0"
+if not exist "%FM_RAGDOLL_DIR%" (
+    echo No compiled Improved Ragdolls found on disk - building them now.
+    set "FM_RAGDOLL_REBUILD=1"
+) else (
+    choice /c YN /t 3 /d N /m "Rebuild the Improved Ragdolls before the full build (auto-No in 3s)"
+    if not errorlevel 2 set "FM_RAGDOLL_REBUILD=1"
+)
+if "!FM_RAGDOLL_REBUILD!"=="1" (
+    echo Building Improved Ragdolls...
+    powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0fx\tools\build-improved-ragdolls.ps1" -Stage
+    if errorlevel 1 (
+        echo WARNING: Improved Ragdolls build FAILED; continuing ^(ragdoll toggle falls back to stock physics^).
+        timeout /t 5 >nul
+    )
+) else (
+    echo Keeping the existing Improved Ragdolls ^(skipped; answer Y within 3s to rebuild^).
+)
+echo.
+
 echo === Locating Visual Studio 2022 ===
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist "%VSWHERE%" (
@@ -151,7 +177,9 @@ REM only >=8 is a real failure, so guard on errorlevel 8 (a bare errorlevel 1 wo
 set "FM_FX_STAGE_DIR=%~dp0build\staging-release\fx\source_mvm_fx"
 if exist "%FM_FX_PACK_DIR%\particles" (
     echo Staging compiled FX pack into the release folder: %FM_FX_STAGE_DIR%
-    robocopy "%FM_FX_PACK_DIR%" "%FM_FX_STAGE_DIR%" /MIR /NFL /NDL /NJH /NJS /NP /R:1 /W:1 >nul
+    REM /XD excludes the Improved Ragdolls subtree: it is owned + staged by the separate
+    REM standalone ragdoll build, so this particle /MIR must not delete or overwrite it.
+    robocopy "%FM_FX_PACK_DIR%" "%FM_FX_STAGE_DIR%" /MIR /XD "%FM_FX_STAGE_DIR%\models\filmmaker\improved_ragdolls" /NFL /NDL /NJH /NJS /NP /R:1 /W:1 >nul
     if errorlevel 8 (
         echo WARNING: failed to stage the FX pack into build\staging-release; the shipped
         echo build may launch without custom particles. Scroll up for robocopy errors.

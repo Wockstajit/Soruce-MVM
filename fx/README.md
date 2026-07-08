@@ -8,7 +8,7 @@ from `automation/` (which is test-only).
 |---|---|---|---|
 | **Povarehok** | On / Less | `reference/csgo effect mod/` (git-ignored, ~GB CS:GO mod) | `particles/filmmaker/povarehok/{regular,less/impacts,less/smoke}/` |
 | **Modern** (MW2019) | Modern | [`sources/modern-warfare-gmod/`](sources/modern-warfare-gmod/) (committed, ~44 MB) | `particles/filmmaker/modern/...` |
-| **Improved Ragdolls** | Runtime toggle | [`sources/improved-ragdolls/`](sources/improved-ragdolls/) canonical player `.phy` + current Valve models via VRF | `models/filmmaker/improved_ragdolls/...` |
+| **Improved Ragdolls** | Runtime toggle | current Valve player models via VRF (Valve `PHYS` block grafted post-compile) | `models/filmmaker/improved_ragdolls/...` |
 
 Both packs are produced by **one converter run** and mounted at runtime by
 `AfxHookSource2/Filmmaker/Movie/ParticleFx*.cpp` (swap tables: `ParticleFxRules.cpp`).
@@ -26,7 +26,7 @@ fx/
     postprocess_common.py             shared CS2 VPCF fixes (see docs/povarehok-csgo-mod-reference.md §10)
     postprocess_povarehok.py          Povarehok-only fixes + CLI entry point (drives postprocess_common/_modern too)
     postprocess_modern.py             Modern (MW2019)-only fixes
-    convert-improved-ragdolls.py      Source 1 PHY metadata + VRF CS2 models -> ModelDoc ragdolls
+    convert-improved-ragdolls.py      VRF CS2 models -> improved-ragdoll namespace + Valve PHYS graft
     validate-povarehok-assets.py      runtime resource-closure check
   sources/
     modern-warfare-gmod/              committed Modern (MW2019) Source 1 inputs
@@ -55,28 +55,43 @@ powershell -File fx/tools/convert-povarehok-source1.ps1 -Compile
 
 ### Improved Ragdolls
 
-`convert-improved-ragdolls.py` verifies the deduplicated canonical player sidecar by
-SHA-256. It extracts 21 body definitions, 20 joint
-constraints, damping, inertia, and the authored total mass of 800. The Source 1 masses
-are proportionally normalized to Valve CS2's 272-unit player mass; copying 800 literally
-made the port 2.94x heavier and produced the reported unnaturally fast collapse. VRF decompiles every
-current `agents/models/ctm_*` and `agents/models/tm_*` player model to ModelDoc 28; the
-tool then adds per-body mass markup, conical joints, and the six intermediate physics
-bodies absent from stock CS2. Missing shapes are derived from each model's hitboxes so
-the current Valve skeleton remains authoritative.
+`convert-improved-ragdolls.py` runs in two phases. **Prepare:** VRF decompiles every
+current `agents/models/ctm_*` and `agents/models/tm_*` player model and relocates it
+verbatim under `models/filmmaker/improved_ragdolls/agents/models/...` (no physics editing).
+**Graft** (`--graft-phys`, run by `convert-povarehok-source1.ps1` *after* resourcecompiler):
+raw-extracts each agent's stock `vmdl_c` and grafts its compiled `PHYS` block — Valve's
+exact joint reference frames, masses (272), inertia and damping — into the recompiled
+improved model, rebuilding the resource block table cleanly.
+
+The graft exists because **CS2's compiler drops Valve's authored ragdoll physics on any
+recompile**: a decompiled agent recompiles to `m_joints = []` with zero mass, and no
+source-level ModelDoc node can recreate a joint's reference frames (`PhysicsJointConical`
+only fills the child frame, leaving the parent frame at identity → limits orient around the
+wrong axis → the ragdoll goes floppy and collapses). The earlier attempt to port jahpeg's
+Source 1 PHY metadata (per-body mass markup, conical joints, six extra bodies) is why the
+old models distorted; that path is gone. `player-profile.phy` is now unused.
 
 The generated models use an alternate `models/filmmaker/improved_ragdolls/agents/models/...`
 namespace. The main-thread toggle selects the alternate model on living pawns and never
-swaps an existing dead body; this lets CS2 initialize ragdoll physics normally and makes
-mid-demo toggles apply safely to future deaths. Off selects genuine Valve physics.
+swaps an existing dead body; because the grafted PHYS is byte-for-byte Valve physics, the
+result is indistinguishable from stock (the toggle is currently a correct-but-neutral base
+for future reactive ragdoll modes). Off selects genuine Valve physics.
 
-The generated sources and compiled models live only under `build/fx/`. Hostage files,
-Source 1 sound scripts/WAVs, and duplicate `.phy` sidecars are never staged. After a CS2
-update, rebuild the FX pack to regenerate wrappers from Valve's current models.
+Improved Ragdolls have their **own standalone build**, fully independent of the particle
+packs above: [`fx/tools/build-improved-ragdolls.ps1`](tools/build-improved-ragdolls.ps1)
+(its own content/game dirs, gameinfo, and CS2 junctions). It shares only the runtime
+`source_mvm_fx` mount at stage time and owns solely the `models/filmmaker/improved_ragdolls/`
+subtree there. The particle converter must never build ragdolls, and this script must never
+build particles. After a CS2 update, rerun it to regenerate wrappers from Valve's current
+models.
 
-`build.bat` runs this opt-in (3-second prompt, defaults to No; forced on a fresh checkout),
-then stages the compiled `source_mvm_fx` game dir into `build/staging-release/fx/` so the
-shipped build is self-contained. `automation/launch/launch-cs2-netcon.ps1` mounts it via
+```
+powershell -ExecutionPolicy Bypass -File fx\tools\build-improved-ragdolls.ps1 -Stage
+```
+
+`build.bat` runs it as a separate opt-in step (3-second prompt, defaults to No; forced when
+none exist), and it stages its models into `build/staging-release/fx/` so the shipped build
+is self-contained. `automation/launch/launch-cs2-netcon.ps1` mounts the shared FX dir via
 `USRLOCALCSGO`.
 
 ## Docs

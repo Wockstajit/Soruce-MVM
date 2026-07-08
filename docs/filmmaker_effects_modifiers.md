@@ -6,6 +6,14 @@ player models so CS2 can initialize physics normally at death. Existing bodies a
 swapped when the option changes; the new setting applies to future deaths. Off selects
 Valve's original player models and stock physics. Agent appearance remains unchanged.
 
+The improved models carry Valve's exact ragdoll physics: the build grafts each agent's
+stock compiled `PHYS` block (joint reference frames, 272 total mass, inertia, damping) into
+the recompiled model, because CS2's compiler otherwise drops Valve's authored physics on
+recompile and leaves the ragdoll floppy (legs collapse, torso pinches thin). The result is
+currently indistinguishable from stock — a correct, neutral base for the planned reactive
+ragdoll modes (Default / Improved / Euphoria-like / CoD-like) that will react to hit
+location at death.
+
 Runtime particle-effect control for demo playback: per-category **On / Less / Modern /
 Off** (each category only offers the modes it has real assets for) over the demo's visual
 effects, toggled live from the Config panel (`mirv_filmmaker config`) or the console
