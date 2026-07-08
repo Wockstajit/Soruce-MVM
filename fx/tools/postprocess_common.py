@@ -641,11 +641,6 @@ def write_if_different(root: Path, res: str, text: str, changed: list[str]) -> N
         changed.append(res)
 
 
-def _spray_wrapper_res(flash_res: str) -> str:
-    folder, name = flash_res.rsplit("/", 1)
-    return f"{folder}/mvm_spray_{name}"
-
-
 def _ensure_viewmodel_effect_flag(text: str) -> str:
     if "m_bViewModelEffect = true" in text:
         return text

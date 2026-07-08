@@ -78,9 +78,7 @@ std::string FxDebugHud::BuildStateJson() {
 	o << ",\"litMuzzle\":" << (LitMs(st.muzzleMs, st.nowMs, st.muzzleN) ? "true" : "false");
 	o << ",\"litTracer\":" << (LitMs(st.tracerMs, st.nowMs, st.tracerN) ? "true" : "false");
 	o << ",\"litOnSmoke\":" << (LitMs(st.onSmokeMs, st.nowMs, st.onSmokeN) ? "true" : "false");
-	o << ",\"litOnWisp\":" << (LitMs(st.onWispMs, st.nowMs, st.onWispN) ? "true" : "false");
 	o << ",\"litModSmoke\":" << (LitMs(st.modSmokeMs, st.nowMs, st.modSmokeN) ? "true" : "false");
-	o << ",\"litModWisp\":" << (LitMs(st.modWispMs, st.nowMs, st.modWispN) ? "true" : "false");
 	o << "}";
 	return o.str();
 }

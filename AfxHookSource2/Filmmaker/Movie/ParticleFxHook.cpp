@@ -414,64 +414,11 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 							if (const char* t = VariantTargetLower(cat, m, low)) {
 								action = '>';
 								target = t;
-								// Sustained fire upgrades a muzzle flash to its
-								// flash+barrel-smoke spray wrapper (see ParticleFxSpray.cpp).
-								const char* spray = SprayUpgradeFor(t);
-								bool sprayUpgraded = false;
-								if (spray) {
-									const int tickNow = g_demoTickNow.load(std::memory_order_relaxed);
-									int sprayCount = 0;
-									{
-										const auto it = g_sprayHeat.find(low);
-										if (it != g_sprayHeat.end())
-											sprayCount = it->second.count;
-									}
-									const int hotCount = kSprayHotCount;
-									const bool wasHot = sprayCount >= hotCount;
-									// Heat is always counted; the bypass ("fx align gate
-									// off") only widens the upgrade to every shot.
-									const bool hotNow = SprayHotLocked(low, hotCount);
-									if (hotNow || g_sprayGateBypass.load(std::memory_order_relaxed)) {
-										// GMod AfterShotParticle semantics: ONE smoke per burst. Upgrade
-										// only the shot that STARTED the burst (count==1; the wrapper's
-										// smoke child blooms AFTERSHOT_SMOKE_DELAY later, i.e. right
-										// after short bursts end), with a re-arm guard so rapid taps
-										// can't stack plumes (we cannot StopEmission the previous
-										// instance like GMod's Lua does).
-										SprayHeat& h = g_sprayHeat[low];
-										const bool burstStart = h.count <= 1;
-										if (tickNow >= 0 && tickNow < h.lastUpgradeTick)
-											h.lastUpgradeTick = -0x40000000; // seeked backward
-										const bool rearmed = tickNow < 0
-											|| tickNow - h.lastUpgradeTick >= kSprayUpgradeCooldownTicks;
-										if ((burstStart && rearmed)
-											|| g_sprayGateBypass.load(std::memory_order_relaxed)) {
-											target = spray;
-											sprayUpgraded = true;
-											h.lastUpgradeTick = tickNow;
-										}
-									}
-									// #region agent log
-									if (DbgIsBarrelSmokePath(low) || DbgIsBarrelSmokePath(t)
-										|| DbgIsBarrelSmokePath(spray)) {
-										int afterCount = sprayCount;
-										{
-											const auto it = g_sprayHeat.find(low);
-											if (it != g_sprayHeat.end())
-												afterCount = it->second.count;
-										}
-										DbgAgentLog(sprayUpgraded ? "H1" : "H3",
-											"ParticleFxHook.cpp:Hook_CreateBody",
-											sprayUpgraded ? "spray wrapper upgrade" : "muzzle swap pre-spray",
-											low, t, target.c_str(), afterCount, tickNow, wasHot, sprayUpgraded);
-									}
-									// #endregion
-								} else if (DbgIsBarrelSmokePath(low) || DbgIsBarrelSmokePath(t)) {
+								if (DbgIsBarrelSmokePath(low) || DbgIsBarrelSmokePath(t)) {
 									// #region agent log
 									DbgAgentLog("H4", "ParticleFxHook.cpp:Hook_CreateBody",
-										"smoke-related swap (no spray pair)",
-										low, t, target.c_str(), 0,
-										g_demoTickNow.load(std::memory_order_relaxed), false, false);
+										"smoke-related swap",
+										low, t, target.c_str(), g_demoTickNow.load(std::memory_order_relaxed));
 									// #endregion
 								}
 							}
@@ -518,26 +465,14 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 				const bool isModern = target.find("/modern/") != std::string::npos;
 				const bool isPvrh = target.find("/povarehok/") != std::string::npos;
 				const bool isSmoke = target.find("muzzle_smoke") != std::string::npos
-					|| target.find("barrel_smoke") != std::string::npos
-					|| target.find("mvm_spray_") != std::string::npos;
-				const bool isWispWrapper = target.find("mvm_spray_") != std::string::npos
-					|| target.find("weapon_muzzle_smoke_long") != std::string::npos
 					|| target.find("barrel_smoke") != std::string::npos;
 				if (isPvrh && isSmoke) {
 					g_dbgOnSmokeMs.store(nowMs, std::memory_order_relaxed);
 					g_dbgOnSmokeN.fetch_add(1, std::memory_order_relaxed);
 				}
-				if (isPvrh && isWispWrapper) {
-					g_dbgOnWispMs.store(nowMs, std::memory_order_relaxed);
-					g_dbgOnWispN.fetch_add(1, std::memory_order_relaxed);
-				}
 				if (isModern && isSmoke) {
 					g_dbgModSmokeMs.store(nowMs, std::memory_order_relaxed);
 					g_dbgModSmokeN.fetch_add(1, std::memory_order_relaxed);
-				}
-				if (isModern && isWispWrapper) {
-					g_dbgModWispMs.store(nowMs, std::memory_order_relaxed);
-					g_dbgModWispN.fetch_add(1, std::memory_order_relaxed);
 				}
 				// #region agent log
 				DbgWatchLog("H-watch-hud", "debug square lit for watched player shot",
@@ -557,14 +492,11 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 		// #region agent log (session 7803fe: Modern barrel FX alignment per weapon)
 		if (action != '=' && target.find("/modern/") != std::string::npos) {
 			const char* wclass = DbgModernAlignClass(target);
-			const bool isWisp = target.find("barrel_smoke_trail") != std::string::npos
-				|| target.find("mvm_spray_muzzleflash_") != std::string::npos;
 			const bool isSmoke = target.find("barrel_smoke_plume") != std::string::npos
 				|| target.find("barrel_smoke.vpcf") != std::string::npos;
-			const bool isFlash = target.find("muzzleflash_") != std::string::npos
-				&& target.find("mvm_spray_") == std::string::npos;
-			if (wclass && (isWisp || isSmoke || isFlash)) {
-				const char* effect = isWisp ? "wisp" : (isSmoke ? "barrelsmoke" : "muzzleflash");
+			const bool isFlash = target.find("muzzleflash_") != std::string::npos;
+			if (wclass && (isSmoke || isFlash)) {
+				const char* effect = isSmoke ? "barrelsmoke" : "muzzleflash";
 				char msg[96];
 				snprintf(msg, sizeof(msg), "modern %s %s swap (vpcf offset 0.5,0,0)", wclass, effect);
 				DbgWatchLog("H-barrel-align", msg,
@@ -577,8 +509,7 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 
 		// #region agent log (session 7803fe)
 		if (DbgIsFlickerRelevant(low)) {
-			const bool isComposition = target.find("mvm_spray_") != std::string::npos
-				|| target.find("mvm_muzzleflash_sniper") != std::string::npos
+			const bool isComposition = target.find("mvm_muzzleflash_sniper") != std::string::npos
 				|| target.find("mvm_grenade_trail") != std::string::npos;
 			const unsigned long long nowMs = GetTickCount64();
 			unsigned long long lastMs = 0;
@@ -594,7 +525,7 @@ void* __fastcall Hook_CreateBody(unsigned long long thisOrFlag, void* handle, vo
 			}
 			DbgFlickerLog(isDuplicate ? "A-dup" : (isComposition ? "B-comp" : "C-normal"),
 				isDuplicate ? "possible duplicate create (same name <20ms apart)"
-					: (isComposition ? "composition/spray-wrapper target created" : "muzzle/smoke/tracer create"),
+					: (isComposition ? "composition target created" : "muzzle/smoke/tracer create"),
 				raw, action == '=' ? "(pass)" : target.c_str(), isComposition, isDuplicate,
 				(long long)(lastMs ? (nowMs - lastMs) : -1),
 				g_demoTickNow.load(std::memory_order_relaxed));

@@ -1453,14 +1453,6 @@ def apply_modern_gameplay_composites(root: Path, *, tune_tracer_brightness: bool
             path.write_text(new_text, encoding="utf-8")
             changed.append(res)
 
-    # FP viewmodel twins for barrel smoke + rope wisps (reload follow fix; world twins above).
-    for res in MODERN_LIVE_BARREL_SMOKE_FILES + MODERN_BARREL_TRAIL_FILES:
-        path = common.resource_path(root, res)
-        if not path.is_file():
-            continue
-        world = path.read_text(encoding="utf-8")
-        common.write_if_different(root, _fp_variant_res(res), make_modern_smoke_fp(world), changed)
-
     for res in MODERN_MUZZLEFLASH_FILES:
         path = common.resource_path(root, res)
         if not path.is_file():
@@ -1523,61 +1515,36 @@ def apply_modern_gameplay_composites(root: Path, *, tune_tracer_brightness: bool
     # has NO such child, so its classes never got a wisp at all. Give it the
     # OTHER trail file (barrel_smoke_trail.vpcf, previously unused by anything)
     # instead of duplicating barrel_smoke's own trail_b onto it.
-    modern_trail_children = {
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf": f"{MODERN_MUZZLE_DIR}/barrel_smoke_trail.vpcf",
-        f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume_fp.vpcf": f"{MODERN_MUZZLE_DIR}/barrel_smoke_trail_fp.vpcf",
+    removed_smoke_children = {
+        "barrel_smoke.vpcf",
+        "barrel_smoke_fp.vpcf",
+        "barrel_smoke_plume.vpcf",
+        "barrel_smoke_plume_fp.vpcf",
+        "barrel_smoke_trail.vpcf",
+        "barrel_smoke_trail_fp.vpcf",
+        "barrel_smoke_trail_b.vpcf",
+        "barrel_smoke_trail_b_fp.vpcf",
     }
-    for parent_res, child_res in modern_trail_children.items():
-        if not common.resource_path(root, child_res).is_file():
-            continue
-        if common._add_child_once(common.resource_path(root, parent_res), child_res):
-            changed.append(parent_res)
+    for res in MODERN_LIVE_BARREL_SMOKE_FILES:
+        path = common.resource_path(root, res)
+        if path.is_file() and common.remove_child_refs(path, removed_smoke_children):
+            changed.append(res)
 
     for res, children in {**MVM_COMPOSITIONS, **MVM_COMPOSITIONS_FP}.items():
         if not all(common.resource_path(root, c).is_file() for c in children):
             continue
         common.write_if_different(root, res, common._composition_text(children), changed)
-        # Sniper comps additionally get an mvm_spray_ wrapper adding the .50-cal plume
-        # (see the MVM_COMPOSITIONS comment; the grenade trail is not muzzle smoke).
-        if "mvm_muzzleflash_sniper" in res:
-            plume = f"{MODERN_MUZZLE_DIR}/barrel_smoke_plume.vpcf"
-            plume_fp = _fp_variant_res(plume)
-            child = plume_fp if res.endswith("_fp.vpcf") else plume
-            if common.resource_path(root, child).is_file():
-                common.write_if_different(
-                    root,
-                    common._spray_wrapper_res(res),
-                    common._composition_text(
-                        (res, (child, common.AFTERSHOT_SMOKE_DELAY))),
-                    changed,
-                )
-
-    # Spray wrappers (flash + barrel smoke), world + _fp; the hook upgrades to these
-    # under its smoke cooldown (see MODERN_FLASH_SMOKE_CHILDREN comment). The old
-    # direct smoke children are stripped from already-patched trees. _fp wrappers use
-    # _fp smoke twins so reload animations track the viewmodel muzzle in first person.
+    # Strip old smoke children from already-patched trees. Do not generate mvm_spray_*
+    # wrappers or first-person smoke twins; the runtime no longer swaps to them.
     for name, smoke in MODERN_FLASH_SMOKE_CHILDREN.items():
         smoke_res = f"{MODERN_MUZZLE_DIR}/{smoke}"
         smoke_fp_res = _fp_variant_res(smoke_res)
-        if not common.resource_path(root, smoke_res).is_file():
-            continue
         for flash_res in (f"{MODERN_MUZZLE_DIR}/{name}", _fp_variant_res(f"{MODERN_MUZZLE_DIR}/{name}")):
             flash_path = common.resource_path(root, flash_res)
             if not flash_path.is_file():
                 continue
-            is_fp = flash_res.endswith("_fp.vpcf")
-            child_smoke = smoke_fp_res if is_fp else smoke_res
-            if not common.resource_path(root, child_smoke).is_file():
-                child_smoke = smoke_res
             if common.remove_child_refs(flash_path, {smoke_res, smoke_fp_res}):
                 changed.append(flash_res)
-            common.write_if_different(
-                root,
-                common._spray_wrapper_res(flash_res),
-                common._composition_text(
-                    (flash_res, (child_smoke, common.AFTERSHOT_SMOKE_DELAY))),
-                changed,
-            )
 
     patch_modern_shell_port_smoke(root, changed)
 

@@ -4,6 +4,7 @@
 #include "CosmeticModelSwap.h"
 #include "CosmeticDirectComposite.h"
 #include "CosmeticDebugLog.h"
+#include "../Movie/RagdollFx.h"
 
 #include "../Demo/PlayingDemoPath.h"
 
@@ -1400,7 +1401,9 @@ int CosmeticOverrideSystem::ApplyPawnCosmetics() {
 
 		// AGENT (player model). Gate on both model hash and pawn pointer so a seek/entity recreation
 		// always reapplies even when the requested model path did not change.
-		if (prof->agent.set && !prof->agent.model.empty()) {
+		// A dead pawn retains the agent model applied while alive. Reasserting SetModel after
+		// death restarts ragdoll physics and fights the optional Improved Ragdolls swapper.
+		if (pawnEnt->GetHealth() > 0 && prof->agent.set && !prof->agent.model.empty()) {
 			uint64_t h = 1469598103934665603ULL; // FNV-1a of the model path
 			for (char c : prof->agent.model) { h ^= (unsigned char)c; h *= 1099511628211ULL; }
 			auto it = m_agentState.find(steamId);
@@ -1412,7 +1415,7 @@ int CosmeticOverrideSystem::ApplyPawnCosmetics() {
 			} else {
 				// Re-assert periodically so a demo seek that recreated the pawn re-applies. Cheap: a
 				// SetModel with the same path is a no-op once cached, and only one pawn per profile.
-				if ((m_lastStats.frame % 32) == 0)
+				if (!RagdollFx_Enabled() && (m_lastStats.frame % 32) == 0)
 					ApplyAgentModel(pawn, prof->agent.model.c_str());
 			}
 		}

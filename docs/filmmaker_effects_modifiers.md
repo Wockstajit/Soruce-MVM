@@ -1,5 +1,11 @@
 # Effects modifiers (Config panel EFFECTS section)
 
+The EFFECTS section also exposes **Improved Ragdolls**. It defaults Off and can be
+toggled with `mirv_filmmaker ragdoll on|off|toggle`. The selection is carried by living
+player models so CS2 can initialize physics normally at death. Existing bodies are never
+swapped when the option changes; the new setting applies to future deaths. Off selects
+Valve's original player models and stock physics. Agent appearance remains unchanged.
+
 Runtime particle-effect control for demo playback: per-category **On / Less / Modern /
 Off** (each category only offers the modes it has real assets for) over the demo's visual
 effects, toggled live from the Config panel (`mirv_filmmaker config`) or the console

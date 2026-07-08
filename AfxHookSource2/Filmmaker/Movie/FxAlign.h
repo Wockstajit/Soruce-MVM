@@ -1,8 +1,8 @@
 #pragma once
 
 // Modern muzzle-FX alignment probe ("mirv_filmmaker fx align ..."): measures, in Source
-// units, how far the Modern pack's muzzle flash / barrel smoke / sustained wisp actually
-// spawn from the spectated player's weapon muzzle attachment. Replaces the screenshot
+// units, how far the Modern pack's muzzle flash / barrel smoke actually spawn from the
+// spectated player's weapon muzzle attachment. Replaces the screenshot
 // pixel audit (automation/verify/audit-modern-muzzle-alignment.py) as the pass/fail
 // metric -- pixels vary with FOV/resolution/flash timing; this measures world distance.
 //

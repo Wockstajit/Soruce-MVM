@@ -19,6 +19,7 @@
 #include "Movie/BodyCam.h"
 #include "Movie/ViewFx.h"
 #include "Movie/ParticleFx.h"
+#include "Movie/RagdollFx.h"
 #include "Movie/MovieMode.h"
 #include "Movie/DemoEndHold.h"
 #include "Movie/ThirdPersonCamera.h"
@@ -88,10 +89,11 @@ void PrintHelp(const char* cmd) {
 		"%s config [on|off|toggle] - lightweight CONFIG panel (general UI / display settings, no camera tools).\n"
 		"%s viewfx roll|bob|sway|deadzone [<0-150>|off] - camera-feel modifiers (strafe roll, camera walk-bob, weapon sway, decoupled-viewmodel aim deadzone), as an intensity percent.\n"
 		"%s fx [...] - particle-effect toggles: impacts/tracers/muzzle/blood/explosions/molotov per-category On|Less|Off (run for sub-help; also in the Config panel).\n"
+		"%s ragdoll [on|off|toggle|status] - improved 21-body player ragdolls (default off; also in Config).\n"
 		"%s bodycam [on|off|toggle] - one-click chest-cam preset on the spectated player (uses the Follow system).\n"
 		"%s actioncam [on|off|toggle] - one-click head-mounted GoPro-style preset on the spectated player; 'actioncam fisheye on|off' toggles the lens distortion.\n"
 		"%s follow [...] - place and control a Follow / Lock-On camera.\n"
-		, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd
+		, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd, cmd
 	);
 }
 
@@ -273,6 +275,8 @@ CON_COMMAND(mirv_filmmaker, "Browse and play CS2 demos (filmmaker tool).") {
 		// Particle-effect modifiers: per-category On/Less/Off over impacts, tracers, muzzle
 		// fx, blood, explosions, molotov, map ambience (runtime particle-create hook).
 		Filmmaker::ParticleFx_RunCommand(argc, args, cmd);
+	} else if (0 == _stricmp(sub, "ragdoll")) {
+		Filmmaker::RagdollFx_RunCommand(argc, args, cmd);
 	} else if (0 == _stricmp(sub, "bodycam")) {
 		// One-click chest-cam preset over the existing Follow/Attach system.
 		Filmmaker::BodyCam_RunCommand(argc, args, cmd);

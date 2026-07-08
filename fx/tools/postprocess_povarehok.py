@@ -619,42 +619,12 @@ def fix_warm_impact_smoke_tints(root: Path) -> int:
     return changed
 
 
-# Povarehok gets the same treatment as Modern (user: "the trails show for modern
-# but not for On"): the pack bundles the same FAS barrel-smoke assets as
-# ac_muzzle_shotgun_alt_barrel_smoke(_trail/_trail_b), wired by the mod to only
-# one shotgun variant. Spray wrappers attach it to every automatic/pistol class
-# flash; the single-shot snipers get it as a direct per-shot child below
-# (a 4-shot spray gate can never trigger on a bolt gun).
 PVRH_WEAPON_VARIANTS = ("regular", "less/smoke")
 
 
 def _pvrh_weapon_dir(variant: str) -> str:
     return f"particles/filmmaker/povarehok/{variant}/weapons/cs_weapon_fx"
 
-
-# Authentic Povarehok sustained barrel plume (not the FAS shotgun barrel_smoke
-# asset -- that is Modern-pack geometry and misaligns in CS2 viewmodel space).
-# 2026-07-06 night: the sniper flashes (awp + huntingrifle_fp) moved here from the old
-# per-shot direct-child wiring -- a direct smoke_long child on the autosniper flash
-# stacked one 4s plume PER SHOT at auto fire rate (user: "two smokes on the SCAR-20").
-# As spray-pair bases the hook's upgrade cooldown keeps ONE plume going instead.
-PVRH_SPRAY_FLASHES = (
-    "weapon_muzzle_flash_assaultrifle.vpcf",
-    "weapon_muzzle_flash_assaultrifle_fp.vpcf",
-    "weapon_muzzle_flash_smg.vpcf",
-    "weapon_muzzle_flash_smg_fp.vpcf",
-    "weapon_muzzle_flash_smg_silenced.vpcf",
-    "weapon_muzzle_flash_smg_silenced_fp.vpcf",
-    "weapon_muzzle_flash_assaultrifle_silenced.vpcf",
-    "weapon_muzzle_flash_pistol.vpcf",
-    "weapon_muzzle_flash_pistol_fp.vpcf",
-    "weapon_muzzle_flash_shotgun.vpcf",
-    "weapon_muzzle_flash_shotgun_fp.vpcf",
-    "weapon_muzzle_flash_para.vpcf",
-    "weapon_muzzle_flash_para_fp.vpcf",
-    "weapon_muzzle_flash_awp.vpcf",
-    "weapon_muzzle_flash_huntingrifle_fp.vpcf",
-)
 
 LESS_MUZZLE_SMOKE_SCALE = 0.9
 MUZZLE_SMOKE_ALPHA_FIELDS = ("m_nAlphaMin", "m_nAlphaMax")
@@ -890,94 +860,21 @@ def apply_povarehok_gameplay_composites(root: Path) -> list[str]:
     """Returns the content-relative resources that were written/changed."""
     changed: list[str] = []
 
-    for res in WEAPON_MUZZLE_SMOKE_FILES:
-        path = common.resource_path(root, res)
-        if not path.is_file():
-            continue
-        text = new_text = path.read_text(encoding="utf-8")
-        new_text = patch_cs2_muzzle_smoke_alignment(new_text, sustained=True)
-        if new_text != text:
-            path.write_text(new_text, encoding="utf-8")
-            changed.append(res)
-
-    for path in iter_muzzle_trail_wisp_vpcfs(root):
-        text = new_text = path.read_text(encoding="utf-8")
-        new_text = common.patch_cs2_muzzle_rope_trail_alignment(new_text)
-        # Identical wisp look/physics as Modern's barrel_smoke_trail{,_b} (these ARE the
-        # same FAS assets the Modern pack ships; user 2026-07-06: "position it the same
-        # way it is on Modern"): world-space drift, softened ribbon, buoyant rise.
-        new_text = modern._tune_modern_rope_trail_particles(new_text)
-        if new_text != text:
-            path.write_text(new_text, encoding="utf-8")
-            changed.append(path.relative_to(root).as_posix())
-        rel = path.relative_to(root).as_posix()
-        # FP viewmodel twin so rope wisps follow the barrel during reload animations.
-        wisp_fp_res = _fp_variant_res(rel)
-        common.write_if_different(root, wisp_fp_res, modern.make_modern_smoke_fp(new_text), changed)
-
     for variant in PVRH_WEAPON_VARIANTS:
         weapon_dir = _pvrh_weapon_dir(variant)
         barrel_smoke = f"{weapon_dir}/weapon_muzzle_smoke_long.vpcf"
-        barrel_smoke_fp = _fp_variant_res(barrel_smoke)
         if not common.resource_path(root, barrel_smoke).is_file():
             continue
-        # FP plume twin (written before wisp children are attached to either twin).
-        world_plume = common.resource_path(root, barrel_smoke).read_text(encoding="utf-8")
-        common.write_if_different(
-            root, barrel_smoke_fp, modern.make_modern_smoke_fp(world_plume), changed)
-
-        for name in PVRH_SPRAY_FLASHES:
-            flash_res = f"{weapon_dir}/{name}"
-            flash_path = common.resource_path(root, flash_res)
-            if not flash_path.is_file():
-                continue
-            # Strip the reverted CP-config experiment from already-patched trees, and
-            # the old direct smoke_long child from the sniper flashes (see
-            # PVRH_SPRAY_FLASHES comment -- their smoke is spray-gated now).
-            flash_text = flash_path.read_text(encoding="utf-8")
-            new_flash_text = common.remove_muzzle_follow_config(flash_text)
-            if new_flash_text != flash_text:
-                flash_path.write_text(new_flash_text, encoding="utf-8")
-                changed.append(flash_res)
-            if name in PVRH_PER_SHOT_SMOKE_FLASHES and common.remove_child_refs(
-                    flash_path, {"weapon_muzzle_smoke_long.vpcf", "weapon_muzzle_smoke_long_fp.vpcf"}):
-                changed.append(flash_res)
-            is_fp = name.endswith("_fp.vpcf")
-            smoke_child = barrel_smoke_fp if is_fp else barrel_smoke
-            common.write_if_different(
-                root,
-                common._spray_wrapper_res(flash_res),
-                common._composition_text(
-                    (flash_res, (smoke_child, common.AFTERSHOT_SMOKE_DELAY))),
-                changed,
-            )
-
-        # Same rope-wisp reattachment as Modern (see postprocess_modern's
-        # modern_trail_children), for the "regular" On variant's own
-        # ac_muzzle_*_trail(_b) asset. The mod wires this to exactly one
-        # shotgun variant natively; attach it to the SHARED
-        # weapon_muzzle_smoke_long.vpcf instead so every spray-gated flash AND
-        # both per-shot sniper flashes above get the same follow-the-barrel
-        # wisp the mod's own shotgun already has, instead of just one weapon.
-        # First strip the over-matched trace children an earlier pass attached
-        # (see WRONG_SMOKE_LONG_CHILDREN) from already-patched trees.
-        if common.remove_child_refs(common.resource_path(root, barrel_smoke), WRONG_SMOKE_LONG_CHILDREN):
-            changed.append(barrel_smoke)
-        variant_root = common.resource_path(root, weapon_dir)
+        removed_smoke_children = set(WRONG_SMOKE_LONG_CHILDREN)
         for wisp_path in iter_muzzle_trail_wisp_vpcfs(root):
             try:
-                wisp_path.relative_to(variant_root)
+                wisp_path.relative_to(common.resource_path(root, weapon_dir))
             except ValueError:
                 continue
-            wisp_res = wisp_path.relative_to(root).as_posix()
-            wisp_fp_res = _fp_variant_res(wisp_res)
-            if common._add_child_once(common.resource_path(root, barrel_smoke), wisp_res):
-                changed.append(barrel_smoke)
-            if common.resource_path(root, wisp_fp_res).is_file() and common._add_child_once(
-                    common.resource_path(root, barrel_smoke_fp), wisp_fp_res):
-                changed.append(barrel_smoke_fp)
-
-    write_less_muzzle_smoke_variant(root, changed)
+            removed_smoke_children.add(wisp_path.name)
+            removed_smoke_children.add(_fp_variant_res(wisp_path.name))
+        if common.remove_child_refs(common.resource_path(root, barrel_smoke), removed_smoke_children):
+            changed.append(barrel_smoke)
 
     for res, distort in POVAREHOK_DISTORT_CHILDREN.items():
         if common._add_child_once(common.resource_path(root, res), distort):

@@ -2,7 +2,7 @@
 
 #include "FollowCameraMath.h"        // FollowVec3/FollowAngles + rotate/distance helpers
 #include "FollowTargetProviders.h"   // EntityAt, EntityClass, ResolveAttachTransform
-#include "ParticleFx.h"              // ParticleFx_SetSprayGateBypass (the wisp test gate)
+#include "ParticleFx.h"
 #include "../Cosmetics/CosmeticModelSwap.h" // ReadActiveViewmodelWeaponState (viewmodel weapon entity)
 #include "../Cosmetics/CosmeticDebugLog.h"  // MvmDebugLog_* breadcrumbs
 #include "../../ClientEntitySystem.h"       // AfxGetSpectatedPawnIndex, CEntityInstance
@@ -74,30 +74,25 @@ constexpr double kModernCfgOffset[3] = { 0.25, 0.0, -0.25 };
 
 // ============================== classification =====================================
 
-// Muzzle-FX effect kind off the swap target, or null for targets the probe ignores. Covers BOTH
-// packs (user request 2026-07-07): Modern (arc9_fas_muzzleflashes: muzzleflash_*, barrel_smoke*,
-// mvm_spray_*) AND Povarehok (weapons/cs_weapon_fx: weapon_muzzle_flash_*, weapon_muzzle_smoke*,
-// mvm_spray_weapon_muzzle_flash_*). Classification is by name substring, pack-agnostic.
+// Muzzle-FX effect kind off the swap target, or null for targets the probe ignores.
+// Classification is by name substring, pack-agnostic.
 const char* EffectKindFor(const char* target) {
 	if (!std::strstr(target, "/modern/") && !std::strstr(target, "/povarehok/"))
 		return nullptr;
 	if (std::strstr(target, "mvm_grenade_trail"))
 		return nullptr; // grenade flight trail: not muzzle-anchored
-	// Sustained/spray smoke first (a Povarehok smoke wrapper is mvm_spray_weapon_muzzle_flash_*,
-	// which also contains "muzzle_flash" -- the spray/smoke test must win over the flash test).
-	if (std::strstr(target, "mvm_spray_") || std::strstr(target, "barrel_smoke_trail")
-		|| std::strstr(target, "muzzle_smoke"))
-		return "wisp";
 	if (std::strstr(target, "barrel_smoke"))
+		return "barrelsmoke";
+	if (std::strstr(target, "muzzle_smoke"))
 		return "barrelsmoke";
 	if (std::strstr(target, "muzzleflash") || std::strstr(target, "muzzle_flash"))
 		return "muzzleflash"; // Modern muzzleflash_*/mvm_muzzleflash_sniper_*, Povarehok weapon_muzzle_flash_*
 	return nullptr;
 }
 
-// GMod per-shot class flashes (MODERN_FLASH_SMOKE_CHILDREN in postprocess_modern.py):
-// barrel_smoke + rope wisp are PCF children, so they never get their own swap target.
-// When the parent flash is measured, mirror the same muzzle distance into barrelsmoke/wisp.
+// GMod per-shot class flashes carry barrel_smoke as a child, so it never gets its own
+// swap target. When the parent flash is measured, mirror the muzzle distance into
+// barrelsmoke.
 bool HasPerShotBarrelSmokeChild(const char* target) {
 	if (!target || !std::strstr(target, "muzzleflash_"))
 		return false;
@@ -491,7 +486,6 @@ void ProcessSample(const PendingSample& p) {
 			dist, method, m.source.c_str(), fp ? "fp" : "world", pass ? "pass" : "FAIL");
 	if (0 == std::strcmp(effect, "muzzleflash") && HasPerShotBarrelSmokeChild(p.target.c_str())) {
 		RecordDerivedAlignSample(wclassCopy, "barrelsmoke", dist, pass, method, m.attachment);
-		RecordDerivedAlignSample(wclassCopy, "wisp", dist, pass, method, m.attachment);
 	}
 }
 
@@ -521,12 +515,10 @@ void PrintStatus(const char* cmd) {
 		"%llu gated (not watched player), %llu no-pawn.\n"
 		"  %s fx align on|off - measure Modern muzzle FX spawn distance (Source units).\n"
 		"  %s fx align report - per weapon-class/effect table.  clear - reset + truncate log.\n"
-		"  %s fx align gate on|off - spray-wisp heat gate (off = every shot wisps, TESTING "
-		"ONLY -- restore on).\n"
 		"  %s fx align threshold <units> - pass distance (default 2.5).\n"
 		"  Samples: %%APPDATA%%\\HLAE\\fx_align.jsonl\n",
 		FxAlign_Enabled() ? "ON" : "off", samples, cpScan, samples - cpScan, attach,
-		threshold, pending, dropped, droppedGate, droppedNoPawn, cmd, cmd, cmd, cmd);
+		threshold, pending, dropped, droppedGate, droppedNoPawn, cmd, cmd, cmd);
 }
 
 // One-shot evidence dump: where does the WORLD weapon muzzle sit vs the resolved FIRST-PERSON
@@ -673,23 +665,6 @@ void FxAlign_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* cm
 		advancedfx::Message("fx align: cleared (aggregates + fx_align.jsonl).\n");
 		return;
 	}
-	if (0 == _stricmp(sub, "gate")) {
-		const char* v = (argc >= 5) ? args->ArgV(4) : "";
-		if (0 == _stricmp(v, "on")) ParticleFx_SetSprayGateBypass(false);
-		else if (0 == _stricmp(v, "off")) ParticleFx_SetSprayGateBypass(true);
-		else {
-			advancedfx::Message("fx align: spray gate is %s (%s fx align gate on|off).\n",
-				ParticleFx_SprayGateBypass() ? "OFF (bypassed -- every shot wisps)" : "on",
-				cmd);
-			return;
-		}
-		advancedfx::Message("fx align: spray gate %s.%s\n",
-			ParticleFx_SprayGateBypass() ? "OFF (bypassed)" : "restored ON",
-			ParticleFx_SprayGateBypass()
-				? " Every shot now upgrades to its wisp wrapper -- TESTING ONLY, restore with 'fx align gate on'."
-				: "");
-		return;
-	}
 	if (0 == _stricmp(sub, "threshold")) {
 		if (argc < 5) {
 			std::lock_guard<std::mutex> lock(g_mx);
@@ -713,9 +688,9 @@ void FxAlign_RunCommand(int argc, advancedfx::ICommandArgs* args, const char* cm
 	if (0 == _stricmp(sub, "report")) {
 		std::lock_guard<std::mutex> lock(g_mx);
 		advancedfx::Message("fx align: %d sample(s), threshold %.2f units, %d cp-scan / %d "
-			"config-offset, %d on a real muzzle attachment. gate=%s\n",
+			"config-offset, %d on a real muzzle attachment.\n",
 			g_samples, g_threshold, g_cpScanSamples, g_samples - g_cpScanSamples,
-			g_attachSamples, ParticleFx_SprayGateBypass() ? "BYPASSED" : "on");
+			g_attachSamples);
 		advancedfx::Message("  %-14s %-12s %5s %8s %8s %6s %7s\n",
 			"class", "effect", "n", "mean_u", "max_u", "scan", "pass");
 		bool anyFail = false;

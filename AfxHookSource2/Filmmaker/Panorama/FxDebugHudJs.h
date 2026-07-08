@@ -59,9 +59,7 @@ inline const char* kFxDebugHudJs = R"FXDBGJS(
       { key: 'litMuzzle',  label: 'MUZZLE',   dim: 'rgba(40,40,40,0.75)',  lit: '#ffe066' },
       { key: 'litTracer',  label: 'TRACER',   dim: 'rgba(40,40,40,0.75)',  lit: '#66ff99' },
       { key: 'litOnSmoke', label: 'ON-SMOKE', dim: 'rgba(50,20,50,0.75)',  lit: '#ff66ff' },
-      { key: 'litOnWisp',  label: 'ON-WISP',  dim: 'rgba(50,20,50,0.75)',  lit: '#ff33ff' },
-      { key: 'litModSmoke',label: 'MOD-SMK',  dim: 'rgba(20,40,50,0.75)',  lit: '#66e5ff' },
-      { key: 'litModWisp', label: 'MOD-WISP', dim: 'rgba(20,40,50,0.75)',  lit: '#00e5ff' }
+      { key: 'litModSmoke',label: 'MOD-SMK',  dim: 'rgba(20,40,50,0.75)',  lit: '#66e5ff' }
     ];
 
     var squares = {};

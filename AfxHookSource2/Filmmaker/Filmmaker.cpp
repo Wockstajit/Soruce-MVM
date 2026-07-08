@@ -20,6 +20,7 @@
 #include "Movie/BodyCam.h"
 #include "Movie/ViewFxVm.h"
 #include "Movie/ParticleFx.h"
+#include "Movie/RagdollFx.h"
 #include "Movie/DemoEndHold.h"
 #include "Movie/ThirdPersonCamera.h"
 #include "Cosmetics/CosmeticOverrideSystem.h"
@@ -307,6 +308,9 @@ void RunMainThreadFrame() {
 	// entities. Cheap no-op when nothing is overridden. Entity-touching, so it rides the main
 	// thread alongside the camera/follow passes above.
 	Cosmetics_RunFrame();
+	// Optional improved ragdoll model swap runs after cosmetics so live agent overrides remain
+	// authoritative. It only touches dead player pawns; Off restores Valve model paths.
+	RagdollFx_RunFrame();
 
 	// Camera timeline / curve editor (native-styled scrubber + IWXMVM-style lanes).
 	CameraTimelineHudRef().RunFrame();

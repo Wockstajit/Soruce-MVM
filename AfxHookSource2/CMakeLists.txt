@@ -402,11 +402,12 @@ target_sources(${PROJECT_NAME} PRIVATE
     Filmmaker/Movie/ParticleFxInternal.h
     Filmmaker/Movie/ParticleFxRules.cpp
     Filmmaker/Movie/ParticleFxHook.cpp
-    Filmmaker/Movie/ParticleFxSpray.cpp
     Filmmaker/Movie/ParticleFxMoney.cpp
     Filmmaker/Movie/ParticleFxSettings.cpp
     Filmmaker/Movie/ParticleFxDiagnostics.cpp
     Filmmaker/Movie/ParticleFxPrefetch.cpp
+    Filmmaker/Movie/RagdollFx.cpp
+    Filmmaker/Movie/RagdollFx.h
     Filmmaker/Movie/FxAlign.cpp
     Filmmaker/Movie/FxAlign.h
     Filmmaker/Movie/ThirdPersonCamera.cpp

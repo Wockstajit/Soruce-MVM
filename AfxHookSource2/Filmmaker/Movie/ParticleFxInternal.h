@@ -12,7 +12,6 @@
 //                             target selection + swap-target pre-queueing
 //   ParticleFxHook.cpp        SEH-guarded engine reads, vtable resolution, the
 //                             create-collection detour, handle resolution + JIT redirect
-//   ParticleFxSpray.cpp       spray-gated barrel smoke (SprayHeat/SprayPair)
 //   ParticleFxMoney.cpp       money-on-headshot candidates + game-event plumbing
 //   ParticleFxDiagnostics.cpp FxDebugHud state, telemetry ring/name stats, agent logs,
 //                             watched-player fire window
@@ -56,20 +55,6 @@ struct HandleCacheEntry {
 	unsigned long long retryAtMs = 0; // for failed resolves: don't re-resolve until then
 };
 
-struct SprayPair {
-	const char* base;  // the swap target a variant rule produced
-	const char* spray; // the wrapper to use instead while spraying
-};
-
-struct SprayHeat {
-	int lastTick = -0x40000000;
-	int count = 0;
-	// Demo tick of the last spray-wrapper upgrade for this name: the upgrade cooldown
-	// (kSprayUpgradeCooldownTicks) keeps ONE smoke instance going per weapon instead of
-	// stacking a new plume/wisp on every shot (user request 2026-07-06).
-	int lastUpgradeTick = -0x40000000;
-};
-
 constexpr size_t kRingCap = 128;
 constexpr size_t kNameStatsCap = 8192;
 
@@ -77,19 +62,6 @@ constexpr size_t kNameStatsCap = 8192;
 // engine always gets a valid collection back (returning null risks crashing callers).
 constexpr const char* kEmptySystem = "particles/dev/empty.vpcf";
 constexpr const char* kMoneyBurst = "particles/filmmaker/povarehok/regular/impact_fxmoney/impact_helmet_headshot.vpcf";
-
-// Demo-tick based so playback speed does not distort the window (an 0.1x slow-mo
-// spray is still a spray). See ParticleFxSpray.cpp.
-constexpr int kSprayWindowTicks = 32; // ~0.5s at 64 tick between consecutive shots
-// GMod AfterShotParticle semantics (user request 2026-07-06): ONE smoke per burst.
-// The hook upgrades only the shot that STARTED a burst (SprayHeat.count == 1); the
-// wrapper's smoke child carries AFTERSHOT_SMOKE_DELAY (postprocess_common.py, 0.45s)
-// so for short bursts it blooms right after firing stops, like GMod's burst-end
-// spawn. The re-arm guard below bounds plume overlap on rapid taps (GMod stops the
-// previous instance's emission per shot -- no such verb is RE'd for CS2, so overlap
-// is bounded instead of canceled).
-constexpr int kSprayHotCount = 1;
-constexpr int kSprayUpgradeCooldownTicks = 128; // re-arm guard, ~2s at 64 tick
 
 // ============================== core state (ParticleFx.cpp) ========================
 
@@ -164,17 +136,6 @@ void ResolveHandleOnMainThread(const char* name);
 // mid-air. Independent of g_enabled (a camera-correctness gate, not an EFFECTS mode).
 extern std::atomic<bool> g_fpFxSuppress;
 
-// ============================== spray (ParticleFxSpray.cpp) ========================
-
-extern std::atomic<bool> g_sprayGateBypass;
-extern std::map<std::string, SprayHeat> g_sprayHeat; // guarded by g_mx
-
-const SprayPair* SprayPairs(size_t& count);
-const char* SprayUpgradeFor(const char* target);
-// g_mx held. Counts this creation of `low` and returns true once `hotCount` consecutive
-// shots within kSprayWindowTicks have fired. Same-tick repeats do not accumulate.
-bool SprayHotLocked(const char* low, int hotCount);
-
 // ====================== prefetch (ParticleFxPrefetch.cpp) ==========================
 
 // Once per process: detached background thread that plain-reads every file of the
@@ -200,9 +161,9 @@ extern std::atomic<unsigned long long> g_totalSwapped;
 // FxDebugHud state (see the block comment in ParticleFxDiagnostics.cpp).
 extern std::atomic<bool> g_debugHudEnabled;
 extern std::atomic<unsigned long long> g_dbgMuzzleMs, g_dbgTracerMs, g_dbgOnSmokeMs,
-	g_dbgOnWispMs, g_dbgModSmokeMs, g_dbgModWispMs;
+	g_dbgModSmokeMs;
 extern std::atomic<unsigned long long> g_dbgMuzzleN, g_dbgTracerN, g_dbgOnSmokeN,
-	g_dbgOnWispN, g_dbgModSmokeN, g_dbgModWispN;
+	g_dbgModSmokeN;
 // Watched-player gate: light squares only when a swap coincides with weapon_fire from the
 // spectated POV player (not every other player shooting elsewhere in the demo).
 extern std::atomic<int> g_watchedUserId;
@@ -222,8 +183,7 @@ bool ShouldUpdateFxDebugHud(const char* vanillaLow, int demoTick, char action);
 
 // #region agent log helpers (debug sessions 43a665 / 7803fe)
 void DbgAgentLog(const char* hypothesisId, const char* location, const char* message,
-	const char* vanilla, const char* baseTarget, const char* finalTarget, int sprayCount,
-	int demoTick, bool sprayHot, bool sprayUpgraded);
+	const char* vanilla, const char* baseTarget, const char* finalTarget, int demoTick);
 bool DbgIsBarrelSmokePath(const char* s);
 void DbgFlickerLog(const char* hypothesisId, const char* message, const char* raw,
 	const char* target, bool isComposition, bool isDuplicate, long long msSinceSameName,

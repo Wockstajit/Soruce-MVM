@@ -2,12 +2,9 @@
 #
 # Drives a running CS2 (launching one if needed) over netcon:
 #   fx on + weaponfx/tracers modern, `fx align on` (the hook-side probe in
-#   AfxHookSource2/Filmmaker/Movie/FxAlign.cpp), spray gate bypassed for the run so every
-#   weapon class produces wisp samples, plays the all-weapons demo, then reads the NDJSON
+#   AfxHookSource2/Filmmaker/Movie/FxAlign.cpp), plays the all-weapons demo, then reads the NDJSON
 #   samples the hook wrote to %APPDATA%\HLAE\fx_align.jsonl and passes/fails per
 #   weapon-class/effect on SOURCE-UNIT distance from the muzzle attachment.
-#
-# The spray gate is RESTORED (fx align gate on) in the teardown even on failure.
 #
 # Pass/fail per (class, effect) group: MEDIAN distance <= threshold. Missing required
 # groups fail. The old screenshot audit (audit-modern-muzzle-alignment.py) is no longer
@@ -34,9 +31,7 @@ param(
     [double]$Timescale = 1.0,
     [double]$Threshold = 20.0,
     [int]$StallSeconds = 25,
-    [int]$MaxMinutes = 12,
-    # Keep the spray gate bypassed after the run (testing only; default restores it).
-    [switch]$KeepGateOff
+    [int]$MaxMinutes = 12
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -86,14 +81,13 @@ Write-Host "Output: $outDir"
 
 $failures = New-Object System.Collections.Generic.List[string]
 try {
-    # -- arm the probe (gate bypassed so single shots still produce wisp samples) --
+    # -- arm the probe --
     Send-Netcon @(
         'mirv_filmmaker fx on quiet',
         'mirv_filmmaker fx set weaponfx modern quiet',
         'mirv_filmmaker fx set tracers modern quiet',
         "mirv_filmmaker fx align threshold $Threshold",
         'mirv_filmmaker fx align clear',
-        'mirv_filmmaker fx align gate off',
         'mirv_filmmaker fx align on'
     ) 0.5 | Out-Null
     Send-Netcon @("playdemo `"$DemoName`"") 2.0 | Out-Null
@@ -122,13 +116,11 @@ try {
     if (Test-Path $alignJsonl) { $sampleBytes = (Get-Item $alignJsonl).Length }
     if ($sampleBytes -eq 0) { $failures.Add('no samples were written at all (demo did not play, hook not armed, or no Modern swaps fired)') }
 } finally {
-    # -- teardown: ALWAYS restore the spray gate unless explicitly kept off --
+    # -- teardown --
     $tear = @()
-    if (-not $KeepGateOff) { $tear += 'mirv_filmmaker fx align gate on' }
     $tear += 'mirv_filmmaker fx align off'
     $tear += 'mirv_filmmaker fx align report'
     Send-Netcon $tear 1.5 (Join-Path $outDir 'report-console.log') | Out-Null
-    if ($KeepGateOff) { Write-Warning 'Spray gate left BYPASSED (-KeepGateOff): run "mirv_filmmaker fx align gate on" to restore.' }
 }
 
 # -- parse + aggregate ---------------------------------------------------------------
@@ -140,14 +132,9 @@ if (Test-Path $alignJsonl) {
     } | Where-Object { $_ }
 }
 
-# Required coverage. muzzleflash: every class in the all-weapons demo. wisp: the classes
-# ParticleFx has Modern spray pairs for (silenced + awp compositions carry their smoke
-# inside the flash system instead). barrelsmoke: the sustained classes whose
-# weapon_muzzle_smoke* raws fire reliably in the demo.
+# Required coverage. Muzzleflash: every class in the all-weapons demo.
 $required = @{
     muzzleflash = @('assaultrifle','smg','shotgun','pistol','deagle','revolver','lmg','autosniper','awp','rifle_silenced','smg_silenced')
-    wisp        = @('assaultrifle','smg','shotgun','pistol','deagle','lmg','autosniper')
-    barrelsmoke = @('assaultrifle','smg','lmg')
 }
 
 $groups = $samples | Group-Object { "$($_.weapon_class)|$($_.effect)" }

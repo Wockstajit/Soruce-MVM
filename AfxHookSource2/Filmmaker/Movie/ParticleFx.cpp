@@ -1,7 +1,7 @@
 // ParticleFx core: engine binding + demo state, the apply-now reseek, the ParticleFx
 // class' public methods, the main-thread pump, and the `fx` console command dispatch.
 // The subsystem is split into focused translation units -- see the map in
-// ParticleFxInternal.h (rules / hook / spray / money / settings / diagnostics).
+// ParticleFxInternal.h (rules / hook / money / settings / diagnostics).
 
 #include "ParticleFxInternal.h"
 
@@ -547,7 +547,6 @@ std::string ParticleFx::DebugStateJson() const {
 	b.BeginObject();
 	b.BoolField("installed", g_installed.load());
 	b.BoolField("installFailedHard", g_installFailedHard);
-	b.BoolField("sprayGateBypass", g_sprayGateBypass.load(std::memory_order_relaxed));
 	b.BoolField("align", FxAlign_Enabled());
 	b.BoolField("jitRedirect", g_jitRedirectInstalled);
 	// 0 = Idle (trickle), 1 = WaitSettle, 2 = Bursting. Main-thread state read here for
@@ -837,8 +836,8 @@ void ParticleFx_RunCommand(int argc, advancedfx::ICommandArgs* args, const char*
 			return;
 		}
 		advancedfx::Message("fx: debughud %s. Labeled squares blink per shot (each swap "
-			"toggles them 1-0-1-0) for muzzle / tracer / On-smoke / On-wisp / Modern-smoke "
-			"/ Modern-wisp; they go dark ~1.5s after the last swap.\n",
+			"toggles them 1-0-1-0) for muzzle / tracer / On-smoke / Modern-smoke; "
+			"they go dark ~1.5s after the last swap.\n",
 			g_debugHudEnabled.load(std::memory_order_relaxed) ? "ON" : "off");
 		return;
 	}

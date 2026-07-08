@@ -273,18 +273,6 @@ const VariantRule kVariantWeaponFx[] = {
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_revolver.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",    "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_revolver_fps.vpcf",  "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol_fp", "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle_fp"),
 	FXRULE_MODERN("particles/unified_weapon_fx/uweapon_muzzleflash_pist_fire_revolver.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_flash_pistol",    "arc9_fas_muzzleflashes/muzzleflash_pistol_deagle"),
-	// Sustained-fire barrel smoke: On/Less swap to the pack's weapon_muzzle_smoke_long
-	// (per-shot wisps + lingering plume). Modern uses the MW2019 barrel_smoke assets.
-	FXRULE("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke.vpcf",             "weapons/cs_weapon_fx", "weapon_muzzle_smoke"),
-	FXRULE("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_b.vpcf",           "weapons/cs_weapon_fx", "weapon_muzzle_smoke_b"),
-	FXRULE("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_b_version_2.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_smoke_b_version_#2"),
-	FXRULE("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long"),
-	FXRULE("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long_b.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long_b"),
-	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke.vpcf",             "weapons/cs_weapon_fx", "weapon_muzzle_smoke",             "arc9_fas_muzzleflashes/barrel_smoke"),
-	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_b.vpcf",           "weapons/cs_weapon_fx", "weapon_muzzle_smoke_b",           "arc9_fas_muzzleflashes/barrel_smoke"),
-	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_b_version_2.vpcf", "weapons/cs_weapon_fx", "weapon_muzzle_smoke_b_version_#2", "arc9_fas_muzzleflashes/barrel_smoke"),
-	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long.vpcf",        "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long",        "arc9_fas_muzzleflashes/barrel_smoke_plume"),
-	FXRULE_MODERN("particles/weapons/cs_weapon_fx/weapon_muzzle_smoke_long_b.vpcf",      "weapons/cs_weapon_fx", "weapon_muzzle_smoke_long_b",      "arc9_fas_muzzleflashes/barrel_smoke_plume"),
 	// Brass shell casings. SEPARATED per pack (user directive 2026-07-07 "modern and pov have
 	// different casings; nothing shared"): On/Less render Povarehok's casings (generic CS:GO
 	// shell meshes), Modern renders its OWN casings under modern/weapons/cs_weapon_fx/ that
@@ -530,16 +518,6 @@ void RebuildActiveSwapTargetsLocked(bool invalidateObsoleteHandles) {
 		for (size_t i = 0; i < counts[t]; ++i)
 			if (const char* target = SelectVariantTarget(cats[t], mode, tables[t][i]))
 				addActive(target);
-	}
-	// Spray wrappers are active swap targets, but they are not eagerly resolved during
-	// demo entry. If sustained fire needs one before it is hot, that one creation fails
-	// open and queues only that wrapper instead of cold-loading every wrapper up front.
-	if (g_modes[kFxWeaponFx] != FxMode::Off) {
-		size_t sprayCount = 0;
-		const SprayPair* pairs = SprayPairs(sprayCount);
-		for (size_t i = 0; i < sprayCount; ++i)
-			if (selected(pairs[i].base))
-				addActive(pairs[i].spray);
 	}
 	// Keep every TracerFallbackTarget bucket eligible too (not just the exact-table
 	// targets above), but do not force-load them during demo entry. Untabled tracer names

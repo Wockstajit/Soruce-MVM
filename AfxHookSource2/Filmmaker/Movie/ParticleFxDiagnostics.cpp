@@ -28,31 +28,21 @@ std::atomic<unsigned long long> g_totalNoName{ 0 };
 std::atomic<unsigned long long> g_totalBlocked{ 0 };
 std::atomic<unsigned long long> g_totalSwapped{ 0 };
 
-// #region FxDebugHud wisp squares (user request 2026-07-03: on-screen proof the barrel-smoke
-// wisp's PARENT swap actually fires, distinctly for Modern vs Povarehok On, since the two
-// packs wire the wisp onto different parent assets -- see postprocess_modern.py's
-// modern_trail_children / postprocess_povarehok.py's PVRH_REGULAR_BARREL_SMOKE wiring).
+// #region FxDebugHud squares.
 // Timestamps, not booleans, so FxDebugHud can fade the square out a beat after the swap
-// instead of it strobing on/off every frame. NOTE: this can only observe the PARENT swap --
-// the wisp itself is a m_ChildRef the engine instantiates internally, a call path that never
-// reaches Hook_CreateBody's detour point (confirmed 2026-07-03: it never shows up in
-// 'fx names' either, for the same reason). Gated on g_debugHudEnabled so it costs nothing
-// when off.
+// instead of it strobing on/off every frame. Gated on g_debugHudEnabled so it costs
+// nothing when off.
 std::atomic<bool> g_debugHudEnabled{ false };
 std::atomic<unsigned long long> g_dbgMuzzleMs{ 0 };
 std::atomic<unsigned long long> g_dbgTracerMs{ 0 };
 std::atomic<unsigned long long> g_dbgOnSmokeMs{ 0 };
-std::atomic<unsigned long long> g_dbgOnWispMs{ 0 };
 std::atomic<unsigned long long> g_dbgModSmokeMs{ 0 };
-std::atomic<unsigned long long> g_dbgModWispMs{ 0 };
 // Per-event counters (one increment per swap): the HUD blinks squares on counter parity
 // so each bullet visibly toggles 1-0-1-0 regardless of demo_timescale.
 std::atomic<unsigned long long> g_dbgMuzzleN{ 0 };
 std::atomic<unsigned long long> g_dbgTracerN{ 0 };
 std::atomic<unsigned long long> g_dbgOnSmokeN{ 0 };
-std::atomic<unsigned long long> g_dbgOnWispN{ 0 };
 std::atomic<unsigned long long> g_dbgModSmokeN{ 0 };
-std::atomic<unsigned long long> g_dbgModWispN{ 0 };
 // Watched-player gate: light squares only when a swap coincides with weapon_fire from the
 // spectated POV player (not every other player shooting elsewhere in the demo).
 std::atomic<int> g_watchedUserId{ -1 };
@@ -182,8 +172,7 @@ void DbgAgentLogJsonEscape(std::string* out, const char* s) {
 
 // #region agent log
 void DbgAgentLog(const char* hypothesisId, const char* location, const char* message,
-	const char* vanilla, const char* baseTarget, const char* finalTarget, int sprayCount, int demoTick,
-	bool sprayHot, bool sprayUpgraded) {
+	const char* vanilla, const char* baseTarget, const char* finalTarget, int demoTick) {
 	static const wchar_t* kLogPath =
 		L"c:\\Users\\ayden\\Documents\\Github Projects\\cs2 filmaker\\debug-43a665.log";
 	std::ofstream f(kLogPath, std::ios::app);
@@ -201,10 +190,7 @@ void DbgAgentLog(const char* hypothesisId, const char* location, const char* mes
 	  << "\",\"data\":{\"vanilla\":\"" << v
 	  << "\",\"baseTarget\":\"" << b
 	  << "\",\"finalTarget\":\"" << t
-	  << "\",\"sprayCount\":" << sprayCount
-	  << ",\"demoTick\":" << demoTick
-	  << ",\"sprayHot\":" << (sprayHot ? "true" : "false")
-	  << ",\"sprayUpgraded\":" << (sprayUpgraded ? "true" : "false")
+	  << "\",\"demoTick\":" << demoTick
 	  << "},\"timestamp\":" << ms << "}\n";
 }
 
@@ -259,19 +245,19 @@ bool DbgIsFlickerRelevant(const char* s) {
 
 // #region agent log (FxDebugHud watched-player filter, session 7803fe)
 const char* DbgModernAlignClass(const std::string& target) {
-	if (target.find("muzzleflash_ar") != std::string::npos || target.find("mvm_spray_muzzleflash_ar") != std::string::npos)
+	if (target.find("muzzleflash_ar") != std::string::npos)
 		return "assaultrifle";
-	if (target.find("muzzleflash_smg") != std::string::npos || target.find("mvm_spray_muzzleflash_smg") != std::string::npos)
+	if (target.find("muzzleflash_smg") != std::string::npos)
 		return "smg";
-	if (target.find("muzzleflash_shotgun") != std::string::npos || target.find("mvm_spray_muzzleflash_shotgun") != std::string::npos)
+	if (target.find("muzzleflash_shotgun") != std::string::npos)
 		return "shotgun";
-	if (target.find("muzzleflash_pistol_deagle") != std::string::npos || target.find("mvm_spray_muzzleflash_pistol_deagle") != std::string::npos)
+	if (target.find("muzzleflash_pistol_deagle") != std::string::npos)
 		return "deagle";
-	if (target.find("muzzleflash_pistol") != std::string::npos || target.find("mvm_spray_muzzleflash_pistol") != std::string::npos)
+	if (target.find("muzzleflash_pistol") != std::string::npos)
 		return "pistol";
-	if (target.find("muzzleflash_lmg") != std::string::npos || target.find("mvm_spray_muzzleflash_lmg") != std::string::npos)
+	if (target.find("muzzleflash_lmg") != std::string::npos)
 		return "lmg";
-	if (target.find("muzzleflash_dmr") != std::string::npos || target.find("mvm_spray_muzzleflash_dmr") != std::string::npos)
+	if (target.find("muzzleflash_dmr") != std::string::npos)
 		return "autosniper";
 	if (target.find("muzzleflash_suppressed") != std::string::npos)
 		return "rifle_silenced";
@@ -329,15 +315,11 @@ void ParticleFx_GetDebugHudState(FxDebugHudState& out) {
 	out.muzzleMs = g_dbgMuzzleMs.load(std::memory_order_relaxed);
 	out.tracerMs = g_dbgTracerMs.load(std::memory_order_relaxed);
 	out.onSmokeMs = g_dbgOnSmokeMs.load(std::memory_order_relaxed);
-	out.onWispMs = g_dbgOnWispMs.load(std::memory_order_relaxed);
 	out.modSmokeMs = g_dbgModSmokeMs.load(std::memory_order_relaxed);
-	out.modWispMs = g_dbgModWispMs.load(std::memory_order_relaxed);
 	out.muzzleN = g_dbgMuzzleN.load(std::memory_order_relaxed);
 	out.tracerN = g_dbgTracerN.load(std::memory_order_relaxed);
 	out.onSmokeN = g_dbgOnSmokeN.load(std::memory_order_relaxed);
-	out.onWispN = g_dbgOnWispN.load(std::memory_order_relaxed);
 	out.modSmokeN = g_dbgModSmokeN.load(std::memory_order_relaxed);
-	out.modWispN = g_dbgModWispN.load(std::memory_order_relaxed);
 }
 
 } // namespace Filmmaker

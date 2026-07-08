@@ -9,6 +9,7 @@
 #include "../Movie/BodyCam.h" // MODIFIERS: chest-cam preset state
 #include "../Movie/ActionCam.h" // MODIFIERS: head-cam preset + fisheye lens state
 #include "../Movie/ParticleFx.h" // EFFECTS: per-category particle toggles
+#include "../Movie/RagdollFx.h" // EFFECTS: improved player-ragdoll toggle
 #include "../Filmmaker.h" // CameraEditor_Active/Set (mutual exclusion), CameraEditor_HudViewName
 
 #include "../../DeathMsg.h" // AfxHookSource2_GetPanoramaHudPanel + PanoramaUIPanel offsets
@@ -143,6 +144,7 @@ std::string ConfigHud::BuildStateJson() {
 		o << ",\"fxOn\":" << (fx.Enabled() ? "true" : "false");
 		o << ",\"fxReady\":" << (fx.Installed() ? "true" : "false");
 		o << ",\"fxMoneyshot\":" << (fx.MoneyHeadshot() ? "true" : "false");
+		o << ",\"ragdollOn\":" << (RagdollFx_Enabled() ? "true" : "false");
 		for (int c = 0; c < kFxCategoryCount; ++c)
 			o << ",\"fx_" << FxCategoryKey((FxCategory)c) << "\":\""
 			  << FxModeName(fx.Mode((FxCategory)c)) << "\"";

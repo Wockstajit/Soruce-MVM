@@ -157,13 +157,15 @@ bool IsSupportedModelPath(const char* model) {
 		return false;
 	return 0 == _strnicmp(model, "weapons/models/", 15)
 		|| 0 == _strnicmp(model, "agents/models/", 14)
-		|| 0 == _strnicmp(model, "characters/models/", 18);
+		|| 0 == _strnicmp(model, "characters/models/", 18)
+		|| 0 == _strnicmp(model, "models/filmmaker/improved_ragdolls/agents/models/", 49);
 }
 
 bool IsSupportedPlayerModelPath(const char* model) {
 	return IsSupportedModelPath(model)
 		&& (0 == _strnicmp(model, "agents/models/", 14)
-			|| 0 == _strnicmp(model, "characters/models/", 18));
+			|| 0 == _strnicmp(model, "characters/models/", 18)
+			|| 0 == _strnicmp(model, "models/filmmaker/improved_ragdolls/agents/models/", 49));
 }
 
 namespace {

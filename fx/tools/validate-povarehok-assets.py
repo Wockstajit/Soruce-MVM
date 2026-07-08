@@ -24,15 +24,6 @@ MODERN_RULE_RE = re.compile(
 MODERN_PATH_RE = re.compile(r'"(particles/filmmaker/modern/[^"]+\.vpcf)"')
 MONEY_RE = re.compile(r'kMoneyBurst\s*=\s*"([^"]+\.vpcf)"')
 RESOURCE_RE = re.compile(r'resource:"([^"]+)"')
-# Spray-gated barrel-smoke wrappers (kSprayPairs in ParticleFxSpray.cpp): these swap
-# TARGETS are only ever assembled at runtime via string concatenation inside the
-# MODSPRAY/BPSPRAY macros (a literal + a macro-arg identifier + a literal), so
-# RULE_RE's whole-string match never sees them and they were silently pruned as
-# "unreferenced" before compilation (bug 2026-07-03: "mvm_spray_*.vpcf was not
-# precached correctly" in-game, despite postprocess_povarehok.py/postprocess_modern.py
-# having just generated them). Seed them explicitly from the macro invocations instead.
-MODSPRAY_RE = re.compile(r'MODSPRAY\("([^"]+)"\)')
-BPSPRAY_RE = re.compile(r'BPSPRAY\("([^"]+)"\s*,\s*"([^"]+)"\)')
 MODERN_MUZZLE_DIR = "particles/filmmaker/modern/arc9_fas_muzzleflashes"
 COMPILED_EXTENSIONS = {".vpcf", ".vmat", ".vtex", ".vmdl", ".vsnap"}
 
@@ -59,8 +50,8 @@ def parse_args() -> argparse.Namespace:
 
 def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
     # The ParticleFx subsystem is split across focused translation units (2026-07-04):
-    # the FXRULE variant tables live in ParticleFxRules.cpp, MODSPRAY/BPSPRAY in
-    # ParticleFxSpray.cpp, kMoneyBurst in ParticleFxInternal.h. The converter still
+    # the FXRULE variant tables live in ParticleFxRules.cpp, and kMoneyBurst in
+    # ParticleFxInternal.h. The converter still
     # passes ParticleFx.cpp; scan every sibling ParticleFx* source so the closure
     # covers the whole subsystem no matter which file a table lives in.
     siblings = sorted(cpp_path.parent.glob("ParticleFx*.cpp")) + sorted(
@@ -84,13 +75,6 @@ def runtime_targets(cpp_path: Path, require_modern: bool) -> list[str]:
             targets.add(f"particles/filmmaker/modern/{rel}.vpcf")
         for path in MODERN_PATH_RE.findall(text):
             targets.add(path)
-        for name in MODSPRAY_RE.findall(text):
-            targets.add(f"{MODERN_MUZZLE_DIR}/mvm_spray_{name}.vpcf")
-    for variant, name in BPSPRAY_RE.findall(text):
-        targets.add(
-            f"particles/filmmaker/povarehok/{variant}/weapons/cs_weapon_fx/"
-            f"mvm_spray_{name}.vpcf"
-        )
     money = MONEY_RE.search(text)
     if money:
         targets.add(money.group(1))

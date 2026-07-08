@@ -123,15 +123,11 @@ struct FxDebugHudState {
 	unsigned long long muzzleMs = 0;
 	unsigned long long tracerMs = 0;
 	unsigned long long onSmokeMs = 0;
-	unsigned long long onWispMs = 0;
 	unsigned long long modSmokeMs = 0;
-	unsigned long long modWispMs = 0;
 	unsigned long long muzzleN = 0;
 	unsigned long long tracerN = 0;
 	unsigned long long onSmokeN = 0;
-	unsigned long long onWispN = 0;
 	unsigned long long modSmokeN = 0;
-	unsigned long long modWispN = 0;
 };
 bool ParticleFx_DebugHudEnabled();
 void ParticleFx_GetDebugHudState(FxDebugHudState& out);
@@ -147,13 +143,6 @@ void ParticleFx_OnGameEvent(SOURCESDK::CS2::CGameEvent* event);
 // from Filmmaker::RunMainThreadFrame alongside r_drawviewmodel.
 void ParticleFx_SetFirstPersonFxSuppressed(bool on);
 bool ParticleFx_FirstPersonFxSuppressed();
-
-// Spray-heat gate bypass ("fx align gate off"): while bypassed, EVERY shot upgrades to
-// its wisp wrapper instead of only sustained fire -- so the alignment probe (FxAlign)
-// gets wisp samples for every weapon class. TESTING ONLY; not persisted, defaults to
-// the normal gate every session.
-void ParticleFx_SetSprayGateBypass(bool bypass);
-bool ParticleFx_SprayGateBypass();
 
 // True while `demoTick` is inside the spectated player's weapon_fire window (the same
 // watched-player gate FxDebugHud uses). Lets FxAlign attribute the spectated player's

@@ -349,6 +349,18 @@ R"CFJS(
       });
       fxMaster = { pill: pill, knob: knob };
     })();
+    var ragdollBtn;
+    (function () {
+      var r = row(fxSec); r.style.marginTop = '6px';
+      var t = lbl(r, 'Improved Ragdolls', S.value, 13);
+      t.style.width = 'fill-parent-flow(1.0)'; t.style.verticalAlign = 'center';
+      ragdollBtn = btn(r, 'Off', function () {
+        cmd('mirv_filmmaker ragdoll ' + (st && st.ragdollOn ? 'off' : 'on'));
+      }, S.label);
+      ragdollBtn.style.paddingTop = '3px'; ragdollBtn.style.paddingBottom = '3px';
+      ragdollBtn.style.paddingLeft = '9px'; ragdollBtn.style.paddingRight = '9px';
+      ragdollBtn.__lbl.style.fontSize = '12px';
+    })();
     function fxSeg(label, catKey, modes) {
       var head = row(fxSec); head.style.marginTop = '6px';
       var nl = lbl(head, label, S.value, 13);
@@ -543,6 +555,11 @@ R"CFJS(
       fxMaster.pill.style.backgroundColor = fxOn ? '#2bb24cff' : '#00000088';
       fxMaster.pill.style.border = '1px solid ' + (fxOn ? '#1c8a3aff' : '#ffffff14');
       fxMaster.knob.style.horizontalAlign = fxOn ? 'right' : 'left';
+      var ragOn = !!st.ragdollOn;
+      ragdollBtn.__lbl.text = ragOn ? 'On' : 'Off';
+      ragdollBtn.style.backgroundColor = ragOn ? S.btnOn : S.btnBg;
+      ragdollBtn.style.border = '1px solid ' + (ragOn ? S.accent : S.cardBorder);
+      ragdollBtn.__lbl.style.color = ragOn ? S.accent : S.label;
       for (var fi = 0; fi < fxCtls.length; fi++) {
         var fxMode = st[fxCtls[fi][0]] || 'off';
         fxCtls[fi][1].sync(fxMode);
